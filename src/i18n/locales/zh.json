@@ -1004,6 +1004,23 @@
         "ssotAdded": "SSOT 已添加",
         "appConflict": "应用冲突"
       }
+    },
+    "repo": {
+      "manage": "仓库管理",
+      "title": "Command 仓库管理",
+      "addTitle": "添加仓库",
+      "url": "仓库地址",
+      "urlPlaceholder": "输入 GitHub 仓库地址，如 owner/repo 或完整 URL",
+      "branch": "分支",
+      "branchPlaceholder": "默认: main",
+      "add": "添加",
+      "addSuccess": "仓库添加成功",
+      "removeSuccess": "仓库删除成功",
+      "addFailed": "添加仓库失败",
+      "invalidUrl": "无效的仓库地址格式",
+      "list": "已添加的仓库",
+      "empty": "暂无仓库，请添加仓库以发现可用的 Commands",
+      "commandCount": "{{count}} 个 Command"
     }
   },
   "deeplink": {

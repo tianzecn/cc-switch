@@ -1012,6 +1012,23 @@
         "ssotAdded": "SSOT Added",
         "appConflict": "App Conflict"
       }
+    },
+    "repo": {
+      "manage": "Manage Repos",
+      "title": "Command Repository Management",
+      "addTitle": "Add Repository",
+      "url": "Repository URL",
+      "urlPlaceholder": "Enter GitHub repo URL, e.g. owner/repo or full URL",
+      "branch": "Branch",
+      "branchPlaceholder": "Default: main",
+      "add": "Add",
+      "addSuccess": "Repository added successfully",
+      "removeSuccess": "Repository removed successfully",
+      "addFailed": "Failed to add repository",
+      "invalidUrl": "Invalid repository URL format",
+      "list": "Added Repositories",
+      "empty": "No repositories added. Add a repository to discover available Commands",
+      "commandCount": "{{count}} Commands"
     }
   },
   "deeplink": {

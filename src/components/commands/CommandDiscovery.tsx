@@ -7,6 +7,7 @@ import {
   Check,
   Loader2,
   RefreshCw,
+  Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,11 +22,16 @@ import {
   useDiscoverableCommands,
   useInstalledCommands,
   useInstallCommand,
+  useCommandRepos,
+  useAddCommandRepo,
+  useRemoveCommandRepo,
+  commandKeys,
   type DiscoverableCommand,
+  type CommandRepo,
 } from "@/hooks/useCommands";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { commandKeys } from "@/hooks/useCommands";
+import { CommandRepoManager } from "./CommandRepoManager";
 
 interface CommandDiscoveryProps {
   onBack: () => void;
@@ -42,6 +48,7 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [showRepoManager, setShowRepoManager] = useState(false);
 
   // Queries
   const {
@@ -51,7 +58,10 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
     isFetching,
   } = useDiscoverableCommands();
   const { data: installedCommands } = useInstalledCommands();
+  const { data: repos = [] } = useCommandRepos();
   const installMutation = useInstallCommand();
+  const addRepoMutation = useAddCommandRepo();
+  const removeRepoMutation = useRemoveCommandRepo();
 
   // 已安装的命令 ID 集合
   const installedIds = useMemo(() => {
@@ -113,6 +123,17 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
     await refetch();
   };
 
+  // 仓库管理
+  const handleAddRepo = async (repo: CommandRepo) => {
+    await addRepoMutation.mutateAsync(repo);
+    toast.success(t("commands.repo.addSuccess"), { closeButton: true });
+  };
+
+  const handleRemoveRepo = async (owner: string, name: string) => {
+    await removeRepoMutation.mutateAsync({ owner, name });
+    toast.success(t("commands.repo.removeSuccess"), { closeButton: true });
+  };
+
   return (
     <div className="mx-auto max-w-[72rem] px-6 flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
       {/* Header */}
@@ -128,6 +149,14 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
             {t("commands.discoverSubtitle")}
           </p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowRepoManager(true)}
+        >
+          <Settings size={16} />
+          <span className="ml-2">{t("commands.repo.manage")}</span>
+        </Button>
         <Button
           variant="outline"
           size="sm"
@@ -214,6 +243,17 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
           </div>
         )}
       </div>
+
+      {/* 仓库管理面板 */}
+      {showRepoManager && (
+        <CommandRepoManager
+          repos={repos}
+          commands={discoverableCommands || []}
+          onAdd={handleAddRepo}
+          onRemove={handleRemoveRepo}
+          onClose={() => setShowRepoManager(false)}
+        />
+      )}
     </div>
   );
 };
