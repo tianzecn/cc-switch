@@ -312,6 +312,183 @@ fn default_enabled() -> bool {
     true
 }
 
+// ========== Agent 相关类型 (v3.12.0+) ==========
+
+/// Agent 应用启用状态
+///
+/// 与 CommandApps 类似，但用于 agents 管理
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AgentApps {
+    /// 是否在 Claude Code 中启用
+    pub claude: bool,
+    /// 是否在 Codex CLI 中启用
+    pub codex: bool,
+    /// 是否在 Gemini CLI 中启用
+    pub gemini: bool,
+}
+
+impl AgentApps {
+    /// 检查是否有任何应用启用
+    pub fn any_enabled(&self) -> bool {
+        self.claude || self.codex || self.gemini
+    }
+
+    /// 获取指定应用的启用状态
+    pub fn is_enabled_for(&self, app: &str) -> bool {
+        match app.to_lowercase().as_str() {
+            "claude" => self.claude,
+            "codex" => self.codex,
+            "gemini" => self.gemini,
+            _ => false,
+        }
+    }
+
+    /// 设置指定应用的启用状态
+    pub fn set_enabled_for(&mut self, app: &str, enabled: bool) {
+        match app.to_lowercase().as_str() {
+            "claude" => self.claude = enabled,
+            "codex" => self.codex = enabled,
+            "gemini" => self.gemini = enabled,
+            _ => {}
+        }
+    }
+
+    /// 创建仅启用指定应用的实例
+    pub fn only_for(app: &str) -> Self {
+        let mut apps = Self::default();
+        apps.set_enabled_for(app, true);
+        apps
+    }
+
+    /// 创建仅启用指定应用的实例（接受 AppType）
+    pub fn only(app: &AppType) -> Self {
+        Self::only_for(app.as_str())
+    }
+}
+
+/// 已安装的 Agent（v3.12.0+ 统一结构）
+///
+/// Agent 是 Claude Code 等应用的自定义代理，存储为 Markdown 文件
+/// 支持 YAML frontmatter 定义元数据（如 model、tools 等）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstalledAgent {
+    /// 唯一标识符（格式："namespace/filename" 或 "filename"）
+    /// 例如："development/code-reviewer" 或 "debugger"
+    pub id: String,
+    /// 显示名称（来自 YAML name 字段）
+    pub name: String,
+    /// 描述（来自 YAML description 字段）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// 命名空间，根命名空间为空字符串
+    pub namespace: String,
+    /// 文件名（不含 .md 后缀）
+    pub filename: String,
+    /// 模型设置（YAML model 字段）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// 工具列表（YAML tools 字段）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<String>>,
+    /// 其他未知 YAML 字段（保留扩展性）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extra_metadata: Option<serde_json::Value>,
+    /// 仓库所有者（GitHub 用户/组织）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repo_owner: Option<String>,
+    /// 仓库名称
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repo_name: Option<String>,
+    /// 仓库分支
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repo_branch: Option<String>,
+    /// README/文档 URL
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub readme_url: Option<String>,
+    /// 文件在仓库中的完整路径
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_path: Option<String>,
+    /// 应用启用状态
+    pub apps: AgentApps,
+    /// 文件内容哈希（用于变更检测）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_hash: Option<String>,
+    /// 安装时间（Unix 时间戳）
+    pub installed_at: i64,
+}
+
+/// 可发现的 Agent（来自 GitHub 仓库）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoverableAgent {
+    /// 仓库中的唯一标识（namespace/filename）
+    pub key: String,
+    /// 显示名称
+    pub name: String,
+    /// 描述
+    pub description: String,
+    /// 命名空间
+    pub namespace: String,
+    /// 文件名（不含 .md 后缀）
+    pub filename: String,
+    /// 模型设置
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// 工具列表
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<String>>,
+    /// README/文档 URL
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub readme_url: Option<String>,
+    /// 仓库所有者
+    pub repo_owner: String,
+    /// 仓库名称
+    pub repo_name: String,
+    /// 仓库分支
+    pub repo_branch: String,
+    /// 文件在仓库中的完整路径
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_path: Option<String>,
+}
+
+/// Agent 命名空间
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentNamespace {
+    /// 命名空间名称，根命名空间为空字符串
+    pub name: String,
+    /// 显示名称（根命名空间显示为 "Root" 或本地化名称）
+    pub display_name: String,
+    /// 该命名空间下的 agent 数量
+    pub agent_count: usize,
+}
+
+/// 未管理的 Agent（在应用目录发现但不在 SSOT 中）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnmanagedAgent {
+    /// 命名空间/文件名
+    pub id: String,
+    /// 命名空间
+    pub namespace: String,
+    /// 文件名（不含 .md 后缀）
+    pub filename: String,
+    /// 显示名称（从 YAML frontmatter 解析）
+    pub name: String,
+    /// 描述
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// 模型设置（sonnet, opus, haiku 等）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// 工具列表
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<String>>,
+    /// 在哪些应用目录中发现（如 ["claude", "codex"]）
+    pub found_in: Vec<String>,
+}
+
 /// 已安装的 Skill（v3.10.0+ 统一结构）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

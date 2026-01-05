@@ -13,5 +13,8 @@ release/
 /.cc-switch
 /.idea
 /.vscode
+/.spec-workflow
+/.serena
 vitest-report.json
 nul
+/.history

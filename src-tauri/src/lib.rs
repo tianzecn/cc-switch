@@ -39,8 +39,8 @@ pub use mcp::{
 };
 pub use provider::{Provider, ProviderMeta};
 pub use services::{
-    CommandMetadata, CommandService, ConfigService, EndpointLatency, McpService, PromptService,
-    ProviderService, ProxyService, SkillService, SpeedtestService,
+    AgentMetadata, AgentService, CommandMetadata, CommandService, ConfigService, EndpointLatency,
+    McpService, PromptService, ProviderService, ProxyService, SkillService, SpeedtestService,
 };
 pub use settings::{update_settings, AppSettings};
 pub use store::AppState;
@@ -578,6 +578,10 @@ pub fn run() {
                 command_service,
             )));
 
+            // 初始化 AgentService (v3.11.0+ Agents 统一管理)
+            let agent_service = AgentService::new();
+            app.manage(commands::agent::AgentServiceState(Arc::new(agent_service)));
+
             // 异常退出恢复 + 代理状态自动恢复
             let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -740,6 +744,28 @@ pub fn run() {
             commands::resolve_command_conflict,
             commands::refresh_commands_from_ssot,
             commands::sync_commands_to_apps,
+            // Agent management (v3.11.0+ unified)
+            commands::get_installed_agents,
+            commands::get_agent_namespaces,
+            commands::install_agent_unified,
+            commands::uninstall_agent_unified,
+            commands::toggle_agent_app,
+            commands::create_agent_namespace,
+            commands::delete_agent_namespace,
+            commands::scan_unmanaged_agents,
+            commands::import_agents_from_apps,
+            commands::discover_available_agents,
+            commands::get_agent_content,
+            commands::open_agent_in_editor,
+            commands::check_app_agents_support_cmd,
+            commands::get_agent_repos,
+            commands::add_agent_repo,
+            commands::remove_agent_repo,
+            commands::clear_agent_cache,
+            commands::detect_agent_changes,
+            commands::resolve_agent_conflict,
+            commands::refresh_agents_from_ssot,
+            commands::sync_agents_to_apps,
             // Auto launch
             commands::set_auto_launch,
             commands::get_auto_launch_status,

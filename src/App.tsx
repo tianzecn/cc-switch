@@ -8,7 +8,7 @@ import {
   Plus,
   Settings,
   ArrowLeft,
-  // Bot, // TODO: Agents 功能开发中，暂时不需要
+  Bot,
   Book,
   Wrench,
   Server,
@@ -47,7 +47,7 @@ import PromptPanel from "@/components/prompts/PromptPanel";
 import { SkillsPage } from "@/components/skills/SkillsPage";
 import UnifiedSkillsPanel from "@/components/skills/UnifiedSkillsPanel";
 import { DeepLinkImportDialog } from "@/components/DeepLinkImportDialog";
-import { AgentsPanel } from "@/components/agents/AgentsPanel";
+import { AgentsPage } from "@/components/agents/AgentsPage";
 import { UniversalProviderPanel } from "@/components/universal";
 import { CommandsPage } from "@/components/commands";
 import { Button } from "@/components/ui/button";
@@ -447,9 +447,7 @@ function App() {
             />
           );
         case "agents":
-          return (
-            <AgentsPanel onOpenChange={() => setCurrentView("providers")} />
-          );
+          return <AgentsPage />;
         case "commands":
           return <CommandsPage />;
         case "universal":
@@ -743,18 +741,15 @@ function App() {
                   >
                     <Terminal className="w-4 h-4" />
                   </Button>
-                  {/* TODO: Agents 功能开发中，暂时隐藏入口 */}
-                  {/* {isClaudeApp && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setCurrentView("agents")}
-                        className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
-                        title="Agents"
-                      >
-                        <Bot className="w-4 h-4" />
-                      </Button>
-                    )} */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setCurrentView("agents")}
+                    className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                    title={t("agents.title")}
+                  >
+                    <Bot className="w-4 h-4" />
+                  </Button>
                   <Button
                     variant="ghost"
                     size="sm"

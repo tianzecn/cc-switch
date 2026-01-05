@@ -140,11 +140,58 @@ impl Database {
         )
         .map_err(|e| AppError::Database(e.to_string()))?;
 
-        // 8. Command Repos 表 (命令仓库来源)
+        // 8. Command Repos 表 (命令/代理仓库来源，共用)
         conn.execute(
             "CREATE TABLE IF NOT EXISTS command_repos (
             owner TEXT NOT NULL, name TEXT NOT NULL, branch TEXT NOT NULL DEFAULT 'main',
             enabled BOOLEAN NOT NULL DEFAULT 1, PRIMARY KEY (owner, name)
+        )",
+            [],
+        )
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        // 8.5 Agents 表 (v3.12.0+ 统一管理结构)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS agents (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            namespace TEXT NOT NULL DEFAULT '',
+            filename TEXT NOT NULL,
+            model TEXT,
+            tools TEXT,
+            extra_metadata TEXT,
+            repo_owner TEXT,
+            repo_name TEXT,
+            repo_branch TEXT DEFAULT 'main',
+            readme_url TEXT,
+            source_path TEXT,
+            enabled_claude INTEGER NOT NULL DEFAULT 0,
+            enabled_codex INTEGER NOT NULL DEFAULT 0,
+            enabled_gemini INTEGER NOT NULL DEFAULT 0,
+            file_hash TEXT,
+            installed_at INTEGER NOT NULL DEFAULT 0
+        )",
+            [],
+        )
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        // Agents 表索引
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_agents_namespace ON agents(namespace)",
+            [],
+        )
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        // 8.6 Agent Discovery Cache 表
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS agent_discovery_cache (
+            repo_owner TEXT NOT NULL,
+            repo_name TEXT NOT NULL,
+            repo_branch TEXT NOT NULL,
+            agents_json TEXT NOT NULL,
+            scanned_at INTEGER NOT NULL,
+            PRIMARY KEY (repo_owner, repo_name, repo_branch)
         )",
             [],
         )
@@ -404,6 +451,11 @@ impl Database {
                         log::info!("迁移数据库从 v4 到 v5（Commands 发现缓存与源路径）");
                         Self::migrate_v4_to_v5(conn)?;
                         Self::set_user_version(conn, 5)?;
+                    }
+                    5 => {
+                        log::info!("迁移数据库从 v5 到 v6（Agents 统一管理架构）");
+                        Self::migrate_v5_to_v6(conn)?;
+                        Self::set_user_version(conn, 6)?;
                     }
                     _ => {
                         return Err(AppError::Database(format!(
@@ -1031,6 +1083,89 @@ impl Database {
             "数据库已迁移到 v5 结构（Commands 发现缓存与源路径）。\n\
              - commands 表新增 source_path 列，用于记录文件在仓库中的完整路径\n\
              - 新增 command_discovery_cache 表，用于缓存仓库扫描结果"
+        );
+
+        Ok(())
+    }
+
+    /// v5 -> v6 迁移：Agents 统一管理架构
+    ///
+    /// 添加 agents 和 agent_discovery_cache 表，用于统一管理 Claude Code Agents。
+    /// command_repos 表共用于 Commands 和 Agents。
+    fn migrate_v5_to_v6(conn: &Connection) -> Result<(), AppError> {
+        // 检查 agents 表是否已存在（幂等性）
+        if Self::table_exists(conn, "agents")? {
+            log::info!("agents 表已存在，跳过创建");
+        } else {
+            // 创建 agents 表
+            conn.execute(
+                "CREATE TABLE agents (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    description TEXT,
+                    namespace TEXT NOT NULL DEFAULT '',
+                    filename TEXT NOT NULL,
+                    model TEXT,
+                    tools TEXT,
+                    extra_metadata TEXT,
+                    repo_owner TEXT,
+                    repo_name TEXT,
+                    repo_branch TEXT DEFAULT 'main',
+                    readme_url TEXT,
+                    source_path TEXT,
+                    enabled_claude INTEGER NOT NULL DEFAULT 0,
+                    enabled_codex INTEGER NOT NULL DEFAULT 0,
+                    enabled_gemini INTEGER NOT NULL DEFAULT 0,
+                    file_hash TEXT,
+                    installed_at INTEGER NOT NULL DEFAULT 0
+                )",
+                [],
+            )
+            .map_err(|e| AppError::Database(format!("创建 agents 表失败: {e}")))?;
+
+            // 创建索引
+            conn.execute(
+                "CREATE INDEX idx_agents_namespace ON agents(namespace)",
+                [],
+            )
+            .map_err(|e| AppError::Database(format!("创建 agents 命名空间索引失败: {e}")))?;
+
+            log::info!("agents 表已创建");
+        }
+
+        // 检查 agent_discovery_cache 表是否已存在
+        if Self::table_exists(conn, "agent_discovery_cache")? {
+            log::info!("agent_discovery_cache 表已存在，跳过创建");
+        } else {
+            conn.execute(
+                "CREATE TABLE agent_discovery_cache (
+                    repo_owner TEXT NOT NULL,
+                    repo_name TEXT NOT NULL,
+                    repo_branch TEXT NOT NULL,
+                    agents_json TEXT NOT NULL,
+                    scanned_at INTEGER NOT NULL,
+                    PRIMARY KEY (repo_owner, repo_name, repo_branch)
+                )",
+                [],
+            )
+            .map_err(|e| {
+                AppError::Database(format!("创建 agent_discovery_cache 表失败: {e}"))
+            })?;
+
+            log::info!("agent_discovery_cache 表已创建");
+        }
+
+        // 标记：需要在启动后扫描现有 Agents 并导入
+        let _ = conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('agents_ssot_migration_pending', 'true')",
+            [],
+        );
+
+        log::info!(
+            "数据库已迁移到 v6 结构（Agents 统一管理架构）。\n\
+             - 新增 agents 表，用于存储已安装的 Agents\n\
+             - 新增 agent_discovery_cache 表，用于缓存仓库扫描结果\n\
+             - command_repos 表共用于 Commands 和 Agents"
         );
 
         Ok(())

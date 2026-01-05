@@ -5,6 +5,8 @@
 //! - MCP 服务器配置
 //! - 提示词管理
 //! - Skills 管理
+//! - Commands 管理
+//! - Agents 管理
 //! - 通用设置存储
 //!
 //! ## 架构设计
@@ -20,6 +22,8 @@
 //!     ├── mcp.rs
 //!     ├── prompts.rs
 //!     ├── skills.rs
+//!     ├── commands.rs
+//!     ├── agents.rs
 //!     └── settings.rs
 //! ```
 
@@ -32,7 +36,7 @@ mod schema;
 mod tests;
 
 // DAO 类型导出供外部使用
-pub use dao::{CommandDiscoveryCache, FailoverQueueItem, CACHE_EXPIRY_SECONDS};
+pub use dao::{AgentDiscoveryCache, FailoverQueueItem, CACHE_EXPIRY_SECONDS};
 
 use crate::config::get_app_config_dir;
 use crate::error::AppError;
@@ -47,7 +51,7 @@ const DB_BACKUP_RETAIN: usize = 10;
 
 /// 当前 Schema 版本号
 /// 每次修改表结构时递增，并在 schema.rs 中添加相应的迁移逻辑
-pub(crate) const SCHEMA_VERSION: i32 = 5;
+pub(crate) const SCHEMA_VERSION: i32 = 6;
 
 /// 安全地序列化 JSON，避免 unwrap panic
 pub(crate) fn to_json_string<T: Serialize + ?Sized>(value: &T) -> Result<String, AppError> {

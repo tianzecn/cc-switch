@@ -1,3 +1,4 @@
+pub mod agent;
 pub mod command;
 pub mod config;
 pub mod env_checker;
@@ -11,6 +12,7 @@ pub mod speedtest;
 pub mod stream_check;
 pub mod usage_stats;
 
+pub use agent::{AgentMetadata, AgentService};
 pub use command::{CommandMetadata, CommandService};
 pub use config::ConfigService;
 pub use mcp::McpService;
