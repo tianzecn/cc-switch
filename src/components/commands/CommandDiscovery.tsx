@@ -51,9 +51,10 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [showRepoManager, setShowRepoManager] = useState(false);
-  const [selectedCommand, setSelectedCommand] =
-    useState<DiscoverableCommand | null>(null);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+  // 选中的命名空间及其命令列表
+  const [selectedNamespace, setSelectedNamespace] = useState<string | null>(null);
+  const [namespaceCommands, setNamespaceCommands] = useState<DiscoverableCommand[]>([]);
 
   // Queries
   const { data: discoverableCommands, isLoading } = useDiscoverableCommands();
@@ -153,18 +154,17 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
     });
   };
 
-  const handleSelectCommand = (command: DiscoverableCommand) => {
-    setSelectedCommand(command);
+  // 命名空间选择处理
+  const handleSelectNamespace = (namespaceId: string, commands: DiscoverableCommand[]) => {
+    setSelectedNamespace(namespaceId);
+    setNamespaceCommands(commands);
   };
 
-  // 检查选中的命令是否已安装
-  const isSelectedInstalled = useMemo(() => {
-    if (!selectedCommand) return false;
-    const id = selectedCommand.namespace
-      ? `${selectedCommand.namespace}/${selectedCommand.filename}`
-      : selectedCommand.filename;
+  // 检查命令是否已安装
+  const isCommandInstalled = (cmd: DiscoverableCommand) => {
+    const id = cmd.namespace ? `${cmd.namespace}/${cmd.filename}` : cmd.filename;
     return installedIds.has(id);
-  }, [selectedCommand, installedIds]);
+  };
 
   return (
     <div className="mx-auto max-w-[72rem] px-6 flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
@@ -243,8 +243,8 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
 
       {/* Main Content - 双栏布局 */}
       <div className="flex-1 flex gap-4 overflow-hidden pb-4">
-        {/* Left Panel - Tree */}
-        <div className="w-80 flex-shrink-0 rounded-xl border border-border bg-muted/30 overflow-hidden flex flex-col">
+        {/* Left Panel - Tree Navigation */}
+        <div className="w-72 flex-shrink-0 rounded-xl border border-border bg-muted/30 overflow-hidden flex flex-col">
           <div className="flex-shrink-0 px-4 py-3 border-b border-border/50">
             <h3 className="text-sm font-medium text-muted-foreground">
               {t("commands.browseByRepo")}
@@ -259,9 +259,8 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
             ) : (
               <CommandDiscoveryTree
                 commands={filteredCommands}
-                installedIds={installedIds}
-                selectedKey={selectedCommand?.key ?? null}
-                onSelectCommand={handleSelectCommand}
+                selectedNamespace={selectedNamespace}
+                onSelectNamespace={handleSelectNamespace}
                 expandedNodes={expandedNodes}
                 onToggleNode={handleToggleNode}
               />
@@ -269,18 +268,35 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
           </div>
         </div>
 
-        {/* Right Panel - Detail */}
+        {/* Right Panel - Command List */}
         <div className="flex-1 rounded-xl border border-border bg-muted/30 overflow-hidden flex flex-col">
-          {selectedCommand ? (
-            <CommandDetailPanel
-              command={selectedCommand}
-              isInstalled={isSelectedInstalled}
-              isInstalling={
-                installMutation.isPending &&
-                installMutation.variables?.command.key === selectedCommand.key
-              }
-              onInstall={() => handleInstall(selectedCommand)}
-            />
+          {selectedNamespace ? (
+            <>
+              <div className="flex-shrink-0 px-4 py-3 border-b border-border/50">
+                <h3 className="text-sm font-medium text-foreground">
+                  {selectedNamespace.split("/").slice(-1)[0]}
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  {namespaceCommands.length} {t("commands.title").toLowerCase()}
+                </p>
+              </div>
+              <div className="flex-1 overflow-y-auto p-2">
+                <div className="space-y-2">
+                  {namespaceCommands.map((cmd) => (
+                    <CommandListItem
+                      key={cmd.key}
+                      command={cmd}
+                      isInstalled={isCommandInstalled(cmd)}
+                      isInstalling={
+                        installMutation.isPending &&
+                        installMutation.variables?.command.key === cmd.key
+                      }
+                      onInstall={() => handleInstall(cmd)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
               <FileText size={48} className="mb-4 opacity-30" />
@@ -305,16 +321,16 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
 };
 
 /**
- * 命令详情面板
+ * 命令列表项组件
  */
-interface CommandDetailPanelProps {
+interface CommandListItemProps {
   command: DiscoverableCommand;
   isInstalled: boolean;
   isInstalling: boolean;
   onInstall: () => void;
 }
 
-const CommandDetailPanel: React.FC<CommandDetailPanelProps> = ({
+const CommandListItem: React.FC<CommandListItemProps> = ({
   command,
   isInstalled,
   isInstalling,
@@ -322,118 +338,60 @@ const CommandDetailPanel: React.FC<CommandDetailPanelProps> = ({
 }) => {
   const { t } = useTranslation();
 
-  const commandId = command.namespace
-    ? `${command.namespace}/${command.filename}`
-    : command.filename;
-
-  const repoUrl = `https://github.com/${command.repoOwner}/${command.repoName}`;
-
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex-shrink-0 p-4 border-b border-border/50">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <h2 className="text-lg font-semibold text-foreground truncate">
-                {commandId}
-              </h2>
-              {command.category && (
-                <span className="px-2 py-0.5 text-xs rounded-full bg-primary/10 text-primary flex-shrink-0">
-                  {command.category}
-                </span>
-              )}
-            </div>
-            <p className="text-sm text-muted-foreground">{command.name}</p>
-          </div>
-
-          {/* Install Button */}
-          <div className="flex-shrink-0">
-            {isInstalled ? (
-              <Button variant="outline" size="sm" disabled className="gap-1">
-                <Check size={14} />
-                {t("commands.installed")}
-              </Button>
-            ) : (
-              <Button
-                size="sm"
-                onClick={onInstall}
-                disabled={isInstalling}
-                className="gap-1"
-              >
-                {isInstalling ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : (
-                  <Download size={14} />
-                )}
-                {t("commands.install")}
-              </Button>
+    <div className="rounded-lg border border-border bg-background/50 p-3">
+      {/* 头部：命令名 + 分类 + 安装按钮 */}
+      <div className="flex items-start gap-3">
+        <FileText size={16} className="text-muted-foreground flex-shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="font-medium text-sm">{command.name}</span>
+            {command.category && (
+              <span className="px-1.5 py-0.5 text-xs rounded bg-primary/10 text-primary flex-shrink-0">
+                {command.category}
+              </span>
             )}
           </div>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* Description */}
-        <div>
-          <h3 className="text-sm font-medium text-foreground mb-2">
-            {t("commands.description")}
-          </h3>
-          <p className="text-sm text-muted-foreground">{command.description}</p>
-        </div>
-
-        {/* Metadata */}
-        <div className="space-y-2">
-          <h3 className="text-sm font-medium text-foreground">
-            {t("commands.metadata")}
-          </h3>
-
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            <div className="text-muted-foreground">{t("commands.source")}</div>
-            <a
-              href={repoUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary hover:underline flex items-center gap-1"
-            >
-              {command.repoOwner}/{command.repoName}
-              <ExternalLink size={12} />
-            </a>
-
-            <div className="text-muted-foreground">{t("commands.branch")}</div>
-            <div className="text-foreground">{command.repoBranch}</div>
-
-            <div className="text-muted-foreground">
-              {t("commands.namespace")}
-            </div>
-            <div className="text-foreground">
-              {command.namespace || t("commands.rootNamespace")}
-            </div>
-
-            <div className="text-muted-foreground">
-              {t("commands.filename")}
-            </div>
-            <div className="text-foreground font-mono text-xs">
-              {command.filename}.md
-            </div>
-          </div>
-        </div>
-
-        {/* README Link */}
-        {command.readmeUrl && (
-          <div>
+          {/* 描述 */}
+          <p className="text-xs text-muted-foreground mb-2">{command.description}</p>
+          {/* 文档链接 */}
+          {command.readmeUrl && (
             <a
               href={command.readmeUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+              className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
             >
-              <ExternalLink size={14} />
+              <ExternalLink size={12} />
               {t("commands.viewDocumentation")}
             </a>
-          </div>
-        )}
+          )}
+        </div>
+
+        {/* 安装按钮 */}
+        <div className="flex-shrink-0">
+          {isInstalled ? (
+            <span className="inline-flex items-center gap-1 text-xs text-green-600">
+              <Check size={12} />
+              {t("commands.installed")}
+            </span>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onInstall}
+              disabled={isInstalling}
+              className="h-7 text-xs gap-1"
+            >
+              {isInstalling ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <Download size={12} />
+              )}
+              {t("commands.install")}
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );

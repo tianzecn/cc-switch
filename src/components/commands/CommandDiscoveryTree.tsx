@@ -5,9 +5,6 @@ import {
   ChevronDown,
   GitBranch,
   Folder,
-  FolderOpen,
-  FileText,
-  Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DiscoverableCommand } from "@/hooks/useCommands";
@@ -137,22 +134,22 @@ function buildTree(commands: DiscoverableCommand[]): RepoNode[] {
 
 interface CommandDiscoveryTreeProps {
   commands: DiscoverableCommand[];
-  installedIds: Set<string>;
-  selectedKey: string | null;
-  onSelectCommand: (command: DiscoverableCommand) => void;
+  /** 选中的命名空间 ID（格式: owner/repo/namespace） */
+  selectedNamespace: string | null;
+  /** 命名空间被选中时的回调 */
+  onSelectNamespace: (namespaceId: string, commands: DiscoverableCommand[]) => void;
   expandedNodes?: Set<string>;
   onToggleNode?: (nodeId: string) => void;
 }
 
 /**
  * 命令发现树组件
- * 以 repo → namespace → commands 的层级结构展示可发现的命令
+ * 以 repo → namespace 的层级结构展示，点击命名空间在右侧显示命令列表
  */
 export const CommandDiscoveryTree: React.FC<CommandDiscoveryTreeProps> = ({
   commands,
-  installedIds,
-  selectedKey,
-  onSelectCommand,
+  selectedNamespace,
+  onSelectNamespace,
   expandedNodes: controlledExpanded,
   onToggleNode: controlledToggle,
 }) => {
@@ -179,12 +176,10 @@ export const CommandDiscoveryTree: React.FC<CommandDiscoveryTreeProps> = ({
   // 构建树结构
   const tree = useMemo(() => buildTree(commands), [commands]);
 
-  // 检查命令是否已安装
-  const isInstalled = (cmd: DiscoverableCommand) => {
-    const id = cmd.namespace
-      ? `${cmd.namespace}/${cmd.filename}`
-      : cmd.filename;
-    return installedIds.has(id);
+  // 处理命名空间选中
+  const handleSelectNamespace = (node: NamespaceNode) => {
+    const cmds = node.children.map((c) => c.command);
+    onSelectNamespace(node.id, cmds);
   };
 
   if (tree.length === 0) {
@@ -203,9 +198,8 @@ export const CommandDiscoveryTree: React.FC<CommandDiscoveryTreeProps> = ({
           node={repo}
           expanded={expanded}
           toggleNode={toggleNode}
-          selectedKey={selectedKey}
-          onSelectCommand={onSelectCommand}
-          isInstalled={isInstalled}
+          selectedNamespace={selectedNamespace}
+          onSelectNamespace={handleSelectNamespace}
         />
       ))}
     </div>
@@ -218,18 +212,16 @@ interface RepoTreeNodeProps {
   node: RepoNode;
   expanded: Set<string>;
   toggleNode: (nodeId: string) => void;
-  selectedKey: string | null;
-  onSelectCommand: (command: DiscoverableCommand) => void;
-  isInstalled: (cmd: DiscoverableCommand) => boolean;
+  selectedNamespace: string | null;
+  onSelectNamespace: (node: NamespaceNode) => void;
 }
 
 const RepoTreeNode: React.FC<RepoTreeNodeProps> = ({
   node,
   expanded,
   toggleNode,
-  selectedKey,
-  onSelectCommand,
-  isInstalled,
+  selectedNamespace,
+  onSelectNamespace,
 }) => {
   const isExpanded = expanded.has(node.id);
 
@@ -250,18 +242,15 @@ const RepoTreeNode: React.FC<RepoTreeNodeProps> = ({
         <span className="text-xs text-muted-foreground">{node.count}</span>
       </div>
 
-      {/* Children */}
+      {/* Children - 命名空间列表 */}
       {isExpanded && (
         <div className="ml-4 border-l border-border/50 pl-2">
           {node.children.map((ns) => (
             <NamespaceTreeNode
               key={ns.id}
               node={ns}
-              expanded={expanded}
-              toggleNode={toggleNode}
-              selectedKey={selectedKey}
-              onSelectCommand={onSelectCommand}
-              isInstalled={isInstalled}
+              isSelected={selectedNamespace === ns.id}
+              onSelect={() => onSelectNamespace(ns)}
             />
           ))}
         </div>
@@ -272,71 +261,14 @@ const RepoTreeNode: React.FC<RepoTreeNodeProps> = ({
 
 interface NamespaceTreeNodeProps {
   node: NamespaceNode;
-  expanded: Set<string>;
-  toggleNode: (nodeId: string) => void;
-  selectedKey: string | null;
-  onSelectCommand: (command: DiscoverableCommand) => void;
-  isInstalled: (cmd: DiscoverableCommand) => boolean;
+  isSelected: boolean;
+  onSelect: () => void;
 }
 
 const NamespaceTreeNode: React.FC<NamespaceTreeNodeProps> = ({
   node,
-  expanded,
-  toggleNode,
-  selectedKey,
-  onSelectCommand,
-  isInstalled,
-}) => {
-  const isExpanded = expanded.has(node.id);
-  const FolderIcon = isExpanded ? FolderOpen : Folder;
-
-  return (
-    <div>
-      {/* Namespace Header */}
-      <div
-        className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-muted transition-colors"
-        onClick={() => toggleNode(node.id)}
-      >
-        {isExpanded ? (
-          <ChevronDown size={14} className="text-muted-foreground" />
-        ) : (
-          <ChevronRight size={14} className="text-muted-foreground" />
-        )}
-        <FolderIcon size={14} className="text-yellow-500" />
-        <span className="flex-1 text-sm truncate">{node.name}</span>
-        <span className="text-xs text-muted-foreground">{node.count}</span>
-      </div>
-
-      {/* Commands */}
-      {isExpanded && (
-        <div className="ml-4 border-l border-border/50 pl-2">
-          {node.children.map((cmd) => (
-            <CommandTreeNode
-              key={cmd.id}
-              node={cmd}
-              isSelected={selectedKey === cmd.id}
-              isInstalled={isInstalled(cmd.command)}
-              onClick={() => onSelectCommand(cmd.command)}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-interface CommandTreeNodeProps {
-  node: CommandNode;
-  isSelected: boolean;
-  isInstalled: boolean;
-  onClick: () => void;
-}
-
-const CommandTreeNode: React.FC<CommandTreeNodeProps> = ({
-  node,
   isSelected,
-  isInstalled,
-  onClick,
+  onSelect,
 }) => {
   return (
     <div
@@ -346,11 +278,11 @@ const CommandTreeNode: React.FC<CommandTreeNodeProps> = ({
           ? "bg-primary/10 text-primary"
           : "hover:bg-muted text-foreground"
       )}
-      onClick={onClick}
+      onClick={onSelect}
     >
-      <FileText size={14} className="text-muted-foreground" />
+      <Folder size={14} className={isSelected ? "text-primary" : "text-yellow-500"} />
       <span className="flex-1 text-sm truncate">{node.name}</span>
-      {isInstalled && <Check size={12} className="text-green-500" />}
+      <span className="text-xs text-muted-foreground">{node.count}</span>
     </div>
   );
 };
