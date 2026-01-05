@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 
+pub mod command;
 mod config;
 mod deeplink;
 mod env;
@@ -16,6 +17,7 @@ pub mod skill;
 mod stream_check;
 mod usage;
 
+pub use command::*;
 pub use config::*;
 pub use deeplink::*;
 pub use env::*;

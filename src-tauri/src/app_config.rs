@@ -113,6 +113,202 @@ impl SkillApps {
     }
 }
 
+/// Command 应用启用状态（标记 Command 应用到哪些客户端）
+/// v3.11.0 Commands 统一管理架构
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+pub struct CommandApps {
+    #[serde(default)]
+    pub claude: bool,
+    #[serde(default)]
+    pub codex: bool,
+    #[serde(default)]
+    pub gemini: bool,
+}
+
+impl CommandApps {
+    /// 检查指定应用是否启用
+    pub fn is_enabled_for(&self, app: &AppType) -> bool {
+        match app {
+            AppType::Claude => self.claude,
+            AppType::Codex => self.codex,
+            AppType::Gemini => self.gemini,
+        }
+    }
+
+    /// 设置指定应用的启用状态
+    pub fn set_enabled_for(&mut self, app: &AppType, enabled: bool) {
+        match app {
+            AppType::Claude => self.claude = enabled,
+            AppType::Codex => self.codex = enabled,
+            AppType::Gemini => self.gemini = enabled,
+        }
+    }
+
+    /// 获取所有启用的应用列表
+    pub fn enabled_apps(&self) -> Vec<AppType> {
+        let mut apps = Vec::new();
+        if self.claude {
+            apps.push(AppType::Claude);
+        }
+        if self.codex {
+            apps.push(AppType::Codex);
+        }
+        if self.gemini {
+            apps.push(AppType::Gemini);
+        }
+        apps
+    }
+
+    /// 检查是否所有应用都未启用
+    pub fn is_empty(&self) -> bool {
+        !self.claude && !self.codex && !self.gemini
+    }
+
+    /// 仅启用指定应用（其他应用设为禁用）
+    pub fn only(app: &AppType) -> Self {
+        let mut apps = Self::default();
+        apps.set_enabled_for(app, true);
+        apps
+    }
+}
+
+/// 已安装的 Command（v3.11.0+ 统一结构）
+///
+/// Command 是 Claude Code 等应用的自定义命令，存储为 Markdown 文件
+/// 支持 YAML frontmatter 定义元数据
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstalledCommand {
+    /// 唯一标识符（格式："namespace/filename" 或 "filename"）
+    /// 例如："sc/agent" 或 "commit"
+    pub id: String,
+    /// 显示名称（来自 YAML name 字段）
+    pub name: String,
+    /// 描述（来自 YAML description 字段）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// 命名空间，根命名空间为空字符串
+    pub namespace: String,
+    /// 文件名（不含 .md 后缀）
+    pub filename: String,
+    /// 分类（YAML category 字段）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub category: Option<String>,
+    /// 允许的工具列表（YAML allowedTools 字段）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allowed_tools: Option<Vec<String>>,
+    /// MCP 服务器列表（YAML mcpServers 字段）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mcp_servers: Option<Vec<String>>,
+    /// 角色列表（YAML personas 字段）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub personas: Option<Vec<String>>,
+    /// 其他未知 YAML 字段（保留扩展性）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extra_metadata: Option<serde_json::Value>,
+    /// 仓库所有者（GitHub 用户/组织）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repo_owner: Option<String>,
+    /// 仓库名称
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repo_name: Option<String>,
+    /// 仓库分支
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repo_branch: Option<String>,
+    /// README/文档 URL
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub readme_url: Option<String>,
+    /// 应用启用状态
+    pub apps: CommandApps,
+    /// 文件内容哈希（用于变更检测）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_hash: Option<String>,
+    /// 安装时间（Unix 时间戳）
+    pub installed_at: i64,
+}
+
+/// 可发现的 Command（来自 GitHub 仓库）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoverableCommand {
+    /// 仓库中的唯一标识（namespace/filename）
+    pub key: String,
+    /// 显示名称
+    pub name: String,
+    /// 描述
+    pub description: String,
+    /// 命名空间
+    pub namespace: String,
+    /// 文件名（不含 .md 后缀）
+    pub filename: String,
+    /// 分类
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub category: Option<String>,
+    /// README/文档 URL
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub readme_url: Option<String>,
+    /// 仓库所有者
+    pub repo_owner: String,
+    /// 仓库名称
+    pub repo_name: String,
+    /// 仓库分支
+    pub repo_branch: String,
+}
+
+/// 未管理的 Command（在应用目录中发现但未被 CC Switch 管理）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnmanagedCommand {
+    /// 命名空间/文件名
+    pub id: String,
+    /// 命名空间
+    pub namespace: String,
+    /// 文件名（不含 .md 后缀）
+    pub filename: String,
+    /// 显示名称（从 YAML frontmatter 解析）
+    pub name: String,
+    /// 描述
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// 在哪些应用目录中发现（如 ["claude", "codex"]）
+    pub found_in: Vec<String>,
+}
+
+/// Command 命名空间
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandNamespace {
+    /// 命名空间名称，根命名空间为空字符串
+    pub name: String,
+    /// 显示名称（根命名空间显示为 "Root" 或本地化名称）
+    pub display_name: String,
+    /// 该命名空间下的命令数量
+    pub command_count: usize,
+}
+
+/// Command 仓库配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommandRepo {
+    /// 仓库所有者（GitHub 用户/组织）
+    pub owner: String,
+    /// 仓库名称
+    pub name: String,
+    /// 分支名称
+    #[serde(default = "default_branch")]
+    pub branch: String,
+    /// 是否启用
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+}
+
+fn default_branch() -> String {
+    "main".to_string()
+}
+
+fn default_enabled() -> bool {
+    true
+}
+
 /// 已安装的 Skill（v3.10.0+ 统一结构）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

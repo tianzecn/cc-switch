@@ -39,8 +39,8 @@ pub use mcp::{
 };
 pub use provider::{Provider, ProviderMeta};
 pub use services::{
-    ConfigService, EndpointLatency, McpService, PromptService, ProviderService, ProxyService,
-    SkillService, SpeedtestService,
+    CommandMetadata, CommandService, ConfigService, EndpointLatency, McpService, PromptService,
+    ProviderService, ProxyService, SkillService, SpeedtestService,
 };
 pub use settings::{update_settings, AppSettings};
 pub use store::AppState;
@@ -572,6 +572,12 @@ pub fn run() {
             let skill_service = SkillService::new();
             app.manage(commands::skill::SkillServiceState(Arc::new(skill_service)));
 
+            // 初始化 CommandService (v3.11.0+ Commands 统一管理)
+            let command_service = CommandService::new();
+            app.manage(commands::command::CommandServiceState(Arc::new(
+                command_service,
+            )));
+
             // 异常退出恢复 + 代理状态自动恢复
             let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -712,6 +718,27 @@ pub fn run() {
             commands::get_skill_repos,
             commands::add_skill_repo,
             commands::remove_skill_repo,
+            // Command management (v3.11.0+ unified)
+            commands::get_installed_commands,
+            commands::get_command_namespaces,
+            commands::install_command_unified,
+            commands::uninstall_command_unified,
+            commands::toggle_command_app,
+            commands::create_command_namespace,
+            commands::delete_command_namespace,
+            commands::scan_unmanaged_commands,
+            commands::import_commands_from_apps,
+            commands::discover_available_commands,
+            commands::get_command_content,
+            commands::open_command_in_editor,
+            commands::check_app_commands_support,
+            commands::get_command_repos,
+            commands::add_command_repo,
+            commands::remove_command_repo,
+            commands::detect_command_changes,
+            commands::resolve_command_conflict,
+            commands::refresh_commands_from_ssot,
+            commands::sync_commands_to_apps,
             // Auto launch
             commands::set_auto_launch,
             commands::get_auto_launch_status,

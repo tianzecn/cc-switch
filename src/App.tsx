@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Search,
   Download,
+  Terminal,
 } from "lucide-react";
 import type { Provider } from "@/types";
 import type { EnvConflict } from "@/types/env";
@@ -48,6 +49,7 @@ import UnifiedSkillsPanel from "@/components/skills/UnifiedSkillsPanel";
 import { DeepLinkImportDialog } from "@/components/DeepLinkImportDialog";
 import { AgentsPanel } from "@/components/agents/AgentsPanel";
 import { UniversalProviderPanel } from "@/components/universal";
+import { CommandsPage } from "@/components/commands";
 import { Button } from "@/components/ui/button";
 
 type View =
@@ -58,7 +60,8 @@ type View =
   | "skillsDiscovery"
   | "mcp"
   | "agents"
-  | "universal";
+  | "universal"
+  | "commands";
 
 const DRAG_BAR_HEIGHT = 28; // px
 const HEADER_HEIGHT = 64; // px
@@ -447,6 +450,8 @@ function App() {
           return (
             <AgentsPanel onOpenChange={() => setCurrentView("providers")} />
           );
+        case "commands":
+          return <CommandsPage />;
         case "universal":
           return (
             <div className="mx-auto max-w-[56rem] px-5 pt-4">
@@ -588,6 +593,7 @@ function App() {
                   {currentView === "skillsDiscovery" && t("skills.title")}
                   {currentView === "mcp" && t("mcp.unifiedPanel.title")}
                   {currentView === "agents" && t("agents.title")}
+                  {currentView === "commands" && t("commands.title")}
                   {currentView === "universal" &&
                     t("universalProvider.title", {
                       defaultValue: "统一供应商",
@@ -727,6 +733,15 @@ function App() {
                     title={t("skills.manage")}
                   >
                     <Wrench className="flex-shrink-0 w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setCurrentView("commands")}
+                    className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                    title={t("commands.title")}
+                  >
+                    <Terminal className="w-4 h-4" />
                   </Button>
                   {/* TODO: Agents 功能开发中，暂时隐藏入口 */}
                   {/* {isClaudeApp && (

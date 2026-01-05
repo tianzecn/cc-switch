@@ -101,14 +101,63 @@ impl Database {
         )
         .map_err(|e| AppError::Database(e.to_string()))?;
 
-        // 7. Settings 表
+        // 7. Commands 表 (v3.11.0+ 统一管理结构)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS commands (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            namespace TEXT NOT NULL DEFAULT '',
+            filename TEXT NOT NULL,
+            category TEXT,
+            allowed_tools TEXT,
+            mcp_servers TEXT,
+            personas TEXT,
+            extra_metadata TEXT,
+            repo_owner TEXT,
+            repo_name TEXT,
+            repo_branch TEXT DEFAULT 'main',
+            readme_url TEXT,
+            enabled_claude INTEGER NOT NULL DEFAULT 0,
+            enabled_codex INTEGER NOT NULL DEFAULT 0,
+            enabled_gemini INTEGER NOT NULL DEFAULT 0,
+            file_hash TEXT,
+            installed_at INTEGER NOT NULL DEFAULT 0
+        )",
+            [],
+        )
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        // Commands 表索引
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_commands_namespace ON commands(namespace)",
+            [],
+        )
+        .map_err(|e| AppError::Database(e.to_string()))?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_commands_category ON commands(category)",
+            [],
+        )
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        // 8. Command Repos 表 (命令仓库来源)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS command_repos (
+            owner TEXT NOT NULL, name TEXT NOT NULL, branch TEXT NOT NULL DEFAULT 'main',
+            enabled BOOLEAN NOT NULL DEFAULT 1, PRIMARY KEY (owner, name)
+        )",
+            [],
+        )
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        // 9. Settings 表
         conn.execute(
             "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)",
             [],
         )
         .map_err(|e| AppError::Database(e.to_string()))?;
 
-        // 8. Proxy Config 表（三行结构，app_type 主键）
+        // 10. Proxy Config 表（三行结构，app_type 主键）
         conn.execute("CREATE TABLE IF NOT EXISTS proxy_config (
             app_type TEXT PRIMARY KEY CHECK (app_type IN ('claude','codex','gemini')),
             proxy_enabled INTEGER NOT NULL DEFAULT 0, listen_address TEXT NOT NULL DEFAULT '127.0.0.1',
@@ -157,7 +206,7 @@ impl Database {
             .map_err(|e| AppError::Database(e.to_string()))?;
         }
 
-        // 9. Provider Health 表
+        // 11. Provider Health 表
         conn.execute("CREATE TABLE IF NOT EXISTS provider_health (
             provider_id TEXT NOT NULL, app_type TEXT NOT NULL, is_healthy INTEGER NOT NULL DEFAULT 1,
             consecutive_failures INTEGER NOT NULL DEFAULT 0, last_success_at TEXT, last_failure_at TEXT,
@@ -166,7 +215,7 @@ impl Database {
             FOREIGN KEY (provider_id, app_type) REFERENCES providers(id, app_type) ON DELETE CASCADE
         )", []).map_err(|e| AppError::Database(e.to_string()))?;
 
-        // 10. Proxy Request Logs 表
+        // 12. Proxy Request Logs 表
         conn.execute("CREATE TABLE IF NOT EXISTS proxy_request_logs (
             request_id TEXT PRIMARY KEY, provider_id TEXT NOT NULL, app_type TEXT NOT NULL, model TEXT NOT NULL,
             input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0,
@@ -199,7 +248,7 @@ impl Database {
         )
         .map_err(|e| AppError::Database(e.to_string()))?;
 
-        // 11. Model Pricing 表
+        // 13. Model Pricing 表
         conn.execute(
             "CREATE TABLE IF NOT EXISTS model_pricing (
             model_id TEXT PRIMARY KEY, display_name TEXT NOT NULL,
@@ -211,7 +260,7 @@ impl Database {
         )
         .map_err(|e| AppError::Database(e.to_string()))?;
 
-        // 12. Stream Check Logs 表
+        // 14. Stream Check Logs 表
         conn.execute("CREATE TABLE IF NOT EXISTS stream_check_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT, provider_id TEXT NOT NULL, provider_name TEXT NOT NULL,
             app_type TEXT NOT NULL, status TEXT NOT NULL, success INTEGER NOT NULL, message TEXT NOT NULL,
@@ -228,7 +277,7 @@ impl Database {
 
         // 注意：circuit_breaker_config 已合并到 proxy_config 表中
 
-        // 16. Proxy Live Backup 表 (Live 配置备份)
+        // 15. Proxy Live Backup 表 (Live 配置备份)
         conn.execute(
             "CREATE TABLE IF NOT EXISTS proxy_live_backup (
             app_type TEXT PRIMARY KEY, original_config TEXT NOT NULL, backed_up_at TEXT NOT NULL
@@ -345,6 +394,11 @@ impl Database {
                         log::info!("迁移数据库从 v2 到 v3（Skills 统一管理架构）");
                         Self::migrate_v2_to_v3(conn)?;
                         Self::set_user_version(conn, 3)?;
+                    }
+                    3 => {
+                        log::info!("迁移数据库从 v3 到 v4（Commands 统一管理架构）");
+                        Self::migrate_v3_to_v4(conn)?;
+                        Self::set_user_version(conn, 4)?;
                     }
                     _ => {
                         return Err(AppError::Database(format!(
@@ -844,6 +898,94 @@ impl Database {
         log::info!(
             "skills 表已迁移到 v3 结构。\n\
              注意：旧的安装记录已清除，首次启动时将自动扫描文件系统重建数据。"
+        );
+
+        Ok(())
+    }
+
+    /// v3 -> v4 迁移：Commands 统一管理架构
+    ///
+    /// 添加 commands 和 command_repos 表，用于统一管理 Claude Code Commands。
+    /// 由于使用 CREATE TABLE IF NOT EXISTS，实际上表已在 create_tables_on_conn 中创建，
+    /// 此迁移函数主要用于版本号递增和日志记录。
+    fn migrate_v3_to_v4(conn: &Connection) -> Result<(), AppError> {
+        // 检查 commands 表是否已存在（幂等性）
+        if Self::table_exists(conn, "commands")? {
+            log::info!("commands 表已存在，跳过创建");
+        } else {
+            // 创建 commands 表
+            conn.execute(
+                "CREATE TABLE commands (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    description TEXT,
+                    namespace TEXT NOT NULL DEFAULT '',
+                    filename TEXT NOT NULL,
+                    category TEXT,
+                    allowed_tools TEXT,
+                    mcp_servers TEXT,
+                    personas TEXT,
+                    extra_metadata TEXT,
+                    repo_owner TEXT,
+                    repo_name TEXT,
+                    repo_branch TEXT DEFAULT 'main',
+                    readme_url TEXT,
+                    enabled_claude INTEGER NOT NULL DEFAULT 0,
+                    enabled_codex INTEGER NOT NULL DEFAULT 0,
+                    enabled_gemini INTEGER NOT NULL DEFAULT 0,
+                    file_hash TEXT,
+                    installed_at INTEGER NOT NULL DEFAULT 0
+                )",
+                [],
+            )
+            .map_err(|e| AppError::Database(format!("创建 commands 表失败: {e}")))?;
+
+            // 创建索引
+            conn.execute(
+                "CREATE INDEX idx_commands_namespace ON commands(namespace)",
+                [],
+            )
+            .map_err(|e| AppError::Database(format!("创建 commands 命名空间索引失败: {e}")))?;
+
+            conn.execute(
+                "CREATE INDEX idx_commands_category ON commands(category)",
+                [],
+            )
+            .map_err(|e| AppError::Database(format!("创建 commands 分类索引失败: {e}")))?;
+
+            log::info!("commands 表已创建");
+        }
+
+        // 检查 command_repos 表是否已存在
+        if Self::table_exists(conn, "command_repos")? {
+            log::info!("command_repos 表已存在，跳过创建");
+        } else {
+            conn.execute(
+                "CREATE TABLE command_repos (
+                    owner TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    branch TEXT NOT NULL DEFAULT 'main',
+                    enabled BOOLEAN NOT NULL DEFAULT 1,
+                    PRIMARY KEY (owner, name)
+                )",
+                [],
+            )
+            .map_err(|e| AppError::Database(format!("创建 command_repos 表失败: {e}")))?;
+
+            log::info!("command_repos 表已创建");
+        }
+
+        // 标记：需要在启动后扫描现有 Commands 并导入
+        // 说明：v4 结构将 Commands 的 SSOT 迁移到 ~/.cc-switch/commands/，
+        // 需要在首次启动时扫描各应用目录并导入已有的 Commands。
+        let _ = conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('commands_ssot_migration_pending', 'true')",
+            [],
+        );
+
+        log::info!(
+            "数据库已迁移到 v4 结构（Commands 统一管理架构）。\n\
+             注意：首次启动时将自动扫描各应用目录并导入已有的 Commands。"
         );
 
         Ok(())
