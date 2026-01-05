@@ -1000,6 +1000,7 @@
     "branch": "ブランチ",
     "namespace": "名前空間",
     "rootNamespace": "ルート",
+    "localCommands": "ローカルコマンド",
     "filename": "ファイル名",
     "viewDocumentation": "ドキュメントを表示",
     "noReposConfigured": "リポジトリが設定されていません",

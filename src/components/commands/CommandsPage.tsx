@@ -139,9 +139,10 @@ export const CommandsPage: React.FC = () => {
       {/* Main Content - Two Column Layout */}
       <div className="flex-1 flex gap-4 overflow-hidden pb-8">
         {/* Left Sidebar - Namespace Tree */}
-        <div className="w-56 flex-shrink-0 flex flex-col overflow-hidden">
+        <div className="w-64 flex-shrink-0 flex flex-col overflow-hidden">
           <NamespaceTree
             namespaces={namespaces || []}
+            commands={commands}
             selectedNamespace={selectedNamespace}
             onSelectNamespace={setSelectedNamespace}
           />

@@ -993,6 +993,7 @@
     "branch": "分支",
     "namespace": "命名空间",
     "rootNamespace": "(根)",
+    "localCommands": "本地命令",
     "filename": "文件名",
     "viewDocumentation": "查看文档",
     "noReposConfigured": "暂无已配置的仓库",

@@ -1000,6 +1000,7 @@
     "branch": "Branch",
     "namespace": "Namespace",
     "rootNamespace": "Root",
+    "localCommands": "Local Commands",
     "filename": "Filename",
     "viewDocumentation": "View Documentation",
     "noReposConfigured": "No repositories configured",
