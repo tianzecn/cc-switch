@@ -253,6 +253,9 @@ pub struct DiscoverableCommand {
     pub repo_name: String,
     /// 仓库分支
     pub repo_branch: String,
+    /// 文件在仓库中的完整路径（如 plugins/bun/commands/agent.md）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_path: Option<String>,
 }
 
 /// 未管理的 Command（在应用目录中发现但未被 CC Switch 管理）

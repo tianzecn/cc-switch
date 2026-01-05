@@ -400,6 +400,11 @@ impl Database {
                         Self::migrate_v3_to_v4(conn)?;
                         Self::set_user_version(conn, 4)?;
                     }
+                    4 => {
+                        log::info!("迁移数据库从 v4 到 v5（Commands 发现缓存与源路径）");
+                        Self::migrate_v4_to_v5(conn)?;
+                        Self::set_user_version(conn, 5)?;
+                    }
                     _ => {
                         return Err(AppError::Database(format!(
                             "未知的数据库版本 {version}，无法迁移到 {SCHEMA_VERSION}"
@@ -986,6 +991,46 @@ impl Database {
         log::info!(
             "数据库已迁移到 v4 结构（Commands 统一管理架构）。\n\
              注意：首次启动时将自动扫描各应用目录并导入已有的 Commands。"
+        );
+
+        Ok(())
+    }
+
+    /// v4 -> v5 迁移：Commands 发现缓存与源路径
+    ///
+    /// 1. 给 commands 表添加 source_path 列（记录文件在仓库中的完整路径）
+    /// 2. 创建 command_discovery_cache 表（缓存仓库扫描结果）
+    fn migrate_v4_to_v5(conn: &Connection) -> Result<(), AppError> {
+        // 1. 添加 source_path 列到 commands 表
+        Self::add_column_if_missing(conn, "commands", "source_path", "TEXT")?;
+        log::info!("commands 表已添加 source_path 列");
+
+        // 2. 创建 command_discovery_cache 表
+        if Self::table_exists(conn, "command_discovery_cache")? {
+            log::info!("command_discovery_cache 表已存在，跳过创建");
+        } else {
+            conn.execute(
+                "CREATE TABLE command_discovery_cache (
+                    repo_owner TEXT NOT NULL,
+                    repo_name TEXT NOT NULL,
+                    repo_branch TEXT NOT NULL,
+                    commands_json TEXT NOT NULL,
+                    scanned_at INTEGER NOT NULL,
+                    PRIMARY KEY (repo_owner, repo_name, repo_branch)
+                )",
+                [],
+            )
+            .map_err(|e| {
+                AppError::Database(format!("创建 command_discovery_cache 表失败: {e}"))
+            })?;
+
+            log::info!("command_discovery_cache 表已创建");
+        }
+
+        log::info!(
+            "数据库已迁移到 v5 结构（Commands 发现缓存与源路径）。\n\
+             - commands 表新增 source_path 列，用于记录文件在仓库中的完整路径\n\
+             - 新增 command_discovery_cache 表，用于缓存仓库扫描结果"
         );
 
         Ok(())

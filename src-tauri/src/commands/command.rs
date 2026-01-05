@@ -125,16 +125,20 @@ pub fn import_commands_from_apps(
 
 // ========== 发现功能命令 ==========
 
-/// 发现可安装的 Commands（从仓库获取）
+/// 发现可安装的 Commands（从仓库获取，带缓存支持）
+///
+/// # 参数
+/// - `force_refresh`: 是否强制刷新（跳过缓存，默认 false）
 #[tauri::command]
 pub async fn discover_available_commands(
     service: State<'_, CommandServiceState>,
     app_state: State<'_, AppState>,
+    force_refresh: Option<bool>,
 ) -> Result<Vec<DiscoverableCommand>, String> {
     let repos = CommandService::get_repos(&app_state.db).map_err(|e| e.to_string())?;
     service
         .0
-        .discover_available(repos)
+        .discover_available(&app_state.db, repos, force_refresh.unwrap_or(false))
         .await
         .map_err(|e| e.to_string())
 }
@@ -187,7 +191,32 @@ pub fn remove_command_repo(
     app_state: State<'_, AppState>,
 ) -> Result<bool, String> {
     CommandService::remove_repo(&app_state.db, &owner, &name).map_err(|e| e.to_string())?;
+    // 同时删除该仓库的缓存
+    let _ = app_state.db.delete_repo_cache(&owner, &name);
     Ok(true)
+}
+
+/// 清除 Commands 发现缓存
+///
+/// # 参数
+/// - `owner`: 可选，仓库所有者。如果提供则只清除该仓库的缓存
+/// - `name`: 可选，仓库名称。与 owner 一起使用
+#[tauri::command]
+pub fn clear_command_cache(
+    owner: Option<String>,
+    name: Option<String>,
+    app_state: State<'_, AppState>,
+) -> Result<usize, String> {
+    match (owner, name) {
+        (Some(o), Some(n)) => app_state
+            .db
+            .delete_repo_cache(&o, &n)
+            .map_err(|e| e.to_string()),
+        _ => app_state
+            .db
+            .clear_all_command_cache()
+            .map_err(|e| e.to_string()),
+    }
 }
 
 // ========== 变更检测命令 ==========

@@ -32,7 +32,7 @@ mod schema;
 mod tests;
 
 // DAO 类型导出供外部使用
-pub use dao::FailoverQueueItem;
+pub use dao::{CommandDiscoveryCache, FailoverQueueItem, CACHE_EXPIRY_SECONDS};
 
 use crate::config::get_app_config_dir;
 use crate::error::AppError;
@@ -47,10 +47,10 @@ const DB_BACKUP_RETAIN: usize = 10;
 
 /// 当前 Schema 版本号
 /// 每次修改表结构时递增，并在 schema.rs 中添加相应的迁移逻辑
-pub(crate) const SCHEMA_VERSION: i32 = 4;
+pub(crate) const SCHEMA_VERSION: i32 = 5;
 
 /// 安全地序列化 JSON，避免 unwrap panic
-pub(crate) fn to_json_string<T: Serialize>(value: &T) -> Result<String, AppError> {
+pub(crate) fn to_json_string<T: Serialize + ?Sized>(value: &T) -> Result<String, AppError> {
     serde_json::to_string(value)
         .map_err(|e| AppError::Config(format!("JSON serialization failed: {e}")))
 }

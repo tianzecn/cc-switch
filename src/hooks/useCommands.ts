@@ -50,13 +50,34 @@ export function useCommandNamespaces() {
 }
 
 /**
- * 发现可安装的 Commands（从仓库获取）
+ * 发现可安装的 Commands（从仓库获取，带后端缓存支持）
+ *
+ * 后端有 24 小时缓存机制，首次加载很快。
+ * 使用 `refetch()` 时默认使用后端缓存，
+ * 需要强制刷新时请使用 `useRefreshDiscoverableCommands` mutation。
  */
 export function useDiscoverableCommands() {
   return useQuery({
     queryKey: commandKeys.discoverable(),
-    queryFn: () => commandsApi.discoverAvailable(),
-    staleTime: Infinity, // 无限缓存，直到仓库变化时 invalidate
+    queryFn: () => commandsApi.discoverAvailable(false),
+    staleTime: 5 * 60 * 1000, // 5 分钟后标记为 stale（但后端有 24h 缓存）
+  });
+}
+
+/**
+ * 强制刷新可发现的 Commands（跳过后端缓存）
+ *
+ * 用于用户点击"刷新"按钮时，强制从 GitHub 重新获取
+ */
+export function useRefreshDiscoverableCommands() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => commandsApi.discoverAvailable(true),
+    onSuccess: (data) => {
+      // 更新查询缓存
+      queryClient.setQueryData(commandKeys.discoverable(), data);
+    },
   });
 }
 

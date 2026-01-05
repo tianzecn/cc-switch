@@ -6,7 +6,9 @@
 ## 📋 需求概述
 
 ### 核心目标
+
 构建一个完整的 Commands 管理模块，支持：
+
 1. **统一管理** - SSOT 模式，集中存储，同步到各应用目录
 2. **发现安装** - 从 GitHub 仓库发现并安装 Commands
 3. **本地管理** - 只读展示 + 外部编辑器打开 + 双向同步
@@ -14,21 +16,21 @@
 
 ### 用户决策汇总
 
-| 决策项 | 选择 |
-|--------|------|
-| UI 布局 | 双栏布局（左侧命名空间树 + 右侧列表） |
-| 详情展示 | 完整元数据 + Markdown 内容预览 |
-| 迁移策略 | 双向同步（检测外部变更并同步） |
-| 冲突处理 | 提示用户选择保留版本 |
-| 元数据支持 | 完整支持所有 YAML 字段 |
-| 发现页面 | 列表 + 分类筛选 + 搜索 |
-| 命名空间 UI | 简单列表（左侧树结构） |
-| 存储策略 | 元数据存 DB + 文件内容存磁盘 |
-| 变更检测 | 文件系统监听（notify crate） |
-| 仓库结构 | 混合模式（索引优先，fallback 扫描） |
-| 多应用支持 | 动态检测各应用是否支持 Commands |
-| 安装粒度 | 保持仓库目录结构（命名空间） |
-| ID 策略 | 命名空间+文件名（如 `sc/agent`） |
+| 决策项      | 选择                                  |
+| ----------- | ------------------------------------- |
+| UI 布局     | 双栏布局（左侧命名空间树 + 右侧列表） |
+| 详情展示    | 完整元数据 + Markdown 内容预览        |
+| 迁移策略    | 双向同步（检测外部变更并同步）        |
+| 冲突处理    | 提示用户选择保留版本                  |
+| 元数据支持  | 完整支持所有 YAML 字段                |
+| 发现页面    | 列表 + 分类筛选 + 搜索                |
+| 命名空间 UI | 简单列表（左侧树结构）                |
+| 存储策略    | 元数据存 DB + 文件内容存磁盘          |
+| 变更检测    | 文件系统监听（notify crate）          |
+| 仓库结构    | 混合模式（索引优先，fallback 扫描）   |
+| 多应用支持  | 动态检测各应用是否支持 Commands       |
+| 安装粒度    | 保持仓库目录结构（命名空间）          |
+| ID 策略     | 命名空间+文件名（如 `sc/agent`）      |
 
 ---
 
@@ -364,32 +366,32 @@ pub struct CommandNamespace {
 
 ### 需要创建的文件
 
-| 文件路径 | 职责 |
-|----------|------|
-| `src-tauri/src/services/command.rs` | Command 业务逻辑 |
-| `src-tauri/src/services/command_watcher.rs` | 文件监听服务 |
-| `src-tauri/src/commands/command.rs` | Tauri IPC 命令 |
-| `src-tauri/src/database/dao/commands.rs` | 数据访问对象 |
-| `src/lib/api/commands.ts` | 前端 API 封装 |
-| `src/hooks/useCommands.ts` | TanStack Query hooks |
-| `src/components/commands/CommandsPage.tsx` | 主页面 |
-| `src/components/commands/NamespaceTree.tsx` | 命名空间树 |
-| `src/components/commands/CommandsList.tsx` | 命令列表 |
-| `src/components/commands/CommandDetail.tsx` | 详情面板 |
-| `src/components/commands/CommandDiscovery.tsx` | 发现页面 |
-| `src/components/commands/CommandPreview.tsx` | Markdown 预览 |
+| 文件路径                                       | 职责                 |
+| ---------------------------------------------- | -------------------- |
+| `src-tauri/src/services/command.rs`            | Command 业务逻辑     |
+| `src-tauri/src/services/command_watcher.rs`    | 文件监听服务         |
+| `src-tauri/src/commands/command.rs`            | Tauri IPC 命令       |
+| `src-tauri/src/database/dao/commands.rs`       | 数据访问对象         |
+| `src/lib/api/commands.ts`                      | 前端 API 封装        |
+| `src/hooks/useCommands.ts`                     | TanStack Query hooks |
+| `src/components/commands/CommandsPage.tsx`     | 主页面               |
+| `src/components/commands/NamespaceTree.tsx`    | 命名空间树           |
+| `src/components/commands/CommandsList.tsx`     | 命令列表             |
+| `src/components/commands/CommandDetail.tsx`    | 详情面板             |
+| `src/components/commands/CommandDiscovery.tsx` | 发现页面             |
+| `src/components/commands/CommandPreview.tsx`   | Markdown 预览        |
 
 ### 需要修改的文件
 
-| 文件路径 | 修改内容 |
-|----------|----------|
-| `src-tauri/src/database/mod.rs` | 添加 commands 表迁移 |
-| `src-tauri/src/app_config.rs` | 添加 Command 类型定义 |
-| `src-tauri/src/services/mod.rs` | 导出 command 模块 |
-| `src-tauri/src/commands/mod.rs` | 导出 command 命令 |
-| `src-tauri/src/main.rs` | 注册命令和启动监听 |
-| `src/App.tsx` 或路由配置 | 添加 Commands 页面路由 |
-| `src/i18n/locales/*.json` | 添加 i18n 翻译 |
+| 文件路径                        | 修改内容               |
+| ------------------------------- | ---------------------- |
+| `src-tauri/src/database/mod.rs` | 添加 commands 表迁移   |
+| `src-tauri/src/app_config.rs`   | 添加 Command 类型定义  |
+| `src-tauri/src/services/mod.rs` | 导出 command 模块      |
+| `src-tauri/src/commands/mod.rs` | 导出 command 命令      |
+| `src-tauri/src/main.rs`         | 注册命令和启动监听     |
+| `src/App.tsx` 或路由配置        | 添加 Commands 页面路由 |
+| `src/i18n/locales/*.json`       | 添加 i18n 翻译         |
 
 ---
 
@@ -406,6 +408,7 @@ pub struct CommandNamespace {
 ## 🚀 实施阶段
 
 ### Phase 1: 核心基础 (预计 3-4 天)
+
 - [ ] SQLite 表结构和迁移
 - [ ] Rust 类型定义
 - [ ] DAO 层 CRUD
@@ -413,12 +416,14 @@ pub struct CommandNamespace {
 - [ ] Tauri 命令注册
 
 ### Phase 2: 文件同步 (预计 2-3 天)
+
 - [ ] SSOT 目录管理
 - [ ] 应用目录同步
 - [ ] YAML frontmatter 解析
 - [ ] 文件监听服务
 
 ### Phase 3: 前端 UI (预计 3-4 天)
+
 - [ ] API 层封装
 - [ ] TanStack Query hooks
 - [ ] 双栏布局主页面
@@ -427,12 +432,14 @@ pub struct CommandNamespace {
 - [ ] 详情面板
 
 ### Phase 4: 发现与导入 (预计 2-3 天)
+
 - [ ] GitHub 仓库发现
 - [ ] 发现页面 UI
 - [ ] 未管理 Commands 扫描
 - [ ] 导入功能
 
 ### Phase 5: 高级功能 (预计 2 天)
+
 - [ ] 冲突检测与解决 UI
 - [ ] 多应用支持检测
 - [ ] i18n 翻译
@@ -440,4 +447,4 @@ pub struct CommandNamespace {
 
 ---
 
-*本规格由傲娇大小姐工程师哈雷酱倾情设计，笨蛋们好好按照这个来实现吧！(￣▽￣)ノ*
+_本规格由傲娇大小姐工程师哈雷酱倾情设计，笨蛋们好好按照这个来实现吧！(￣▽￣)ノ_

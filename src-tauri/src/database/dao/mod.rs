@@ -14,5 +14,6 @@ pub mod stream_check;
 pub mod universal_providers;
 
 // 所有 DAO 方法都通过 Database impl 提供，无需单独导出
-// 导出 FailoverQueueItem 供外部使用
+// 导出特定类型供外部使用
+pub use commands::{CommandDiscoveryCache, CACHE_EXPIRY_SECONDS};
 pub use failover::FailoverQueueItem;

@@ -620,35 +620,100 @@ impl CommandService {
 
     // ========== 发现功能 ==========
 
-    /// 列出所有可发现的 Commands（从仓库获取）
+    /// 列出所有可发现的 Commands（从仓库获取，带缓存支持）
+    ///
+    /// # 参数
+    /// - `db`: 数据库连接，用于缓存查询和存储
+    /// - `repos`: 仓库列表
+    /// - `force_refresh`: 是否强制刷新（跳过缓存）
+    ///
+    /// # 缓存策略
+    /// - 缓存有效期：24小时
+    /// - 强制刷新时跳过缓存直接从 GitHub 获取
+    /// - 获取成功后更新缓存
     pub async fn discover_available(
         &self,
+        db: &Arc<Database>,
         repos: Vec<CommandRepo>,
+        force_refresh: bool,
     ) -> Result<Vec<DiscoverableCommand>> {
+        use crate::database::CACHE_EXPIRY_SECONDS;
+
         let mut commands = Vec::new();
 
         // 仅使用启用的仓库
         let enabled_repos: Vec<CommandRepo> =
             repos.into_iter().filter(|repo| repo.enabled).collect();
 
-        let fetch_tasks = enabled_repos
-            .iter()
-            .map(|repo| self.fetch_repo_commands(repo));
+        // 先清理过期缓存
+        if let Err(e) = db.cleanup_expired_cache() {
+            log::warn!("清理过期缓存失败: {}", e);
+        }
 
-        let results: Vec<Result<Vec<DiscoverableCommand>>> =
-            futures::future::join_all(fetch_tasks).await;
+        // 分离：需要从网络获取的仓库 vs 可以使用缓存的仓库
+        let mut repos_to_fetch = Vec::new();
+        let mut cached_commands = Vec::new();
 
-        for (repo, result) in enabled_repos.into_iter().zip(results.into_iter()) {
-            match result {
-                Ok(repo_commands) => commands.extend(repo_commands),
-                Err(e) => log::warn!(
-                    "获取仓库 {}/{} Commands 失败: {}",
-                    repo.owner,
-                    repo.name,
-                    e
-                ),
+        for repo in &enabled_repos {
+            if force_refresh {
+                repos_to_fetch.push(repo.clone());
+                continue;
+            }
+
+            // 尝试从缓存获取
+            match db.get_cached_commands(&repo.owner, &repo.name, &repo.branch) {
+                Ok(Some(cache)) => {
+                    // 检查缓存是否过期
+                    let now = chrono::Utc::now().timestamp();
+                    if now - cache.scanned_at < CACHE_EXPIRY_SECONDS {
+                        log::debug!(
+                            "使用缓存: {}/{} ({} 个命令)",
+                            repo.owner,
+                            repo.name,
+                            cache.commands.len()
+                        );
+                        cached_commands.extend(cache.commands);
+                    } else {
+                        log::debug!("缓存过期: {}/{}", repo.owner, repo.name);
+                        repos_to_fetch.push(repo.clone());
+                    }
+                }
+                Ok(None) => {
+                    log::debug!("无缓存: {}/{}", repo.owner, repo.name);
+                    repos_to_fetch.push(repo.clone());
+                }
+                Err(e) => {
+                    log::warn!("读取缓存失败: {}/{}: {}", repo.owner, repo.name, e);
+                    repos_to_fetch.push(repo.clone());
+                }
             }
         }
+
+        // 从网络获取需要刷新的仓库
+        if !repos_to_fetch.is_empty() {
+            let db_clone = Arc::clone(db);
+            let fetch_tasks = repos_to_fetch
+                .iter()
+                .map(|repo| self.fetch_repo_commands_with_cache(repo, &db_clone));
+
+            let results: Vec<Result<Vec<DiscoverableCommand>>> =
+                futures::future::join_all(fetch_tasks).await;
+
+            for (repo, result) in repos_to_fetch.into_iter().zip(results.into_iter()) {
+                match result {
+                    Ok(repo_commands) => commands.extend(repo_commands),
+                    Err(e) => log::warn!(
+                        "获取仓库 {}/{} Commands 失败: {}",
+                        repo.owner,
+                        repo.name,
+                        e
+                    ),
+                }
+            }
+        }
+
+        // 合并缓存的命令
+        commands.extend(cached_commands);
 
         // 去重并排序
         Self::deduplicate_commands(&mut commands);
@@ -657,7 +722,35 @@ impl CommandService {
         Ok(commands)
     }
 
-    /// 从仓库获取 Commands 列表
+    /// 从仓库获取 Commands 列表并更新缓存
+    async fn fetch_repo_commands_with_cache(
+        &self,
+        repo: &CommandRepo,
+        db: &Arc<Database>,
+    ) -> Result<Vec<DiscoverableCommand>> {
+        let commands = self.fetch_repo_commands(repo).await?;
+
+        // 保存到缓存
+        if let Err(e) = db.save_cached_commands(&repo.owner, &repo.name, &repo.branch, &commands) {
+            log::warn!(
+                "保存缓存失败: {}/{}: {}",
+                repo.owner,
+                repo.name,
+                e
+            );
+        } else {
+            log::debug!(
+                "已缓存: {}/{} ({} 个命令)",
+                repo.owner,
+                repo.name,
+                commands.len()
+            );
+        }
+
+        Ok(commands)
+    }
+
+    /// 从仓库获取 Commands 列表（不带缓存）
     async fn fetch_repo_commands(&self, repo: &CommandRepo) -> Result<Vec<DiscoverableCommand>> {
         let temp_dir = timeout(
             std::time::Duration::from_secs(60),
@@ -676,15 +769,143 @@ impl CommandService {
         Ok(commands)
     }
 
-    /// 扫描仓库目录查找 .md 文件
+    /// 扫描仓库查找所有 commands 目录中的命令
+    ///
+    /// 策略：
+    /// 1. 浅层扫描（最多3层）查找所有名为 `commands` 的目录
+    /// 2. 对每个 commands 目录，计算其父目录作为命名空间
+    /// 3. 扫描该目录内的 .md 文件
     fn scan_repo_for_commands(
-        current_dir: &Path,
+        _current_dir: &Path,
         base_dir: &Path,
         repo: &CommandRepo,
         commands: &mut Vec<DiscoverableCommand>,
     ) -> Result<()> {
-        for entry in fs::read_dir(current_dir)? {
-            let entry = entry?;
+        // 查找所有 commands 目录
+        let commands_dirs = Self::find_commands_directories(base_dir, 3)?;
+
+        for commands_dir in commands_dirs {
+            // 计算命名空间：commands 目录的父目录名
+            // plugins/bun/commands -> namespace = "bun"
+            // commands -> namespace = ""
+            let namespace = Self::compute_namespace(&commands_dir, base_dir);
+
+            // 扫描该 commands 目录内的所有 .md 文件
+            Self::scan_commands_directory(
+                &commands_dir,
+                &commands_dir,
+                base_dir,
+                &namespace,
+                repo,
+                commands,
+            )?;
+        }
+
+        Ok(())
+    }
+
+    /// 浅层扫描查找所有名为 `commands` 的目录
+    fn find_commands_directories(base_dir: &Path, max_depth: usize) -> Result<Vec<PathBuf>> {
+        let mut result = Vec::new();
+        Self::find_commands_directories_recursive(base_dir, 0, max_depth, &mut result)?;
+        Ok(result)
+    }
+
+    fn find_commands_directories_recursive(
+        current_dir: &Path,
+        current_depth: usize,
+        max_depth: usize,
+        result: &mut Vec<PathBuf>,
+    ) -> Result<()> {
+        if current_depth > max_depth {
+            return Ok(());
+        }
+
+        let entries = match fs::read_dir(current_dir) {
+            Ok(e) => e,
+            Err(_) => return Ok(()), // 跳过无法读取的目录
+        };
+
+        for entry in entries {
+            let entry = match entry {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+
+            // 跳过隐藏目录
+            if name.starts_with('.') {
+                continue;
+            }
+
+            if path.is_dir() {
+                if name == "commands" {
+                    // 找到 commands 目录，添加到结果
+                    result.push(path);
+                    // 不再递归进入 commands 目录查找嵌套的 commands
+                } else {
+                    // 继续向下搜索
+                    Self::find_commands_directories_recursive(
+                        &path,
+                        current_depth + 1,
+                        max_depth,
+                        result,
+                    )?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// 计算命名空间：commands 目录的父目录名
+    ///
+    /// - `plugins/bun/commands` -> "bun"
+    /// - `commands` -> ""
+    /// - `some/deep/path/commands` -> "path"
+    fn compute_namespace(commands_dir: &Path, base_dir: &Path) -> String {
+        // 获取相对路径
+        let relative = commands_dir.strip_prefix(base_dir).unwrap_or(commands_dir);
+
+        // 获取父目录
+        if let Some(parent) = relative.parent() {
+            if parent.as_os_str().is_empty() {
+                // commands 在根目录
+                String::new()
+            } else {
+                // 取父目录的最后一个组件作为命名空间
+                parent
+                    .file_name()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_default()
+            }
+        } else {
+            String::new()
+        }
+    }
+
+    /// 扫描单个 commands 目录内的 .md 文件
+    fn scan_commands_directory(
+        current_dir: &Path,
+        commands_root: &Path,
+        base_dir: &Path,
+        namespace: &str,
+        repo: &CommandRepo,
+        commands: &mut Vec<DiscoverableCommand>,
+    ) -> Result<()> {
+        let entries = match fs::read_dir(current_dir) {
+            Ok(e) => e,
+            Err(_) => return Ok(()),
+        };
+
+        for entry in entries {
+            let entry = match entry {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+
             let path = entry.path();
             let name = entry.file_name().to_string_lossy().to_string();
 
@@ -693,41 +914,66 @@ impl CommandService {
                 continue;
             }
 
-            // 跳过非 command 文件（如 README.md, LICENSE.md 等）
+            // 跳过非 command 文件
             let skip_files = ["README.md", "LICENSE.md", "CHANGELOG.md", "CONTRIBUTING.md"];
             if skip_files.contains(&name.as_str()) {
                 continue;
             }
 
             if path.is_dir() {
-                Self::scan_repo_for_commands(&path, base_dir, repo, commands)?;
+                // 递归扫描子目录
+                Self::scan_commands_directory(
+                    &path,
+                    commands_root,
+                    base_dir,
+                    namespace,
+                    repo,
+                    commands,
+                )?;
             } else if path.extension().map(|e| e == "md").unwrap_or(false) {
-                let relative = path.strip_prefix(base_dir).unwrap_or(&path);
-                let id = Self::relative_path_to_id(relative);
+                // 计算文件在 commands 目录内的相对路径
+                let relative_in_commands = path.strip_prefix(commands_root).unwrap_or(&path);
+                let filename_path = relative_in_commands.with_extension("");
+                let filename_str = filename_path.to_string_lossy().replace('\\', "/");
+
+                // 计算完整 ID
+                // 如果有命名空间：namespace/filename (可能包含子目录)
+                // 如果没有命名空间：filename
+                let id = if namespace.is_empty() {
+                    filename_str.clone()
+                } else {
+                    format!("{}/{}", namespace, filename_str)
+                };
+
+                // 计算 source_path（相对于仓库根目录）
+                let source_path = path
+                    .strip_prefix(base_dir)
+                    .unwrap_or(&path)
+                    .to_string_lossy()
+                    .replace('\\', "/");
 
                 // 解析元数据
                 let content = fs::read_to_string(&path).unwrap_or_default();
                 let metadata = Self::parse_command_metadata(&content).unwrap_or_default();
 
-                let (namespace, filename) = Self::parse_id(&id);
+                // 解析 ID 得到最终的命名空间和文件名
+                let (final_namespace, final_filename) = Self::parse_id(&id);
 
                 commands.push(DiscoverableCommand {
                     key: id,
-                    name: metadata.name.unwrap_or_else(|| filename.clone()),
+                    name: metadata.name.unwrap_or_else(|| final_filename.clone()),
                     description: metadata.description.unwrap_or_default(),
-                    namespace,
-                    filename,
+                    namespace: final_namespace,
+                    filename: final_filename,
                     category: metadata.category,
                     readme_url: Some(format!(
                         "https://github.com/{}/{}/blob/{}/{}",
-                        repo.owner,
-                        repo.name,
-                        repo.branch,
-                        relative.display()
+                        repo.owner, repo.name, repo.branch, source_path
                     )),
                     repo_owner: repo.owner.clone(),
                     repo_name: repo.name.clone(),
                     repo_branch: repo.branch.clone(),
+                    source_path: Some(source_path),
                 });
             }
         }
@@ -737,9 +983,15 @@ impl CommandService {
 
     /// 下载单个 Command 内容
     async fn download_command_content(&self, command: &DiscoverableCommand) -> Result<String> {
+        // 优先使用 source_path（完整仓库路径），否则回退到旧逻辑
+        let file_path = command
+            .source_path
+            .clone()
+            .unwrap_or_else(|| format!("{}.md", command.key));
+
         let url = format!(
-            "https://raw.githubusercontent.com/{}/{}/{}/{}.md",
-            command.repo_owner, command.repo_name, command.repo_branch, command.key
+            "https://raw.githubusercontent.com/{}/{}/{}/{}",
+            command.repo_owner, command.repo_name, command.repo_branch, file_path
         );
 
         let response = self.http_client.get(&url).send().await?;

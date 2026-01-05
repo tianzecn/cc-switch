@@ -2,11 +2,26 @@
 //!
 //! 提供 Commands 表的 CRUD 操作
 
-use crate::app_config::{CommandApps, CommandNamespace, CommandRepo, InstalledCommand};
+use crate::app_config::{
+    CommandApps, CommandNamespace, CommandRepo, DiscoverableCommand, InstalledCommand,
+};
 use crate::database::{lock_conn, to_json_string, Database};
 use crate::error::AppError;
 use indexmap::IndexMap;
 use rusqlite::{params, OptionalExtension};
+
+/// 缓存过期时间：24小时（秒）
+pub const CACHE_EXPIRY_SECONDS: i64 = 24 * 60 * 60;
+
+/// Command 发现缓存条目
+#[derive(Debug, Clone)]
+pub struct CommandDiscoveryCache {
+    pub repo_owner: String,
+    pub repo_name: String,
+    pub repo_branch: String,
+    pub commands: Vec<DiscoverableCommand>,
+    pub scanned_at: i64,
+}
 
 impl Database {
     // ========== Commands CRUD ==========
@@ -405,6 +420,155 @@ impl Database {
             .query_row("SELECT COUNT(*) FROM commands", [], |row| row.get(0))
             .map_err(|e| AppError::Database(e.to_string()))?;
         Ok(count == 0)
+    }
+
+    // ========== Command Discovery Cache ==========
+
+    /// 获取仓库的缓存 Commands（如果未过期）
+    ///
+    /// 返回 None 如果缓存不存在或已过期
+    pub fn get_cached_commands(
+        &self,
+        owner: &str,
+        name: &str,
+        branch: &str,
+    ) -> Result<Option<CommandDiscoveryCache>, AppError> {
+        let conn = lock_conn!(self.conn);
+        let mut stmt = conn
+            .prepare(
+                r#"
+                SELECT repo_owner, repo_name, repo_branch, commands_json, scanned_at
+                FROM command_discovery_cache
+                WHERE repo_owner = ?1 AND repo_name = ?2 AND repo_branch = ?3
+                "#,
+            )
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        let result = stmt
+            .query_row(params![owner, name, branch], |row| {
+                let commands_json: String = row.get(3)?;
+                let scanned_at: i64 = row.get(4)?;
+
+                // 检查是否过期
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs() as i64;
+
+                if now - scanned_at > CACHE_EXPIRY_SECONDS {
+                    // 缓存已过期
+                    return Ok(None);
+                }
+
+                // 解析 JSON
+                let commands: Vec<DiscoverableCommand> =
+                    serde_json::from_str(&commands_json).unwrap_or_default();
+
+                Ok(Some(CommandDiscoveryCache {
+                    repo_owner: row.get(0)?,
+                    repo_name: row.get(1)?,
+                    repo_branch: row.get(2)?,
+                    commands,
+                    scanned_at,
+                }))
+            })
+            .optional()
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        // 展平 Option<Option<T>> -> Option<T>
+        Ok(result.flatten())
+    }
+
+    /// 保存 Commands 到缓存
+    pub fn save_cached_commands(
+        &self,
+        owner: &str,
+        name: &str,
+        branch: &str,
+        commands: &[DiscoverableCommand],
+    ) -> Result<(), AppError> {
+        let conn = lock_conn!(self.conn);
+        let commands_json = to_json_string(commands)?;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+
+        conn.execute(
+            r#"
+            INSERT OR REPLACE INTO command_discovery_cache
+                (repo_owner, repo_name, repo_branch, commands_json, scanned_at)
+            VALUES (?1, ?2, ?3, ?4, ?5)
+            "#,
+            params![owner, name, branch, commands_json, now],
+        )
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        Ok(())
+    }
+
+    /// 删除指定仓库的缓存
+    pub fn delete_cached_commands(
+        &self,
+        owner: &str,
+        name: &str,
+        branch: &str,
+    ) -> Result<bool, AppError> {
+        let conn = lock_conn!(self.conn);
+        let affected = conn
+            .execute(
+                r#"
+                DELETE FROM command_discovery_cache
+                WHERE repo_owner = ?1 AND repo_name = ?2 AND repo_branch = ?3
+                "#,
+                params![owner, name, branch],
+            )
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        Ok(affected > 0)
+    }
+
+    /// 删除指定仓库的所有分支缓存
+    pub fn delete_repo_cache(&self, owner: &str, name: &str) -> Result<usize, AppError> {
+        let conn = lock_conn!(self.conn);
+        let affected = conn
+            .execute(
+                "DELETE FROM command_discovery_cache WHERE repo_owner = ?1 AND repo_name = ?2",
+                params![owner, name],
+            )
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        Ok(affected)
+    }
+
+    /// 清空所有缓存
+    pub fn clear_all_command_cache(&self) -> Result<usize, AppError> {
+        let conn = lock_conn!(self.conn);
+        let affected = conn
+            .execute("DELETE FROM command_discovery_cache", [])
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        Ok(affected)
+    }
+
+    /// 清理过期的缓存条目
+    pub fn cleanup_expired_cache(&self) -> Result<usize, AppError> {
+        let conn = lock_conn!(self.conn);
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+
+        let cutoff = now - CACHE_EXPIRY_SECONDS;
+
+        let affected = conn
+            .execute(
+                "DELETE FROM command_discovery_cache WHERE scanned_at < ?1",
+                params![cutoff],
+            )
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        Ok(affected)
     }
 }
 

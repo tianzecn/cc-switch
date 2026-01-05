@@ -146,9 +146,12 @@ export const commandsApi = {
     return await invoke("import_commands_from_apps", { commandIds });
   },
 
-  /** 发现可安装的 Commands（从仓库获取） */
-  async discoverAvailable(): Promise<DiscoverableCommand[]> {
-    return await invoke("discover_available_commands");
+  /**
+   * 发现可安装的 Commands（从仓库获取，带缓存支持）
+   * @param forceRefresh 是否强制刷新（跳过缓存）
+   */
+  async discoverAvailable(forceRefresh = false): Promise<DiscoverableCommand[]> {
+    return await invoke("discover_available_commands", { forceRefresh });
   },
 
   // ========== 文件操作 API ==========
@@ -183,6 +186,16 @@ export const commandsApi = {
   /** 删除仓库 */
   async removeRepo(owner: string, name: string): Promise<boolean> {
     return await invoke("remove_command_repo", { owner, name });
+  },
+
+  /**
+   * 清除 Commands 发现缓存
+   * @param owner 仓库所有者（可选，不提供则清除全部）
+   * @param name 仓库名称（可选，与 owner 一起使用）
+   * @returns 清除的缓存条目数
+   */
+  async clearCache(owner?: string, name?: string): Promise<number> {
+    return await invoke("clear_command_cache", { owner, name });
   },
 
   // ========== 变更检测 API ==========

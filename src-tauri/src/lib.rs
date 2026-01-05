@@ -735,6 +735,7 @@ pub fn run() {
             commands::get_command_repos,
             commands::add_command_repo,
             commands::remove_command_repo,
+            commands::clear_command_cache,
             commands::detect_command_changes,
             commands::resolve_command_conflict,
             commands::refresh_commands_from_ssot,
