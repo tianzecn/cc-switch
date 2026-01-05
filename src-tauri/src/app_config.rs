@@ -535,6 +535,221 @@ pub struct UnmanagedSkill {
     pub found_in: Vec<String>,
 }
 
+// ========== Hook 相关类型 (v3.xx.0+) ==========
+
+/// Hook 启用状态（按应用）
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+pub struct HookApps {
+    pub claude: bool,
+    pub codex: bool,
+    pub gemini: bool,
+}
+
+impl HookApps {
+    /// 检查指定应用是否启用
+    pub fn is_enabled_for(&self, app: &str) -> bool {
+        match app.to_lowercase().as_str() {
+            "claude" => self.claude,
+            "codex" => self.codex,
+            "gemini" => self.gemini,
+            _ => false,
+        }
+    }
+
+    /// 设置指定应用的启用状态
+    pub fn set_enabled_for(&mut self, app: &str, enabled: bool) {
+        match app.to_lowercase().as_str() {
+            "claude" => self.claude = enabled,
+            "codex" => self.codex = enabled,
+            "gemini" => self.gemini = enabled,
+            _ => {}
+        }
+    }
+
+    /// 创建只启用指定应用的实例
+    pub fn only(app: &AppType) -> Self {
+        let mut apps = Self::default();
+        match app {
+            AppType::Claude => apps.claude = true,
+            AppType::Codex => apps.codex = true,
+            AppType::Gemini => apps.gemini = true,
+        }
+        apps
+    }
+
+    /// 检查是否有任何应用启用
+    pub fn any_enabled(&self) -> bool {
+        self.claude || self.codex || self.gemini
+    }
+}
+
+/// Hook 事件类型
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "PascalCase")]
+pub enum HookEventType {
+    /// 工具执行前
+    PreToolUse,
+    /// 工具执行后
+    PostToolUse,
+    /// 权限请求时
+    PermissionRequest,
+    /// 会话结束时
+    SessionEnd,
+}
+
+impl std::fmt::Display for HookEventType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            HookEventType::PreToolUse => write!(f, "PreToolUse"),
+            HookEventType::PostToolUse => write!(f, "PostToolUse"),
+            HookEventType::PermissionRequest => write!(f, "PermissionRequest"),
+            HookEventType::SessionEnd => write!(f, "SessionEnd"),
+        }
+    }
+}
+
+/// Hook 执行类型
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum HookType {
+    /// 命令类型 Hook
+    Command {
+        /// 要执行的命令
+        command: String,
+    },
+    /// 提示类型 Hook
+    Prompt {
+        /// 提示内容
+        prompt: String,
+    },
+}
+
+/// Hook 规则（匹配器 + Hook 列表）
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct HookRule {
+    /// 匹配器（如 "Bash", "Edit|Write", "*", ""）
+    pub matcher: String,
+    /// Hook 执行列表
+    pub hooks: Vec<HookType>,
+}
+
+/// 已安装的 Hook
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstalledHook {
+    /// 唯一标识符（格式："namespace/filename" 或 "filename"）
+    pub id: String,
+    /// 显示名称
+    pub name: String,
+    /// 描述
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// 命名空间（空字符串表示根命名空间）
+    pub namespace: String,
+    /// 文件名（不含 .json 后缀）
+    pub filename: String,
+
+    /// 事件类型
+    pub event_type: HookEventType,
+    /// Hook 规则列表
+    pub rules: Vec<HookRule>,
+
+    /// 全局启用状态
+    pub enabled: bool,
+    /// 执行优先级（数字越小越先执行）
+    pub priority: i32,
+
+    /// 仓库所有者
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repo_owner: Option<String>,
+    /// 仓库名称
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repo_name: Option<String>,
+    /// 仓库分支
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repo_branch: Option<String>,
+    /// README URL
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub readme_url: Option<String>,
+    /// 在仓库中的源路径
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_path: Option<String>,
+
+    /// 应用启用状态
+    pub apps: HookApps,
+
+    /// 文件哈希（用于检测变更）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_hash: Option<String>,
+    /// 安装时间（Unix 时间戳）
+    pub installed_at: i64,
+}
+
+/// 可发现的 Hook（来自仓库扫描）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoverableHook {
+    /// 在仓库中的唯一标识
+    pub key: String,
+    /// 显示名称
+    pub name: String,
+    /// 描述
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// 命名空间
+    pub namespace: String,
+    /// 文件名（不含 .json 后缀）
+    pub filename: String,
+
+    /// 事件类型
+    pub event_type: HookEventType,
+    /// Hook 规则列表
+    pub rules: Vec<HookRule>,
+    /// 默认优先级
+    pub priority: i32,
+
+    /// 仓库所有者
+    pub repo_owner: String,
+    /// 仓库名称
+    pub repo_name: String,
+    /// 仓库分支
+    pub repo_branch: String,
+    /// README URL
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub readme_url: Option<String>,
+    /// 在仓库中的源路径（用于下载）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_path: Option<String>,
+}
+
+/// Hook 命名空间
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HookNamespace {
+    /// 命名空间名称（空字符串表示根）
+    pub name: String,
+    /// 显示名称（"Root" 或实际名称）
+    pub display_name: String,
+    /// 该命名空间下的 Hook 数量
+    pub hook_count: usize,
+}
+
+/// 未管理的 Hook（在应用配置中发现但不在 SSOT 中）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnmanagedHook {
+    /// 生成的标识符
+    pub id: String,
+    /// 事件类型
+    pub event_type: HookEventType,
+    /// 匹配器
+    pub matcher: String,
+    /// Hook 类型和内容
+    pub hook_type: HookType,
+    /// 在哪些应用配置中发现
+    pub found_in: Vec<String>,
+}
+
 /// MCP 服务器定义（v3.7.0 统一结构）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpServer {

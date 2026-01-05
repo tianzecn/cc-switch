@@ -40,7 +40,8 @@ pub use mcp::{
 pub use provider::{Provider, ProviderMeta};
 pub use services::{
     AgentMetadata, AgentService, CommandMetadata, CommandService, ConfigService, EndpointLatency,
-    McpService, PromptService, ProviderService, ProxyService, SkillService, SpeedtestService,
+    HookService, McpService, PromptService, ProviderService, ProxyService, SkillService,
+    SpeedtestService,
 };
 pub use settings::{update_settings, AppSettings};
 pub use store::AppState;
@@ -582,6 +583,10 @@ pub fn run() {
             let agent_service = AgentService::new();
             app.manage(commands::agent::AgentServiceState(Arc::new(agent_service)));
 
+            // 初始化 HookService (Hooks 统一管理)
+            let hook_service = HookService::new();
+            app.manage(commands::hook::HookServiceState(Arc::new(hook_service)));
+
             // 异常退出恢复 + 代理状态自动恢复
             let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -766,6 +771,28 @@ pub fn run() {
             commands::resolve_agent_conflict,
             commands::refresh_agents_from_ssot,
             commands::sync_agents_to_apps,
+            // Hook management (统一管理)
+            commands::get_installed_hooks,
+            commands::get_hook_namespaces,
+            commands::install_hook_unified,
+            commands::uninstall_hook_unified,
+            commands::toggle_hook_enabled,
+            commands::toggle_hook_app,
+            commands::update_hook_priority,
+            commands::reorder_hooks,
+            commands::create_hook_namespace,
+            commands::delete_hook_namespace,
+            commands::scan_unmanaged_hooks,
+            commands::discover_available_hooks,
+            commands::get_hook_content,
+            commands::open_hook_in_editor,
+            commands::check_app_hooks_support_cmd,
+            commands::get_hook_repos,
+            commands::add_hook_repo,
+            commands::remove_hook_repo,
+            commands::clear_hook_cache,
+            commands::refresh_hooks_from_ssot,
+            commands::sync_hooks_to_apps,
             // Auto launch
             commands::set_auto_launch,
             commands::get_auto_launch_status,

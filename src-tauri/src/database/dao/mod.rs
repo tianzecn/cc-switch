@@ -5,6 +5,7 @@
 pub mod agents;
 pub mod commands;
 pub mod failover;
+pub mod hooks;
 pub mod mcp;
 pub mod prompts;
 pub mod providers;
@@ -19,3 +20,4 @@ pub mod universal_providers;
 pub use agents::AgentDiscoveryCache;
 pub use commands::{CommandDiscoveryCache, CACHE_EXPIRY_SECONDS};
 pub use failover::FailoverQueueItem;
+pub use hooks::HookDiscoveryCache;

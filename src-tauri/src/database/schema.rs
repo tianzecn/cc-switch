@@ -197,6 +197,64 @@ impl Database {
         )
         .map_err(|e| AppError::Database(e.to_string()))?;
 
+        // 8.7 Hooks 表 (v3.xx.0+ 统一管理结构)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS hooks (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            namespace TEXT NOT NULL DEFAULT '',
+            filename TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            rules_json TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            priority INTEGER NOT NULL DEFAULT 100,
+            repo_owner TEXT,
+            repo_name TEXT,
+            repo_branch TEXT DEFAULT 'main',
+            readme_url TEXT,
+            source_path TEXT,
+            enabled_claude INTEGER NOT NULL DEFAULT 0,
+            enabled_codex INTEGER NOT NULL DEFAULT 0,
+            enabled_gemini INTEGER NOT NULL DEFAULT 0,
+            file_hash TEXT,
+            installed_at INTEGER NOT NULL DEFAULT 0
+        )",
+            [],
+        )
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        // Hooks 表索引
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_hooks_namespace ON hooks(namespace)",
+            [],
+        )
+        .map_err(|e| AppError::Database(e.to_string()))?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_hooks_event_type ON hooks(event_type)",
+            [],
+        )
+        .map_err(|e| AppError::Database(e.to_string()))?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_hooks_priority ON hooks(priority)",
+            [],
+        )
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        // 8.8 Hook Discovery Cache 表
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS hook_discovery_cache (
+            repo_owner TEXT NOT NULL,
+            repo_name TEXT NOT NULL,
+            repo_branch TEXT NOT NULL,
+            hooks_json TEXT NOT NULL,
+            scanned_at INTEGER NOT NULL,
+            PRIMARY KEY (repo_owner, repo_name, repo_branch)
+        )",
+            [],
+        )
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
         // 9. Settings 表
         conn.execute(
             "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)",

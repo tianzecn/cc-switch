@@ -16,6 +16,7 @@ import {
   Search,
   Download,
   Terminal,
+  Webhook,
 } from "lucide-react";
 import type { Provider } from "@/types";
 import type { EnvConflict } from "@/types/env";
@@ -50,6 +51,7 @@ import { DeepLinkImportDialog } from "@/components/DeepLinkImportDialog";
 import { AgentsPage } from "@/components/agents/AgentsPage";
 import { UniversalProviderPanel } from "@/components/universal";
 import { CommandsPage } from "@/components/commands";
+import { HooksPage } from "@/components/hooks/HooksPage";
 import { Button } from "@/components/ui/button";
 
 type View =
@@ -61,7 +63,8 @@ type View =
   | "mcp"
   | "agents"
   | "universal"
-  | "commands";
+  | "commands"
+  | "hooks";
 
 const DRAG_BAR_HEIGHT = 28; // px
 const HEADER_HEIGHT = 64; // px
@@ -450,6 +453,8 @@ function App() {
           return <AgentsPage />;
         case "commands":
           return <CommandsPage />;
+        case "hooks":
+          return <HooksPage />;
         case "universal":
           return (
             <div className="mx-auto max-w-[56rem] px-5 pt-4">
@@ -592,6 +597,7 @@ function App() {
                   {currentView === "mcp" && t("mcp.unifiedPanel.title")}
                   {currentView === "agents" && t("agents.title")}
                   {currentView === "commands" && t("commands.title")}
+                  {currentView === "hooks" && t("hooks.title")}
                   {currentView === "universal" &&
                     t("universalProvider.title", {
                       defaultValue: "统一供应商",
@@ -740,6 +746,15 @@ function App() {
                     title={t("commands.title")}
                   >
                     <Terminal className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setCurrentView("hooks")}
+                    className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                    title={t("hooks.title")}
+                  >
+                    <Webhook className="w-4 h-4" />
                   </Button>
                   <Button
                     variant="ghost"

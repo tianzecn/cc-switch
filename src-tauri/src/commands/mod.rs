@@ -6,6 +6,7 @@ mod config;
 mod deeplink;
 mod env;
 mod failover;
+pub mod hook;
 mod import_export;
 mod mcp;
 mod misc;
@@ -20,6 +21,7 @@ mod usage;
 
 pub use agent::*;
 pub use command::*;
+pub use hook::*;
 pub use config::*;
 pub use deeplink::*;
 pub use env::*;
