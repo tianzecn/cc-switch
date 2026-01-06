@@ -36,7 +36,7 @@
 
 use crate::app_config::{
     AppType, CommandRepo, DiscoverableHook, HookApps, HookEventType, HookNamespace, HookRule,
-    InstalledHook, UnmanagedHook,
+    HookType, InstalledHook, UnmanagedHook,
 };
 use crate::config::get_app_config_dir;
 use crate::database::Database;
@@ -77,6 +77,99 @@ fn default_priority() -> i32 {
 
 fn default_enabled() -> bool {
     true
+}
+
+/// Claude Code 官方 hooks 配置格式
+/// 格式：{ "hooks": { "PreToolUse": [...], "PostToolUse": [...], ... } }
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct OfficialHooksFormat {
+    /// hooks 对象，键为事件类型名称
+    pub hooks: Option<HashMap<String, Vec<OfficialHookRule>>>,
+}
+
+/// 官方格式中的单个规则
+#[derive(Debug, Clone, Deserialize)]
+pub struct OfficialHookRule {
+    /// 匹配器
+    pub matcher: Option<String>,
+    /// hooks 命令列表
+    pub hooks: Vec<OfficialHookCommand>,
+}
+
+/// 官方格式中的命令
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub struct OfficialHookCommand {
+    /// 命令类型
+    #[serde(rename = "type")]
+    pub cmd_type: String,
+    /// 命令内容
+    pub command: Option<String>,
+    /// 超时时间（毫秒）
+    pub timeout: Option<u64>,
+}
+
+impl OfficialHooksFormat {
+    /// 将官方格式转换为 CC Switch 的 HookFileMetadata 列表
+    pub fn to_hook_metadata_list(&self) -> Vec<(HookEventType, HookFileMetadata)> {
+        let mut result = Vec::new();
+
+        if let Some(hooks) = &self.hooks {
+            for (event_name, rules) in hooks {
+                // 解析事件类型
+                let event_type = match event_name.as_str() {
+                    "PreToolUse" => HookEventType::PreToolUse,
+                    "PostToolUse" => HookEventType::PostToolUse,
+                    "PermissionRequest" => HookEventType::PermissionRequest,
+                    "SessionEnd" => HookEventType::SessionEnd,
+                    // 跳过不支持的事件类型（如 SessionStart）
+                    _ => continue,
+                };
+
+                // 转换规则
+                let converted_rules: Vec<HookRule> = rules
+                    .iter()
+                    .map(|r| HookRule {
+                        matcher: r.matcher.clone().unwrap_or_default(),
+                        hooks: r
+                            .hooks
+                            .iter()
+                            .filter_map(|h| {
+                                // 将官方格式的命令转换为 HookType
+                                match h.cmd_type.as_str() {
+                                    "command" => h
+                                        .command
+                                        .clone()
+                                        .map(|cmd| HookType::Command { command: cmd }),
+                                    "prompt" => h
+                                        .command
+                                        .clone()
+                                        .map(|prompt| HookType::Prompt { prompt }),
+                                    _ => None,
+                                }
+                            })
+                            .collect(),
+                    })
+                    .collect();
+
+                if !converted_rules.is_empty() {
+                    result.push((
+                        event_type.clone(),
+                        HookFileMetadata {
+                            name: None,
+                            description: None,
+                            event_type: Some(event_type),
+                            rules: converted_rules,
+                            priority: default_priority(),
+                            enabled: default_enabled(),
+                        },
+                    ));
+                }
+            }
+        }
+
+        result
+    }
 }
 
 /// Hook 服务
@@ -1020,8 +1113,8 @@ impl HookService {
                 let filename_path = relative_in_hooks.with_extension("");
                 let filename_str = filename_path.to_string_lossy().replace('\\', "/");
 
-                // 计算完整 ID
-                let id = if namespace.is_empty() {
+                // 计算完整基础 ID
+                let base_id = if namespace.is_empty() {
                     filename_str.clone()
                 } else {
                     format!("{}/{}", namespace, filename_str)
@@ -1034,37 +1127,73 @@ impl HookService {
                     .to_string_lossy()
                     .replace('\\', "/");
 
-                // 解析元数据
+                // 读取文件内容
                 let content = fs::read_to_string(&path).unwrap_or_default();
+
+                // 首先尝试 CC Switch 自定义格式（有顶级 event_type 字段）
                 let metadata = Self::parse_hook_metadata(&content).unwrap_or_default();
 
-                // 解析 ID 得到最终的命名空间和文件名
-                let (final_namespace, final_filename) = Self::parse_id(&id);
+                if let Some(event_type) = metadata.event_type {
+                    // CC Switch 格式：单个 hook 预设
+                    let (final_namespace, final_filename) = Self::parse_id(&base_id);
+                    hooks.push(DiscoverableHook {
+                        key: base_id.clone(),
+                        name: metadata.name.unwrap_or_else(|| final_filename.clone()),
+                        description: metadata.description,
+                        namespace: final_namespace,
+                        filename: final_filename,
+                        event_type,
+                        rules: metadata.rules,
+                        priority: metadata.priority,
+                        readme_url: Some(format!(
+                            "https://github.com/{}/{}/blob/{}/{}",
+                            repo.owner, repo.name, repo.branch, source_path
+                        )),
+                        repo_owner: repo.owner.clone(),
+                        repo_name: repo.name.clone(),
+                        repo_branch: repo.branch.clone(),
+                        source_path: Some(source_path),
+                    });
+                } else {
+                    // 尝试 Claude Code 官方格式（hooks 对象包含事件类型键）
+                    if let Ok(official) =
+                        serde_json::from_str::<OfficialHooksFormat>(&content)
+                    {
+                        let converted = official.to_hook_metadata_list();
+                        for (event_type, hook_meta) in converted {
+                            // 为每个事件类型创建一个独立的 hook
+                            let event_suffix = match event_type {
+                                HookEventType::PreToolUse => "pre-tool-use",
+                                HookEventType::PostToolUse => "post-tool-use",
+                                HookEventType::PermissionRequest => "permission-request",
+                                HookEventType::SessionEnd => "session-end",
+                            };
+                            let id = format!("{}-{}", base_id, event_suffix);
+                            let (final_namespace, final_filename) = Self::parse_id(&id);
 
-                // 确保有事件类型
-                let event_type = match metadata.event_type {
-                    Some(et) => et,
-                    None => continue, // 跳过没有事件类型的文件
-                };
-
-                hooks.push(DiscoverableHook {
-                    key: id,
-                    name: metadata.name.unwrap_or_else(|| final_filename.clone()),
-                    description: metadata.description,
-                    namespace: final_namespace,
-                    filename: final_filename,
-                    event_type,
-                    rules: metadata.rules,
-                    priority: metadata.priority,
-                    readme_url: Some(format!(
-                        "https://github.com/{}/{}/blob/{}/{}",
-                        repo.owner, repo.name, repo.branch, source_path
-                    )),
-                    repo_owner: repo.owner.clone(),
-                    repo_name: repo.name.clone(),
-                    repo_branch: repo.branch.clone(),
-                    source_path: Some(source_path),
-                });
+                            hooks.push(DiscoverableHook {
+                                key: id,
+                                name: hook_meta
+                                    .name
+                                    .unwrap_or_else(|| final_filename.clone()),
+                                description: hook_meta.description,
+                                namespace: final_namespace,
+                                filename: final_filename,
+                                event_type,
+                                rules: hook_meta.rules,
+                                priority: hook_meta.priority,
+                                readme_url: Some(format!(
+                                    "https://github.com/{}/{}/blob/{}/{}",
+                                    repo.owner, repo.name, repo.branch, source_path
+                                )),
+                                repo_owner: repo.owner.clone(),
+                                repo_name: repo.name.clone(),
+                                repo_branch: repo.branch.clone(),
+                                source_path: Some(source_path.clone()),
+                            });
+                        }
+                    }
+                }
             }
         }
 
