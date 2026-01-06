@@ -37,15 +37,17 @@ interface AgentDiscoveryProps {
  * 左侧：树形结构浏览（repo → namespace → agents）
  * 右侧：Agent 详情面板
  */
-export const AgentDiscovery: React.FC<AgentDiscoveryProps> = ({
-  onBack,
-}) => {
+export const AgentDiscovery: React.FC<AgentDiscoveryProps> = ({ onBack }) => {
   const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState("");
   const [showRepoManager, setShowRepoManager] = useState(false);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
-  const [selectedNamespace, setSelectedNamespace] = useState<string | null>(null);
-  const [namespaceAgents, setNamespaceAgents] = useState<DiscoverableAgent[]>([]);
+  const [selectedNamespace, setSelectedNamespace] = useState<string | null>(
+    null,
+  );
+  const [namespaceAgents, setNamespaceAgents] = useState<DiscoverableAgent[]>(
+    [],
+  );
 
   // Queries
   const { data: discoverableAgents, isLoading } = useDiscoverableAgents();
@@ -127,13 +129,18 @@ export const AgentDiscovery: React.FC<AgentDiscoveryProps> = ({
     });
   };
 
-  const handleSelectNamespace = (namespaceId: string, agents: DiscoverableAgent[]) => {
+  const handleSelectNamespace = (
+    namespaceId: string,
+    agents: DiscoverableAgent[],
+  ) => {
     setSelectedNamespace(namespaceId);
     setNamespaceAgents(agents);
   };
 
   const isAgentInstalled = (agent: DiscoverableAgent) => {
-    const id = agent.namespace ? `${agent.namespace}/${agent.filename}` : agent.filename;
+    const id = agent.namespace
+      ? `${agent.namespace}/${agent.filename}`
+      : agent.filename;
     return installedIds.has(id);
   };
 
@@ -304,7 +311,9 @@ const AgentListItem: React.FC<AgentListItemProps> = ({
           <div className="flex items-center gap-2 mb-1">
             <span className="font-medium text-sm">{agent.name}</span>
           </div>
-          <p className="text-xs text-muted-foreground mb-2">{agent.description}</p>
+          <p className="text-xs text-muted-foreground mb-2">
+            {agent.description}
+          </p>
           {agent.readmeUrl && (
             <a
               href={agent.readmeUrl}

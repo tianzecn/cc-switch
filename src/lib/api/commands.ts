@@ -150,7 +150,9 @@ export const commandsApi = {
    * 发现可安装的 Commands（从仓库获取，带缓存支持）
    * @param forceRefresh 是否强制刷新（跳过缓存）
    */
-  async discoverAvailable(forceRefresh = false): Promise<DiscoverableCommand[]> {
+  async discoverAvailable(
+    forceRefresh = false,
+  ): Promise<DiscoverableCommand[]> {
     return await invoke("discover_available_commands", { forceRefresh });
   },
 

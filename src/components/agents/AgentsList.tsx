@@ -50,7 +50,7 @@ export const AgentsList: React.FC<AgentsListProps> = ({
   const handleToggleApp = async (
     id: string,
     app: AppType,
-    enabled: boolean
+    enabled: boolean,
   ) => {
     try {
       await toggleAppMutation.mutateAsync({ id, app, enabled });
@@ -137,7 +137,11 @@ export const AgentsList: React.FC<AgentsListProps> = ({
             onToggleApp={handleToggleApp}
             onUninstall={() => handleUninstall(agent)}
             onOpenEditor={() => handleOpenEditor(agent)}
-            onOpenDocs={agent.readmeUrl ? () => handleOpenDocs(agent.readmeUrl!) : undefined}
+            onOpenDocs={
+              agent.readmeUrl
+                ? () => handleOpenDocs(agent.readmeUrl!)
+                : undefined
+            }
             appSupport={{
               claude: claudeSupported,
               codex: codexSupported,
@@ -196,9 +200,7 @@ const AgentListItem: React.FC<AgentListItemProps> = ({
   }, [agent.repoOwner, agent.repoName, t]);
 
   return (
-    <div
-      className="group relative flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all duration-300 border-border-default bg-muted/50 hover:bg-muted hover:border-border-default/80 hover:shadow-sm"
-    >
+    <div className="group relative flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all duration-300 border-border-default bg-muted/50 hover:bg-muted hover:border-border-default/80 hover:shadow-sm">
       {/* 左侧：Agent 信息 */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">

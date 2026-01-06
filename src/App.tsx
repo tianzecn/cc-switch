@@ -4,20 +4,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { invoke } from "@tauri-apps/api/core";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  Plus,
-  Settings,
-  ArrowLeft,
-  Bot,
-  Book,
-  Wrench,
-  Server,
-  RefreshCw,
-  Search,
-  Download,
-  Terminal,
-  Webhook,
-} from "lucide-react";
 import type { Provider } from "@/types";
 import type { EnvConflict } from "@/types/env";
 import { useProvidersQuery } from "@/lib/query";
@@ -32,16 +18,12 @@ import { useProviderActions } from "@/hooks/useProviderActions";
 import { useProxyStatus } from "@/hooks/useProxyStatus";
 import { useLastValidValue } from "@/hooks/useLastValidValue";
 import { extractErrorMessage } from "@/utils/errorUtils";
-import { cn } from "@/lib/utils";
-import { AppSwitcher } from "@/components/AppSwitcher";
 import { ProviderList } from "@/components/providers/ProviderList";
 import { AddProviderDialog } from "@/components/providers/AddProviderDialog";
 import { EditProviderDialog } from "@/components/providers/EditProviderDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { SettingsPage } from "@/components/settings/SettingsPage";
-import { UpdateBadge } from "@/components/UpdateBadge";
 import { EnvWarningBanner } from "@/components/env/EnvWarningBanner";
-import { ProxyToggle } from "@/components/proxy/ProxyToggle";
 import UsageScriptModal from "@/components/UsageScriptModal";
 import UnifiedMcpPanel from "@/components/mcp/UnifiedMcpPanel";
 import PromptPanel from "@/components/prompts/PromptPanel";
@@ -52,23 +34,15 @@ import { AgentsPage } from "@/components/agents/AgentsPage";
 import { UniversalProviderPanel } from "@/components/universal";
 import { CommandsPage } from "@/components/commands";
 import { HooksPage } from "@/components/hooks/HooksPage";
-import { Button } from "@/components/ui/button";
-
-type View =
-  | "providers"
-  | "settings"
-  | "prompts"
-  | "skills"
-  | "skillsDiscovery"
-  | "mcp"
-  | "agents"
-  | "universal"
-  | "commands"
-  | "hooks";
+import {
+  UnifiedNavbar,
+  type View,
+  type PageActionRefs,
+} from "@/components/navbar/UnifiedNavbar";
 
 const DRAG_BAR_HEIGHT = 28; // px
-const HEADER_HEIGHT = 64; // px
-const CONTENT_TOP_OFFSET = DRAG_BAR_HEIGHT + HEADER_HEIGHT;
+const NAVBAR_HEIGHT = 96; // px (3 rows * 32px)
+const CONTENT_TOP_OFFSET = DRAG_BAR_HEIGHT + NAVBAR_HEIGHT;
 
 function App() {
   const { t } = useTranslation();
@@ -92,8 +66,14 @@ function App() {
   const mcpPanelRef = useRef<any>(null);
   const skillsPageRef = useRef<any>(null);
   const unifiedSkillsPanelRef = useRef<any>(null);
-  const addActionButtonClass =
-    "bg-orange-500 hover:bg-orange-600 dark:bg-orange-500 dark:hover:bg-orange-600 text-white shadow-lg shadow-orange-500/30 dark:shadow-orange-500/40 rounded-full w-8 h-8";
+
+  // Page action refs for UnifiedNavbar
+  const pageActionRefs: PageActionRefs = {
+    promptPanel: promptPanelRef,
+    mcpPanel: mcpPanelRef,
+    skillsPage: skillsPageRef,
+    unifiedSkillsPanel: unifiedSkillsPanelRef,
+  };
 
   // 获取代理服务状态
   const {
@@ -117,8 +97,6 @@ function App() {
   });
   const providers = useMemo(() => data?.providers ?? {}, [data]);
   const currentProviderId = data?.currentProviderId ?? "";
-  const hasSkillsSupport = true;
-
   // 🎯 使用 useProviderActions Hook 统一管理所有 Provider 操作
   const {
     addProvider,
@@ -436,12 +414,7 @@ function App() {
             />
           );
         case "skillsDiscovery":
-          return (
-            <SkillsPage
-              ref={skillsPageRef}
-              initialApp={activeApp}
-            />
-          );
+          return <SkillsPage ref={skillsPageRef} initialApp={activeApp} />;
         case "mcp":
           return (
             <UnifiedMcpPanel
@@ -554,249 +527,14 @@ function App() {
         />
       )}
 
-      <header
-        className="fixed z-50 w-full transition-all duration-300 bg-background/80 backdrop-blur-md"
-        data-tauri-drag-region
-        style={
-          {
-            WebkitAppRegion: "drag",
-            top: DRAG_BAR_HEIGHT,
-            height: HEADER_HEIGHT,
-          } as any
-        }
-      >
-        <div
-          className="mx-auto flex h-full max-w-[56rem] flex-wrap items-center justify-between gap-2 px-6"
-          data-tauri-drag-region
-          style={{ WebkitAppRegion: "drag" } as any}
-        >
-          <div
-            className="flex items-center gap-1"
-            style={{ WebkitAppRegion: "no-drag" } as any}
-          >
-            {currentView !== "providers" ? (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() =>
-                    setCurrentView(
-                      currentView === "skillsDiscovery" ? "skills" : "providers",
-                    )
-                  }
-                  className="mr-2 rounded-lg"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                </Button>
-                <h1 className="text-lg font-semibold">
-                  {currentView === "settings" && t("settings.title")}
-                  {currentView === "prompts" &&
-                    t("prompts.title", { appName: t(`apps.${activeApp}`) })}
-                  {currentView === "skills" && t("skills.title")}
-                  {currentView === "skillsDiscovery" && t("skills.title")}
-                  {currentView === "mcp" && t("mcp.unifiedPanel.title")}
-                  {currentView === "agents" && t("agents.title")}
-                  {currentView === "commands" && t("commands.title")}
-                  {currentView === "hooks" && t("hooks.title")}
-                  {currentView === "universal" &&
-                    t("universalProvider.title", {
-                      defaultValue: "统一供应商",
-                    })}
-                </h1>
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center gap-2">
-                  <a
-                    href="https://github.com/farion1231/cc-switch"
-                    target="_blank"
-                    rel="noreferrer"
-                    className={cn(
-                      "text-xl font-semibold transition-colors",
-                      isProxyRunning && isCurrentAppTakeoverActive
-                        ? "text-emerald-500 hover:text-emerald-600 dark:text-emerald-400 dark:hover:text-emerald-300"
-                        : "text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300",
-                    )}
-                  >
-                    CC Switch
-                  </a>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setCurrentView("settings")}
-                    title={t("common.settings")}
-                    className="hover:bg-black/5 dark:hover:bg-white/5"
-                  >
-                    <Settings className="w-4 h-4" />
-                  </Button>
-                </div>
-                <UpdateBadge onClick={() => setCurrentView("settings")} />
-              </>
-            )}
-          </div>
-
-          <div
-            className="flex items-center gap-2 h-[32px]"
-            style={{ WebkitAppRegion: "no-drag" } as any}
-          >
-            {currentView === "prompts" && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => promptPanelRef.current?.openAdd()}
-                className="hover:bg-black/5 dark:hover:bg-white/5"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                {t("prompts.add")}
-              </Button>
-            )}
-            {currentView === "mcp" && (
-              <>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => mcpPanelRef.current?.openImport()}
-                  className="hover:bg-black/5 dark:hover:bg-white/5"
-                >
-                  <Download className="w-4 h-4 mr-2" />
-                  {t("mcp.importExisting")}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => mcpPanelRef.current?.openAdd()}
-                  className="hover:bg-black/5 dark:hover:bg-white/5"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  {t("mcp.addMcp")}
-                </Button>
-              </>
-            )}
-            {currentView === "skills" && (
-              <>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => unifiedSkillsPanelRef.current?.openImport()}
-                  className="hover:bg-black/5 dark:hover:bg-white/5"
-                >
-                  <Download className="w-4 h-4 mr-2" />
-                  {t("skills.import")}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setCurrentView("skillsDiscovery")}
-                  className="hover:bg-black/5 dark:hover:bg-white/5"
-                >
-                  <Search className="w-4 h-4 mr-2" />
-                  {t("skills.discover")}
-                </Button>
-              </>
-            )}
-            {currentView === "skillsDiscovery" && (
-              <>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => skillsPageRef.current?.refresh()}
-                  className="hover:bg-black/5 dark:hover:bg-white/5"
-                >
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  {t("skills.refresh")}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => skillsPageRef.current?.openRepoManager()}
-                  className="hover:bg-black/5 dark:hover:bg-white/5"
-                >
-                  <Settings className="w-4 h-4 mr-2" />
-                  {t("skills.repoManager")}
-                </Button>
-              </>
-            )}
-            {currentView === "providers" && (
-              <>
-                <ProxyToggle activeApp={activeApp} />
-
-                <AppSwitcher activeApp={activeApp} onSwitch={setActiveApp} />
-
-                <div className="flex items-center gap-1 p-1 bg-muted rounded-xl">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setCurrentView("skills")}
-                    className={cn(
-                      "text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5",
-                      "transition-all duration-200 ease-in-out overflow-hidden",
-                      hasSkillsSupport
-                        ? "opacity-100 w-8 scale-100 px-2"
-                        : "opacity-0 w-0 scale-75 pointer-events-none px-0 -ml-1",
-                    )}
-                    title={t("skills.manage")}
-                  >
-                    <Wrench className="flex-shrink-0 w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setCurrentView("commands")}
-                    className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
-                    title={t("commands.title")}
-                  >
-                    <Terminal className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setCurrentView("hooks")}
-                    className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
-                    title={t("hooks.title")}
-                  >
-                    <Webhook className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setCurrentView("agents")}
-                    className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
-                    title={t("agents.title")}
-                  >
-                    <Bot className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setCurrentView("prompts")}
-                    className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
-                    title={t("prompts.manage")}
-                  >
-                    <Book className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setCurrentView("mcp")}
-                    className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
-                    title={t("mcp.title")}
-                  >
-                    <Server className="w-4 h-4" />
-                  </Button>
-                </div>
-
-                <Button
-                  onClick={() => setIsAddOpen(true)}
-                  size="icon"
-                  className={`ml-2 ${addActionButtonClass}`}
-                >
-                  <Plus className="w-5 h-5" />
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-      </header>
+      <UnifiedNavbar
+        currentView={currentView}
+        onViewChange={setCurrentView}
+        activeApp={activeApp}
+        onAppChange={setActiveApp}
+        pageActionRefs={pageActionRefs}
+        onAddProvider={() => setIsAddOpen(true)}
+      />
 
       <main className="flex-1 pb-12 animate-fade-in ">
         <div className="pb-12">{renderContent()}</div>

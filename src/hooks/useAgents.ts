@@ -23,8 +23,7 @@ export const agentKeys = {
   repos: () => [...agentKeys.all, "repos"] as const,
   changes: () => [...agentKeys.all, "changes"] as const,
   content: (id: string) => [...agentKeys.all, "content", id] as const,
-  appSupport: (app: AppType) =>
-    [...agentKeys.all, "appSupport", app] as const,
+  appSupport: (app: AppType) => [...agentKeys.all, "appSupport", app] as const,
 };
 
 // ========== Queries ==========

@@ -38,12 +38,12 @@ export function CommandRepoManager({
       (cmd) =>
         cmd.repoOwner === repo.owner &&
         cmd.repoName === repo.name &&
-        (cmd.repoBranch || "main") === (repo.branch || "main")
+        (cmd.repoBranch || "main") === (repo.branch || "main"),
     ).length;
 
   // 解析仓库 URL
   const parseRepoUrl = (
-    url: string
+    url: string,
   ): { owner: string; name: string } | null => {
     let cleaned = url.trim();
     cleaned = cleaned.replace(/^https?:\/\/github\.com\//, "");

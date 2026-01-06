@@ -34,8 +34,12 @@ export const CommandImport: React.FC<CommandImportProps> = ({ onBack }) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Queries
-  const { data: unmanagedCommands, isLoading, refetch, isFetching } =
-    useScanUnmanagedCommands();
+  const {
+    data: unmanagedCommands,
+    isLoading,
+    refetch,
+    isFetching,
+  } = useScanUnmanagedCommands();
   const importMutation = useImportCommandsFromApps();
 
   // 筛选命令
@@ -93,10 +97,9 @@ export const CommandImport: React.FC<CommandImportProps> = ({ onBack }) => {
     try {
       const ids = Array.from(selectedIds);
       const imported = await importMutation.mutateAsync(ids);
-      toast.success(
-        t("commands.importSuccess", { count: imported.length }),
-        { closeButton: true }
-      );
+      toast.success(t("commands.importSuccess", { count: imported.length }), {
+        closeButton: true,
+      });
       setSelectedIds(new Set());
       // 重新扫描以更新列表
       await refetch();
@@ -108,8 +111,7 @@ export const CommandImport: React.FC<CommandImportProps> = ({ onBack }) => {
   };
 
   const isAllSelected =
-    filteredCommands.length > 0 &&
-    selectedIds.size === filteredCommands.length;
+    filteredCommands.length > 0 && selectedIds.size === filteredCommands.length;
 
   return (
     <div className="mx-auto max-w-[72rem] px-6 flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
@@ -164,11 +166,7 @@ export const CommandImport: React.FC<CommandImportProps> = ({ onBack }) => {
               onClick={handleSelectAll}
               className="gap-1"
             >
-              {isAllSelected ? (
-                <CheckSquare size={16} />
-              ) : (
-                <Square size={16} />
-              )}
+              {isAllSelected ? <CheckSquare size={16} /> : <Square size={16} />}
               {isAllSelected
                 ? t("commands.deselectAll")
                 : t("commands.selectAll")}
@@ -269,7 +267,7 @@ const UnmanagedCommandCard: React.FC<UnmanagedCommandCardProps> = ({
         "flex items-start gap-4 p-4 rounded-xl border cursor-pointer transition-colors",
         isSelected
           ? "border-primary bg-primary/5"
-          : "border-border bg-muted/50 hover:bg-muted"
+          : "border-border bg-muted/50 hover:bg-muted",
       )}
       onClick={onToggle}
     >

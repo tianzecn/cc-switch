@@ -1,8 +1,20 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { X, FileEdit, ExternalLink, Tag, Server, User, AlertCircle } from "lucide-react";
+import {
+  X,
+  FileEdit,
+  ExternalLink,
+  Tag,
+  Server,
+  User,
+  AlertCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useCommandContent, useAppCommandsSupport, type InstalledCommand } from "@/hooks/useCommands";
+import {
+  useCommandContent,
+  useAppCommandsSupport,
+  type InstalledCommand,
+} from "@/hooks/useCommands";
 import { settingsApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -23,7 +35,7 @@ export const CommandDetailPanel: React.FC<CommandDetailPanelProps> = ({
 }) => {
   const { t } = useTranslation();
   const { data: content, isLoading: isLoadingContent } = useCommandContent(
-    command.id
+    command.id,
   );
 
   // 检查各应用的支持状态
@@ -275,9 +287,7 @@ const AppStatusRow: React.FC<AppStatusRowProps> = ({
     <div className="flex items-center justify-between">
       <span>{appName}</span>
       <span
-        className={cn(
-          isEnabled ? "text-green-500" : "text-muted-foreground"
-        )}
+        className={cn(isEnabled ? "text-green-500" : "text-muted-foreground")}
       >
         {isEnabled ? "●" : "○"}
       </span>

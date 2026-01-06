@@ -50,10 +50,12 @@ export const FullScreenPanel: React.FC<FullScreenPanelProps> = ({
           {/* Drag region - match App.tsx */}
           <div
             data-tauri-drag-region
-            style={{
-              WebkitAppRegion: "drag",
-              height: DRAG_BAR_HEIGHT,
-            } as React.CSSProperties}
+            style={
+              {
+                WebkitAppRegion: "drag",
+                height: DRAG_BAR_HEIGHT,
+              } as React.CSSProperties
+            }
           />
 
           {/* Header - match App.tsx */}

@@ -53,7 +53,7 @@ export const CommandsList: React.FC<CommandsListProps> = ({
   const handleToggleApp = async (
     id: string,
     app: AppType,
-    enabled: boolean
+    enabled: boolean,
   ) => {
     try {
       await toggleAppMutation.mutateAsync({ id, app, enabled });
@@ -76,9 +76,12 @@ export const CommandsList: React.FC<CommandsListProps> = ({
           if (selectedCommand?.id === command.id) {
             setSelectedCommand(null);
           }
-          toast.success(t("commands.uninstallSuccess", { name: command.name }), {
-            closeButton: true,
-          });
+          toast.success(
+            t("commands.uninstallSuccess", { name: command.name }),
+            {
+              closeButton: true,
+            },
+          );
         } catch (error) {
           toast.error(t("common.error"), {
             description: String(error),
@@ -145,7 +148,11 @@ export const CommandsList: React.FC<CommandsListProps> = ({
             onToggleApp={handleToggleApp}
             onUninstall={() => handleUninstall(command)}
             onOpenEditor={() => handleOpenEditor(command)}
-            onOpenDocs={command.readmeUrl ? () => handleOpenDocs(command.readmeUrl!) : undefined}
+            onOpenDocs={
+              command.readmeUrl
+                ? () => handleOpenDocs(command.readmeUrl!)
+                : undefined
+            }
             appSupport={{
               claude: claudeSupported,
               codex: codexSupported,
@@ -288,7 +295,9 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
               onToggleApp(command.id, "claude", checked)
             }
             disabled={!appSupport.claude}
-            title={!appSupport.claude ? t("commands.appUnsupported") : undefined}
+            title={
+              !appSupport.claude ? t("commands.appUnsupported") : undefined
+            }
           />
         </div>
 
@@ -328,7 +337,9 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
               onToggleApp(command.id, "gemini", checked)
             }
             disabled={!appSupport.gemini}
-            title={!appSupport.gemini ? t("commands.appUnsupported") : undefined}
+            title={
+              !appSupport.gemini ? t("commands.appUnsupported") : undefined
+            }
           />
         </div>
       </div>

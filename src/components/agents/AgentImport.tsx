@@ -34,8 +34,12 @@ export const AgentImport: React.FC<AgentImportProps> = ({ onBack }) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Queries
-  const { data: unmanagedAgents, isLoading, refetch, isFetching } =
-    useScanUnmanagedAgents();
+  const {
+    data: unmanagedAgents,
+    isLoading,
+    refetch,
+    isFetching,
+  } = useScanUnmanagedAgents();
   const importMutation = useImportAgentsFromApps();
 
   // 筛选 Agents
@@ -93,10 +97,9 @@ export const AgentImport: React.FC<AgentImportProps> = ({ onBack }) => {
     try {
       const ids = Array.from(selectedIds);
       const imported = await importMutation.mutateAsync(ids);
-      toast.success(
-        t("agents.importSuccess", { count: imported.length }),
-        { closeButton: true }
-      );
+      toast.success(t("agents.importSuccess", { count: imported.length }), {
+        closeButton: true,
+      });
       setSelectedIds(new Set());
       await refetch();
     } catch (error) {
@@ -107,8 +110,7 @@ export const AgentImport: React.FC<AgentImportProps> = ({ onBack }) => {
   };
 
   const isAllSelected =
-    filteredAgents.length > 0 &&
-    selectedIds.size === filteredAgents.length;
+    filteredAgents.length > 0 && selectedIds.size === filteredAgents.length;
 
   return (
     <div className="mx-auto max-w-[72rem] px-6 flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
@@ -163,14 +165,8 @@ export const AgentImport: React.FC<AgentImportProps> = ({ onBack }) => {
               onClick={handleSelectAll}
               className="gap-1"
             >
-              {isAllSelected ? (
-                <CheckSquare size={16} />
-              ) : (
-                <Square size={16} />
-              )}
-              {isAllSelected
-                ? t("agents.deselectAll")
-                : t("agents.selectAll")}
+              {isAllSelected ? <CheckSquare size={16} /> : <Square size={16} />}
+              {isAllSelected ? t("agents.deselectAll") : t("agents.selectAll")}
             </Button>
 
             <Button
@@ -268,7 +264,7 @@ const UnmanagedAgentCard: React.FC<UnmanagedAgentCardProps> = ({
         "flex items-start gap-4 p-4 rounded-xl border cursor-pointer transition-colors",
         isSelected
           ? "border-primary bg-primary/5"
-          : "border-border bg-muted/50 hover:bg-muted"
+          : "border-border bg-muted/50 hover:bg-muted",
       )}
       onClick={onToggle}
     >

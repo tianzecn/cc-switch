@@ -69,6 +69,14 @@
     "enterEditMode": "Enter Edit Mode",
     "exitEditMode": "Exit Edit Mode"
   },
+  "navbar": {
+    "skills": "Skills",
+    "commands": "Commands",
+    "hooks": "Hooks",
+    "agents": "Agents",
+    "prompts": "Prompts",
+    "mcp": "MCP"
+  },
   "provider": {
     "tabProvider": "Provider",
     "tabUniversal": "Universal",

@@ -58,7 +58,7 @@ export const NamespaceTree: React.FC<NamespaceTreeProps> = ({
   const [isCreating, setIsCreating] = React.useState(false);
   const [newNamespaceName, setNewNamespaceName] = React.useState("");
   const [expandedRepos, setExpandedRepos] = React.useState<Set<string>>(
-    new Set(["local"]) // 默认展开本地
+    new Set(["local"]), // 默认展开本地
   );
   const [deleteConfirm, setDeleteConfirm] = React.useState<{
     isOpen: boolean;
@@ -85,9 +85,10 @@ export const NamespaceTree: React.FC<NamespaceTreeProps> = ({
     const repoMap = new Map<string, Map<string, number>>();
 
     for (const cmd of commands) {
-      const repoKey = cmd.repoOwner && cmd.repoName
-        ? `${cmd.repoOwner}/${cmd.repoName}`
-        : "local";
+      const repoKey =
+        cmd.repoOwner && cmd.repoName
+          ? `${cmd.repoOwner}/${cmd.repoName}`
+          : "local";
       const namespace = cmd.namespace || "";
 
       if (!repoMap.has(repoKey)) {
@@ -185,7 +186,7 @@ export const NamespaceTree: React.FC<NamespaceTreeProps> = ({
       await deleteMutation.mutateAsync(deleteConfirm.namespace);
       toast.success(
         t("commands.namespaceDeleted", { name: deleteConfirm.displayName }),
-        { closeButton: true }
+        { closeButton: true },
       );
       setDeleteConfirm(null);
 
@@ -266,46 +267,44 @@ export const NamespaceTree: React.FC<NamespaceTreeProps> = ({
         />
 
         {/* 树形结构（如果有 commands 数据） */}
-        {repoTree ? (
-          repoTree.map((repo) => (
-            <RepoTreeItem
-              key={repo.id}
-              repo={repo}
-              isExpanded={expandedRepos.has(repo.id)}
-              onToggle={() => toggleRepo(repo.id)}
-              selectedNamespace={selectedNamespace}
-              onSelectNamespace={onSelectNamespace}
-              namespaces={namespaces}
-              onDeleteNamespace={(ns, displayName) =>
-                setDeleteConfirm({
-                  isOpen: true,
-                  namespace: ns,
-                  displayName,
-                })
-              }
-            />
-          ))
-        ) : (
-          /* 扁平结构（兼容旧逻辑） */
-          namespaces.map((ns) => (
-            <NamespaceItem
-              key={ns.name}
-              name={ns.name}
-              displayName={ns.displayName}
-              count={ns.commandCount}
-              isSelected={selectedNamespace === ns.name}
-              onClick={() => onSelectNamespace(ns.name)}
-              onDelete={() =>
-                setDeleteConfirm({
-                  isOpen: true,
-                  namespace: ns.name,
-                  displayName: ns.displayName,
-                })
-              }
-              canDelete={ns.commandCount === 0 && ns.name !== ""}
-            />
-          ))
-        )}
+        {repoTree
+          ? repoTree.map((repo) => (
+              <RepoTreeItem
+                key={repo.id}
+                repo={repo}
+                isExpanded={expandedRepos.has(repo.id)}
+                onToggle={() => toggleRepo(repo.id)}
+                selectedNamespace={selectedNamespace}
+                onSelectNamespace={onSelectNamespace}
+                namespaces={namespaces}
+                onDeleteNamespace={(ns, displayName) =>
+                  setDeleteConfirm({
+                    isOpen: true,
+                    namespace: ns,
+                    displayName,
+                  })
+                }
+              />
+            ))
+          : /* 扁平结构（兼容旧逻辑） */
+            namespaces.map((ns) => (
+              <NamespaceItem
+                key={ns.name}
+                name={ns.name}
+                displayName={ns.displayName}
+                count={ns.commandCount}
+                isSelected={selectedNamespace === ns.name}
+                onClick={() => onSelectNamespace(ns.name)}
+                onDelete={() =>
+                  setDeleteConfirm({
+                    isOpen: true,
+                    namespace: ns.name,
+                    displayName: ns.displayName,
+                  })
+                }
+                canDelete={ns.commandCount === 0 && ns.name !== ""}
+              />
+            ))}
       </div>
 
       {/* Delete Confirmation Dialog */}
@@ -354,7 +353,7 @@ const NamespaceItem: React.FC<NamespaceItemProps> = ({
         "group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors",
         isSelected
           ? "bg-primary/10 text-primary"
-          : "hover:bg-muted text-foreground"
+          : "hover:bg-muted text-foreground",
       )}
       onClick={onClick}
     >
@@ -429,7 +428,8 @@ const RepoTreeItem: React.FC<RepoTreeItemProps> = ({
           {repo.namespaces.map((ns) => {
             // 查找是否可删除
             const nsInfo = namespaces.find((n) => n.name === ns.name);
-            const canDelete = nsInfo && nsInfo.commandCount === 0 && ns.name !== "";
+            const canDelete =
+              nsInfo && nsInfo.commandCount === 0 && ns.name !== "";
 
             return (
               <div
@@ -438,7 +438,7 @@ const RepoTreeItem: React.FC<RepoTreeItemProps> = ({
                   "group flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors",
                   selectedNamespace === ns.name
                     ? "bg-primary/10 text-primary"
-                    : "hover:bg-muted text-foreground"
+                    : "hover:bg-muted text-foreground",
                 )}
                 onClick={() => onSelectNamespace(ns.name)}
               >
@@ -450,8 +450,12 @@ const RepoTreeItem: React.FC<RepoTreeItemProps> = ({
                       : "text-yellow-500"
                   }
                 />
-                <span className="flex-1 text-sm truncate">{ns.displayName}</span>
-                <span className="text-xs text-muted-foreground">{ns.count}</span>
+                <span className="flex-1 text-sm truncate">
+                  {ns.displayName}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {ns.count}
+                </span>
 
                 {canDelete && (
                   <Button

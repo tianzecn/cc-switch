@@ -53,8 +53,12 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
   const [showRepoManager, setShowRepoManager] = useState(false);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   // 选中的命名空间及其命令列表
-  const [selectedNamespace, setSelectedNamespace] = useState<string | null>(null);
-  const [namespaceCommands, setNamespaceCommands] = useState<DiscoverableCommand[]>([]);
+  const [selectedNamespace, setSelectedNamespace] = useState<string | null>(
+    null,
+  );
+  const [namespaceCommands, setNamespaceCommands] = useState<
+    DiscoverableCommand[]
+  >([]);
 
   // Queries
   const { data: discoverableCommands, isLoading } = useDiscoverableCommands();
@@ -155,14 +159,19 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
   };
 
   // 命名空间选择处理
-  const handleSelectNamespace = (namespaceId: string, commands: DiscoverableCommand[]) => {
+  const handleSelectNamespace = (
+    namespaceId: string,
+    commands: DiscoverableCommand[],
+  ) => {
     setSelectedNamespace(namespaceId);
     setNamespaceCommands(commands);
   };
 
   // 检查命令是否已安装
   const isCommandInstalled = (cmd: DiscoverableCommand) => {
-    const id = cmd.namespace ? `${cmd.namespace}/${cmd.filename}` : cmd.filename;
+    const id = cmd.namespace
+      ? `${cmd.namespace}/${cmd.filename}`
+      : cmd.filename;
     return installedIds.has(id);
   };
 
@@ -342,7 +351,10 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
     <div className="rounded-lg border border-border bg-background/50 p-3">
       {/* 头部：命令名 + 分类 + 安装按钮 */}
       <div className="flex items-start gap-3">
-        <FileText size={16} className="text-muted-foreground flex-shrink-0 mt-0.5" />
+        <FileText
+          size={16}
+          className="text-muted-foreground flex-shrink-0 mt-0.5"
+        />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className="font-medium text-sm">{command.name}</span>
@@ -353,7 +365,9 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
             )}
           </div>
           {/* 描述 */}
-          <p className="text-xs text-muted-foreground mb-2">{command.description}</p>
+          <p className="text-xs text-muted-foreground mb-2">
+            {command.description}
+          </p>
           {/* 文档链接 */}
           {command.readmeUrl && (
             <a

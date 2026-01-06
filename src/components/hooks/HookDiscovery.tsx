@@ -53,7 +53,7 @@ export const HookDiscovery: React.FC<HookDiscoveryProps> = ({ onBack }) => {
   const [showRepoManager, setShowRepoManager] = useState(false);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [selectedNamespace, setSelectedNamespace] = useState<string | null>(
-    null
+    null,
   );
   const [namespaceHooks, setNamespaceHooks] = useState<DiscoverableHook[]>([]);
 
@@ -139,7 +139,7 @@ export const HookDiscovery: React.FC<HookDiscoveryProps> = ({ onBack }) => {
 
   const handleSelectNamespace = (
     namespaceId: string,
-    hooks: DiscoverableHook[]
+    hooks: DiscoverableHook[],
   ) => {
     setSelectedNamespace(namespaceId);
     setNamespaceHooks(hooks);
@@ -283,7 +283,10 @@ export const HookDiscovery: React.FC<HookDiscoveryProps> = ({ onBack }) => {
       {showRepoManager && (
         <CommandRepoManager
           repos={repos}
-          commands={(discoverableHooks || []) as unknown as import("@/hooks/useCommands").DiscoverableCommand[]}
+          commands={
+            (discoverableHooks ||
+              []) as unknown as import("@/hooks/useCommands").DiscoverableCommand[]
+          }
           onAdd={handleAddRepo}
           onRemove={handleRemoveRepo}
           onClose={() => setShowRepoManager(false)}

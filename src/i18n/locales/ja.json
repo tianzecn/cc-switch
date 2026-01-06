@@ -69,6 +69,14 @@
     "enterEditMode": "編集モードに入る",
     "exitEditMode": "編集モードを終了"
   },
+  "navbar": {
+    "skills": "スキル",
+    "commands": "コマンド",
+    "hooks": "フック",
+    "agents": "エージェント",
+    "prompts": "プロンプト",
+    "mcp": "MCP"
+  },
   "provider": {
     "tabProvider": "プロバイダー",
     "tabUniversal": "統一プロバイダー",

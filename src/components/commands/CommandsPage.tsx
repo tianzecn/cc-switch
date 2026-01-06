@@ -24,7 +24,7 @@ export const CommandsPage: React.FC = () => {
   const { t } = useTranslation();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedNamespace, setSelectedNamespace] = useState<string | null>(
-    null
+    null,
   );
 
   // Queries

@@ -1,11 +1,6 @@
 import React, { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  ChevronRight,
-  ChevronDown,
-  GitBranch,
-  Folder,
-} from "lucide-react";
+import { ChevronRight, ChevronDown, GitBranch, Folder } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DiscoverableCommand } from "@/hooks/useCommands";
 
@@ -88,7 +83,7 @@ function buildTree(commands: DiscoverableCommand[]): RepoNode[] {
         if (a === "(root)") return -1;
         if (b === "(root)") return 1;
         return a.localeCompare(b);
-      }
+      },
     );
 
     for (const [namespace, cmds] of sortedNamespaces) {
@@ -137,7 +132,10 @@ interface CommandDiscoveryTreeProps {
   /** 选中的命名空间 ID（格式: owner/repo/namespace） */
   selectedNamespace: string | null;
   /** 命名空间被选中时的回调 */
-  onSelectNamespace: (namespaceId: string, commands: DiscoverableCommand[]) => void;
+  onSelectNamespace: (
+    namespaceId: string,
+    commands: DiscoverableCommand[],
+  ) => void;
   expandedNodes?: Set<string>;
   onToggleNode?: (nodeId: string) => void;
 }
@@ -157,21 +155,23 @@ export const CommandDiscoveryTree: React.FC<CommandDiscoveryTreeProps> = ({
 
   // 内部展开状态（如果没有外部控制）
   const [internalExpanded, setInternalExpanded] = React.useState<Set<string>>(
-    new Set()
+    new Set(),
   );
 
   const expanded = controlledExpanded ?? internalExpanded;
-  const toggleNode = controlledToggle ?? ((nodeId: string) => {
-    setInternalExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(nodeId)) {
-        next.delete(nodeId);
-      } else {
-        next.add(nodeId);
-      }
-      return next;
+  const toggleNode =
+    controlledToggle ??
+    ((nodeId: string) => {
+      setInternalExpanded((prev) => {
+        const next = new Set(prev);
+        if (next.has(nodeId)) {
+          next.delete(nodeId);
+        } else {
+          next.add(nodeId);
+        }
+        return next;
+      });
     });
-  });
 
   // 构建树结构
   const tree = useMemo(() => buildTree(commands), [commands]);
@@ -276,11 +276,14 @@ const NamespaceTreeNode: React.FC<NamespaceTreeNodeProps> = ({
         "flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors",
         isSelected
           ? "bg-primary/10 text-primary"
-          : "hover:bg-muted text-foreground"
+          : "hover:bg-muted text-foreground",
       )}
       onClick={onSelect}
     >
-      <Folder size={14} className={isSelected ? "text-primary" : "text-yellow-500"} />
+      <Folder
+        size={14}
+        className={isSelected ? "text-primary" : "text-yellow-500"}
+      />
       <span className="flex-1 text-sm truncate">{node.name}</span>
       <span className="text-xs text-muted-foreground">{node.count}</span>
     </div>

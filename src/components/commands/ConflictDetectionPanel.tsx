@@ -44,7 +44,9 @@ export const ConflictDetectionPanel: React.FC<ConflictDetectionPanelProps> = ({
   const handleDetect = async () => {
     try {
       await refetch();
-      toast.success(t("commands.conflict.detectComplete"), { closeButton: true });
+      toast.success(t("commands.conflict.detectComplete"), {
+        closeButton: true,
+      });
     } catch (error) {
       toast.error(t("common.error"), {
         description: String(error),
@@ -55,7 +57,7 @@ export const ConflictDetectionPanel: React.FC<ConflictDetectionPanelProps> = ({
   const handleResolve = async (
     id: string,
     app: string,
-    resolution: ConflictResolution
+    resolution: ConflictResolution,
   ) => {
     try {
       await resolveMutation.mutateAsync({
@@ -63,7 +65,9 @@ export const ConflictDetectionPanel: React.FC<ConflictDetectionPanelProps> = ({
         app: app as "claude" | "codex" | "gemini",
         resolution,
       });
-      toast.success(t("commands.conflict.resolveSuccess"), { closeButton: true });
+      toast.success(t("commands.conflict.resolveSuccess"), {
+        closeButton: true,
+      });
       // 重新检测
       await refetch();
     } catch (error) {
@@ -74,7 +78,8 @@ export const ConflictDetectionPanel: React.FC<ConflictDetectionPanelProps> = ({
   };
 
   const hasChanges = changes && changes.length > 0;
-  const conflictCount = changes?.filter((c) => c.eventType === "appConflict").length || 0;
+  const conflictCount =
+    changes?.filter((c) => c.eventType === "appConflict").length || 0;
 
   return (
     <div className={cn("glass rounded-xl border border-white/10", className)}>
@@ -89,7 +94,7 @@ export const ConflictDetectionPanel: React.FC<ConflictDetectionPanelProps> = ({
               "w-8 h-8 rounded-lg flex items-center justify-center",
               hasChanges
                 ? "bg-yellow-500/20 text-yellow-500"
-                : "bg-green-500/20 text-green-500"
+                : "bg-green-500/20 text-green-500",
             )}
           >
             {hasChanges ? <AlertTriangle size={16} /> : <Check size={16} />}
@@ -104,7 +109,11 @@ export const ConflictDetectionPanel: React.FC<ConflictDetectionPanelProps> = ({
                 : t("commands.conflict.noChanges")}
               {conflictCount > 0 && (
                 <span className="ml-2 text-yellow-500">
-                  ({t("commands.conflict.conflictCount", { count: conflictCount })})
+                  (
+                  {t("commands.conflict.conflictCount", {
+                    count: conflictCount,
+                  })}
+                  )
                 </span>
               )}
             </p>
@@ -121,15 +130,11 @@ export const ConflictDetectionPanel: React.FC<ConflictDetectionPanelProps> = ({
             }}
             disabled={isLoading || isFetching}
           >
-            <RefreshCw
-              size={14}
-              className={isFetching ? "animate-spin" : ""}
-            />
+            <RefreshCw size={14} className={isFetching ? "animate-spin" : ""} />
             <span className="ml-1">{t("commands.conflict.detect")}</span>
           </Button>
-          {hasChanges && (
-            isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />
-          )}
+          {hasChanges &&
+            (isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />)}
         </div>
       </div>
 
@@ -200,16 +205,20 @@ const ChangeEventCard: React.FC<ChangeEventCardProps> = ({
         "flex items-start gap-3 p-3 rounded-lg border",
         isConflict
           ? "border-yellow-500/30 bg-yellow-500/5"
-          : "border-border bg-muted/50"
+          : "border-border bg-muted/50",
       )}
     >
       {/* Icon */}
-      <div className="flex-shrink-0 mt-0.5">{getEventIcon(change.eventType)}</div>
+      <div className="flex-shrink-0 mt-0.5">
+        {getEventIcon(change.eventType)}
+      </div>
 
       {/* Info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <span className="font-medium text-foreground text-sm">{change.id}</span>
+          <span className="font-medium text-foreground text-sm">
+            {change.id}
+          </span>
           <span className="px-1.5 py-0.5 text-xs rounded bg-muted text-muted-foreground">
             {getEventLabel(change.eventType)}
           </span>
