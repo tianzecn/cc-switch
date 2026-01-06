@@ -502,6 +502,9 @@ pub struct InstalledSkill {
     pub description: Option<String>,
     /// 安装目录名（在 SSOT 目录中的子目录名）
     pub directory: String,
+    /// 命名空间（用于分组管理，空字符串表示根命名空间）
+    #[serde(default)]
+    pub namespace: String,
     /// 仓库所有者（GitHub 用户/组织）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub repo_owner: Option<String>,

@@ -21,9 +21,9 @@ impl Database {
         let conn = lock_conn!(self.conn);
         let mut stmt = conn
             .prepare(
-                "SELECT id, name, description, directory, repo_owner, repo_name, repo_branch,
+                "SELECT id, name, description, directory, namespace, repo_owner, repo_name, repo_branch,
                         readme_url, enabled_claude, enabled_codex, enabled_gemini, installed_at
-                 FROM skills ORDER BY name ASC",
+                 FROM skills ORDER BY namespace ASC, name ASC",
             )
             .map_err(|e| AppError::Database(e.to_string()))?;
 
@@ -34,16 +34,17 @@ impl Database {
                     name: row.get(1)?,
                     description: row.get(2)?,
                     directory: row.get(3)?,
-                    repo_owner: row.get(4)?,
-                    repo_name: row.get(5)?,
-                    repo_branch: row.get(6)?,
-                    readme_url: row.get(7)?,
+                    namespace: row.get(4)?,
+                    repo_owner: row.get(5)?,
+                    repo_name: row.get(6)?,
+                    repo_branch: row.get(7)?,
+                    readme_url: row.get(8)?,
                     apps: SkillApps {
-                        claude: row.get(8)?,
-                        codex: row.get(9)?,
-                        gemini: row.get(10)?,
+                        claude: row.get(9)?,
+                        codex: row.get(10)?,
+                        gemini: row.get(11)?,
                     },
-                    installed_at: row.get(11)?,
+                    installed_at: row.get(12)?,
                 })
             })
             .map_err(|e| AppError::Database(e.to_string()))?;
@@ -61,7 +62,7 @@ impl Database {
         let conn = lock_conn!(self.conn);
         let mut stmt = conn
             .prepare(
-                "SELECT id, name, description, directory, repo_owner, repo_name, repo_branch,
+                "SELECT id, name, description, directory, namespace, repo_owner, repo_name, repo_branch,
                         readme_url, enabled_claude, enabled_codex, enabled_gemini, installed_at
                  FROM skills WHERE id = ?1",
             )
@@ -73,16 +74,17 @@ impl Database {
                 name: row.get(1)?,
                 description: row.get(2)?,
                 directory: row.get(3)?,
-                repo_owner: row.get(4)?,
-                repo_name: row.get(5)?,
-                repo_branch: row.get(6)?,
-                readme_url: row.get(7)?,
+                namespace: row.get(4)?,
+                repo_owner: row.get(5)?,
+                repo_name: row.get(6)?,
+                repo_branch: row.get(7)?,
+                readme_url: row.get(8)?,
                 apps: SkillApps {
-                    claude: row.get(8)?,
-                    codex: row.get(9)?,
-                    gemini: row.get(10)?,
+                    claude: row.get(9)?,
+                    codex: row.get(10)?,
+                    gemini: row.get(11)?,
                 },
-                installed_at: row.get(11)?,
+                installed_at: row.get(12)?,
             })
         });
 
@@ -98,14 +100,15 @@ impl Database {
         let conn = lock_conn!(self.conn);
         conn.execute(
             "INSERT OR REPLACE INTO skills
-             (id, name, description, directory, repo_owner, repo_name, repo_branch,
+             (id, name, description, directory, namespace, repo_owner, repo_name, repo_branch,
               readme_url, enabled_claude, enabled_codex, enabled_gemini, installed_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             params![
                 skill.id,
                 skill.name,
                 skill.description,
                 skill.directory,
+                skill.namespace,
                 skill.repo_owner,
                 skill.repo_name,
                 skill.repo_branch,
@@ -147,6 +150,80 @@ impl Database {
             )
             .map_err(|e| AppError::Database(e.to_string()))?;
         Ok(affected > 0)
+    }
+
+    /// 获取所有命名空间列表
+    pub fn get_skill_namespaces(&self) -> Result<Vec<String>, AppError> {
+        let conn = lock_conn!(self.conn);
+        let mut stmt = conn
+            .prepare("SELECT DISTINCT namespace FROM skills ORDER BY namespace ASC")
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        let namespace_iter = stmt
+            .query_map([], |row| row.get(0))
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        let mut namespaces = Vec::new();
+        for ns_res in namespace_iter {
+            namespaces.push(ns_res.map_err(|e| AppError::Database(e.to_string()))?);
+        }
+        Ok(namespaces)
+    }
+
+    /// 按命名空间获取 Skills
+    pub fn get_skills_by_namespace(
+        &self,
+        namespace: &str,
+    ) -> Result<Vec<InstalledSkill>, AppError> {
+        let conn = lock_conn!(self.conn);
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, name, description, directory, namespace, repo_owner, repo_name, repo_branch,
+                        readme_url, enabled_claude, enabled_codex, enabled_gemini, installed_at
+                 FROM skills WHERE namespace = ?1 ORDER BY name ASC",
+            )
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        let skill_iter = stmt
+            .query_map([namespace], |row| {
+                Ok(InstalledSkill {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    description: row.get(2)?,
+                    directory: row.get(3)?,
+                    namespace: row.get(4)?,
+                    repo_owner: row.get(5)?,
+                    repo_name: row.get(6)?,
+                    repo_branch: row.get(7)?,
+                    readme_url: row.get(8)?,
+                    apps: SkillApps {
+                        claude: row.get(9)?,
+                        codex: row.get(10)?,
+                        gemini: row.get(11)?,
+                    },
+                    installed_at: row.get(12)?,
+                })
+            })
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        let mut skills = Vec::new();
+        for skill_res in skill_iter {
+            skills.push(skill_res.map_err(|e| AppError::Database(e.to_string()))?);
+        }
+        Ok(skills)
+    }
+
+    /// 检查命名空间是否为空
+    pub fn is_namespace_empty(&self, namespace: &str) -> Result<bool, AppError> {
+        let conn = lock_conn!(self.conn);
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM skills WHERE namespace = ?1",
+                params![namespace],
+                |row| row.get(0),
+            )
+            .map_err(|e| AppError::Database(e.to_string()))?;
+        Ok(count == 0)
     }
 
     // ========== SkillRepo CRUD（保持原有） ==========

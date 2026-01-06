@@ -606,7 +606,7 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app_config::HookType;
+    use crate::app_config::{HookRule, HookType};
 
     fn create_test_hook(id: &str, namespace: &str, filename: &str) -> InstalledHook {
         InstalledHook {

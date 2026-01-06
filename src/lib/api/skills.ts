@@ -17,6 +17,8 @@ export interface InstalledSkill {
   name: string;
   description?: string;
   directory: string;
+  /** 命名空间（用于分组管理，空字符串表示根命名空间） */
+  namespace: string;
   repoOwner?: string;
   repoName?: string;
   repoBranch?: string;
@@ -31,6 +33,8 @@ export interface DiscoverableSkill {
   name: string;
   description: string;
   directory: string;
+  /** 命名空间（父目录的最后一个组件，用于分组显示，空字符串表示根目录） */
+  namespace: string;
   readmeUrl?: string;
   repoOwner: string;
   repoName: string;
@@ -64,6 +68,14 @@ export interface SkillRepo {
   name: string;
   branch: string;
   enabled: boolean;
+}
+
+/** Skill 冲突信息 */
+export interface SkillConflict {
+  /** 冲突的目录名 */
+  directory: string;
+  /** 冲突的 Skills 列表 */
+  conflictingSkills: InstalledSkill[];
 }
 
 // ========== API ==========
@@ -157,5 +169,22 @@ export const skillsApi = {
   /** 删除仓库 */
   async removeRepo(owner: string, name: string): Promise<boolean> {
     return await invoke("remove_skill_repo", { owner, name });
+  },
+
+  // ========== 命名空间管理 (v3.12.0+) ==========
+
+  /** 获取所有命名空间 */
+  async getNamespaces(): Promise<string[]> {
+    return await invoke("get_skill_namespaces");
+  },
+
+  /** 按命名空间获取 Skills */
+  async getByNamespace(namespace: string): Promise<InstalledSkill[]> {
+    return await invoke("get_skills_by_namespace", { namespace });
+  },
+
+  /** 检测 Skill 冲突 */
+  async detectConflicts(): Promise<SkillConflict[]> {
+    return await invoke("detect_skill_conflicts");
   },
 };

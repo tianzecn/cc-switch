@@ -27,8 +27,7 @@ import { EnvWarningBanner } from "@/components/env/EnvWarningBanner";
 import UsageScriptModal from "@/components/UsageScriptModal";
 import UnifiedMcpPanel from "@/components/mcp/UnifiedMcpPanel";
 import PromptPanel from "@/components/prompts/PromptPanel";
-import { SkillsPage } from "@/components/skills/SkillsPage";
-import UnifiedSkillsPanel from "@/components/skills/UnifiedSkillsPanel";
+import { SkillsPageNew } from "@/components/skills/SkillsPageNew";
 import { DeepLinkImportDialog } from "@/components/DeepLinkImportDialog";
 import { AgentsPage } from "@/components/agents/AgentsPage";
 import { UniversalProviderPanel } from "@/components/universal";
@@ -65,14 +64,12 @@ function App() {
   const promptPanelRef = useRef<any>(null);
   const mcpPanelRef = useRef<any>(null);
   const skillsPageRef = useRef<any>(null);
-  const unifiedSkillsPanelRef = useRef<any>(null);
 
   // Page action refs for UnifiedNavbar
   const pageActionRefs: PageActionRefs = {
     promptPanel: promptPanelRef,
     mcpPanel: mcpPanelRef,
     skillsPage: skillsPageRef,
-    unifiedSkillsPanel: unifiedSkillsPanelRef,
   };
 
   // 获取代理服务状态
@@ -407,14 +404,7 @@ function App() {
             />
           );
         case "skills":
-          return (
-            <UnifiedSkillsPanel
-              ref={unifiedSkillsPanelRef}
-              onOpenDiscovery={() => setCurrentView("skillsDiscovery")}
-            />
-          );
-        case "skillsDiscovery":
-          return <SkillsPage ref={skillsPageRef} initialApp={activeApp} />;
+          return <SkillsPageNew ref={skillsPageRef} />;
         case "mcp":
           return (
             <UnifiedMcpPanel

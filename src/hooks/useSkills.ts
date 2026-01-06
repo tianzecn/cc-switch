@@ -4,6 +4,7 @@ import {
   type AppType,
   type DiscoverableSkill,
   type InstalledSkill,
+  type SkillConflict,
 } from "@/lib/api/skills";
 
 /**
@@ -147,6 +148,39 @@ export function useRemoveSkillRepo() {
   });
 }
 
+// ========== 命名空间管理 (v3.12.0+) ==========
+
+/**
+ * 查询所有命名空间
+ */
+export function useSkillNamespaces() {
+  return useQuery({
+    queryKey: ["skills", "namespaces"],
+    queryFn: () => skillsApi.getNamespaces(),
+  });
+}
+
+/**
+ * 按命名空间查询 Skills
+ */
+export function useSkillsByNamespace(namespace: string | null) {
+  return useQuery({
+    queryKey: ["skills", "byNamespace", namespace],
+    queryFn: () => skillsApi.getByNamespace(namespace ?? ""),
+    enabled: namespace !== null,
+  });
+}
+
+/**
+ * 检测 Skill 冲突
+ */
+export function useSkillConflicts() {
+  return useQuery({
+    queryKey: ["skills", "conflicts"],
+    queryFn: () => skillsApi.detectConflicts(),
+  });
+}
+
 // ========== 辅助类型 ==========
 
-export type { InstalledSkill, DiscoverableSkill, AppType };
+export type { InstalledSkill, DiscoverableSkill, AppType, SkillConflict };

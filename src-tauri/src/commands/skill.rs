@@ -248,3 +248,63 @@ pub fn remove_skill_repo(
         .map_err(|e| e.to_string())?;
     Ok(true)
 }
+
+// ========== 命名空间管理命令 ==========
+
+/// 获取所有 Skill 命名空间
+#[tauri::command]
+pub fn get_skill_namespaces(app_state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    app_state
+        .db
+        .get_skill_namespaces()
+        .map_err(|e| e.to_string())
+}
+
+/// 按命名空间获取 Skills
+#[tauri::command]
+pub fn get_skills_by_namespace(
+    namespace: String,
+    app_state: State<'_, AppState>,
+) -> Result<Vec<InstalledSkill>, String> {
+    app_state
+        .db
+        .get_skills_by_namespace(&namespace)
+        .map_err(|e| e.to_string())
+}
+
+/// 检测 Skill 冲突（跨仓库同名）
+#[tauri::command]
+pub fn detect_skill_conflicts(app_state: State<'_, AppState>) -> Result<Vec<SkillConflict>, String> {
+    let skills = SkillService::get_all_installed(&app_state.db).map_err(|e| e.to_string())?;
+
+    // 按 directory 分组，找出重复的
+    let mut dir_groups: std::collections::HashMap<String, Vec<InstalledSkill>> = std::collections::HashMap::new();
+    for skill in skills {
+        dir_groups
+            .entry(skill.directory.clone())
+            .or_default()
+            .push(skill);
+    }
+
+    // 筛选出有冲突的（同一 directory 有多个来源）
+    let conflicts: Vec<SkillConflict> = dir_groups
+        .into_iter()
+        .filter(|(_, skills)| skills.len() > 1)
+        .map(|(directory, skills)| SkillConflict {
+            directory,
+            conflicting_skills: skills,
+        })
+        .collect();
+
+    Ok(conflicts)
+}
+
+/// Skill 冲突信息
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillConflict {
+    /// 冲突的目录名
+    pub directory: String,
+    /// 冲突的 Skills 列表
+    pub conflicting_skills: Vec<InstalledSkill>,
+}

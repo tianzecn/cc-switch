@@ -17,7 +17,6 @@ import {
   Wrench,
   Server,
   RefreshCw,
-  Search,
   Download,
   Terminal,
   Webhook,
@@ -35,7 +34,6 @@ export type View =
   | "settings"
   | "prompts"
   | "skills"
-  | "skillsDiscovery"
   | "mcp"
   | "agents"
   | "universal"
@@ -57,15 +55,10 @@ export interface SkillsPageRef {
   openRepoManager: () => void;
 }
 
-export interface UnifiedSkillsPanelRef {
-  openImport: () => void;
-}
-
 export interface PageActionRefs {
   promptPanel?: React.RefObject<PromptPanelRef>;
   mcpPanel?: React.RefObject<McpPanelRef>;
   skillsPage?: React.RefObject<SkillsPageRef>;
-  unifiedSkillsPanel?: React.RefObject<UnifiedSkillsPanelRef>;
 }
 
 export interface UnifiedNavbarProps {
@@ -90,7 +83,7 @@ const FEATURE_BUTTONS: FeatureButton[] = [
     view: "skills",
     icon: <Wrench className="w-4 h-4" />,
     labelKey: "navbar.skills",
-    highlightViews: ["skills", "skillsDiscovery"],
+    highlightViews: ["skills"],
   },
   {
     view: "commands",
@@ -125,8 +118,7 @@ const FEATURE_BUTTONS: FeatureButton[] = [
 ];
 
 // Back navigation logic
-const getBackTarget = (view: View): View => {
-  if (view === "skillsDiscovery") return "skills";
+const getBackTarget = (_view: View): View => {
   return "providers";
 };
 
@@ -139,7 +131,6 @@ const getPageTitle = (
     settings: t("settings.title"),
     prompts: t("prompts.title", { appName: "" }).trim(),
     skills: t("skills.title"),
-    skillsDiscovery: t("skills.title"),
     mcp: t("mcp.unifiedPanel.title"),
     agents: t("agents.title"),
     commands: t("commands.title"),
@@ -336,32 +327,6 @@ export function UnifiedNavbar({
           );
 
         case "skills":
-          return (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  pageActionRefs?.unifiedSkillsPanel?.current?.openImport()
-                }
-                className="h-7"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                {t("skills.import")}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onViewChange("skillsDiscovery")}
-                className="h-7"
-              >
-                <Search className="w-4 h-4 mr-2" />
-                {t("skills.discover")}
-              </Button>
-            </>
-          );
-
-        case "skillsDiscovery":
           return (
             <>
               <Button

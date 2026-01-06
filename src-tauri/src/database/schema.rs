@@ -515,6 +515,11 @@ impl Database {
                         Self::migrate_v5_to_v6(conn)?;
                         Self::set_user_version(conn, 6)?;
                     }
+                    6 => {
+                        log::info!("迁移数据库从 v6 到 v7（Skills 命名空间支持）");
+                        Self::migrate_v6_to_v7(conn)?;
+                        Self::set_user_version(conn, 7)?;
+                    }
                     _ => {
                         return Err(AppError::Database(format!(
                             "未知的数据库版本 {version}，无法迁移到 {SCHEMA_VERSION}"
@@ -1224,6 +1229,41 @@ impl Database {
              - 新增 agents 表，用于存储已安装的 Agents\n\
              - 新增 agent_discovery_cache 表，用于缓存仓库扫描结果\n\
              - command_repos 表共用于 Commands 和 Agents"
+        );
+
+        Ok(())
+    }
+
+    /// v6 -> v7 迁移：Skills 命名空间支持
+    ///
+    /// 为 skills 表添加 namespace 列，用于分组管理 Skills。
+    /// 现有 Skills 默认使用空字符串作为根命名空间。
+    fn migrate_v6_to_v7(conn: &Connection) -> Result<(), AppError> {
+        // 1. 添加 namespace 列到 skills 表
+        Self::add_column_if_missing(conn, "skills", "namespace", "TEXT NOT NULL DEFAULT ''")?;
+        log::info!("skills 表已添加 namespace 列");
+
+        // 2. 创建命名空间索引
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_skills_namespace ON skills(namespace)",
+            [],
+        )
+        .map_err(|e| AppError::Database(format!("创建 skills 命名空间索引失败: {e}")))?;
+        log::info!("已创建 idx_skills_namespace 索引");
+
+        // 3. 标记：需要在启动后迁移 Skills SSOT 目录结构
+        // 说明：v7 结构将 Skills 从扁平目录改为层级目录（namespace/skill），
+        // 需要在首次启动时执行目录结构迁移。
+        let _ = conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('skills_namespace_migration_pending', 'true')",
+            [],
+        );
+
+        log::info!(
+            "数据库已迁移到 v7 结构（Skills 命名空间支持）。\n\
+             - skills 表新增 namespace 列，用于分组管理\n\
+             - 新增 idx_skills_namespace 索引\n\
+             - 首次启动时将迁移 Skills SSOT 目录结构"
         );
 
         Ok(())

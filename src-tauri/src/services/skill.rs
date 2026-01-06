@@ -31,8 +31,10 @@ pub struct DiscoverableSkill {
     pub name: String,
     /// 技能描述
     pub description: String,
-    /// 目录名称 (安装路径的最后一段)
+    /// 目录路径（相对于仓库根目录）
     pub directory: String,
+    /// 命名空间（父目录的最后一个组件，用于分组显示）
+    pub namespace: String,
     /// GitHub README URL
     #[serde(rename = "readmeUrl")]
     pub readme_url: Option<String>,
@@ -280,6 +282,15 @@ impl SkillService {
             let _ = fs::remove_dir_all(&temp_dir);
         }
 
+        // 从目录路径推断命名空间
+        // 例如：skill.directory = "code-review/my-skill" -> namespace = "code-review"
+        let namespace = Path::new(&skill.directory)
+            .parent()
+            .and_then(|p| p.to_str())
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+            .unwrap_or_default();
+
         // 创建 InstalledSkill 记录
         let installed_skill = InstalledSkill {
             id: skill.key.clone(),
@@ -290,6 +301,7 @@ impl SkillService {
                 Some(skill.description.clone())
             },
             directory: install_name.clone(),
+            namespace,
             repo_owner: Some(skill.repo_owner.clone()),
             repo_name: Some(skill.repo_name.clone()),
             repo_branch: Some(skill.repo_branch.clone()),
@@ -519,12 +531,13 @@ impl SkillService {
                 }
             }
 
-            // 创建记录
+            // 创建记录（本地导入的 Skill 使用根命名空间）
             let skill = InstalledSkill {
                 id: format!("local:{}", dir_name),
                 name,
                 description,
                 directory: dir_name,
+                namespace: String::new(), // 本地导入默认使用根命名空间
                 repo_owner: None,
                 repo_name: None,
                 repo_branch: None,
@@ -772,11 +785,16 @@ impl SkillService {
     ) -> Result<DiscoverableSkill> {
         let meta = self.parse_skill_metadata(skill_md)?;
 
+        // 计算命名空间：找到 skills 目录并取其父目录
+        // 如果 skills 在根目录，使用 repo.owner 作为命名空间
+        let namespace = Self::compute_namespace(directory, &repo.owner);
+
         Ok(DiscoverableSkill {
             key: format!("{}/{}:{}", repo.owner, repo.name, directory),
             name: meta.name.unwrap_or_else(|| directory.to_string()),
             description: meta.description.unwrap_or_default(),
             directory: directory.to_string(),
+            namespace,
             readme_url: Some(format!(
                 "https://github.com/{}/{}/tree/{}/{}",
                 repo.owner, repo.name, repo.branch, directory
@@ -785,6 +803,42 @@ impl SkillService {
             repo_name: repo.name.clone(),
             repo_branch: repo.branch.clone(),
         })
+    }
+
+    /// 计算命名空间：找到 `skills` 目录并取其父目录的最后一个组件
+    ///
+    /// 示例（假设 repo_owner = "cexll"）：
+    /// - `plugins/development/skills/ddd-doc-steward` -> "development"
+    /// - `frontend/skills/my-skill` -> "frontend"
+    /// - `skills/my-skill` -> "cexll" (skills 在根目录，使用 repo_owner)
+    /// - `my-skill` -> "cexll" (没有 skills 目录，使用 repo_owner)
+    fn compute_namespace(directory: &str, repo_owner: &str) -> String {
+        // 移除末尾的斜杠（如果有）
+        let dir = directory.trim_end_matches('/');
+
+        // 按斜杠分割
+        let parts: Vec<&str> = dir.split('/').collect();
+
+        // 查找 "skills" 目录的位置
+        if let Some(skills_idx) = parts.iter().position(|&p| p == "skills") {
+            if skills_idx > 0 {
+                // skills 有父目录，取其前一个组件作为命名空间
+                // 例如：["plugins", "development", "skills", "xxx"] -> "development"
+                parts[skills_idx - 1].to_string()
+            } else {
+                // skills 在根目录（如 "skills/my-skill"），使用 repo_owner 作为命名空间
+                repo_owner.to_string()
+            }
+        } else {
+            // 没找到 skills 目录，可能是直接在根目录的技能
+            // 回退到取父目录最后一个组件（如果有）
+            if parts.len() > 1 {
+                parts[parts.len() - 2].to_string()
+            } else {
+                // 直接在根目录，使用 repo_owner
+                repo_owner.to_string()
+            }
+        }
     }
 
     /// 解析技能元数据
@@ -1048,6 +1102,7 @@ pub fn migrate_skills_to_ssot(db: &Arc<Database>) -> Result<usize> {
             name,
             description,
             directory,
+            namespace: String::new(), // 迁移的本地 Skill 使用根命名空间
             repo_owner: None,
             repo_name: None,
             repo_branch: None,
@@ -1063,4 +1118,56 @@ pub fn migrate_skills_to_ssot(db: &Arc<Database>) -> Result<usize> {
     log::info!("Skills 迁移完成，共 {} 个", count);
 
     Ok(count)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_compute_namespace() {
+        let repo_owner = "cexll";
+
+        // 标准情况：plugins/development/skills/skill-name -> "development"
+        assert_eq!(
+            SkillService::compute_namespace("plugins/development/skills/ddd-doc-steward", repo_owner),
+            "development"
+        );
+
+        // 单层命名空间：frontend/skills/my-skill -> "frontend"
+        assert_eq!(
+            SkillService::compute_namespace("frontend/skills/my-skill", repo_owner),
+            "frontend"
+        );
+
+        // skills 在根目录：skills/my-skill -> "cexll" (使用 repo_owner)
+        assert_eq!(
+            SkillService::compute_namespace("skills/my-skill", repo_owner),
+            "cexll"
+        );
+
+        // 没有 skills 目录但有父目录（回退）：frontend/my-skill -> "frontend"
+        assert_eq!(
+            SkillService::compute_namespace("frontend/my-skill", repo_owner),
+            "frontend"
+        );
+
+        // 直接是技能名（根目录）：my-skill -> "cexll" (使用 repo_owner)
+        assert_eq!(
+            SkillService::compute_namespace("my-skill", repo_owner),
+            "cexll"
+        );
+
+        // 深层嵌套：a/b/c/skills/d -> "c"
+        assert_eq!(
+            SkillService::compute_namespace("a/b/c/skills/d", repo_owner),
+            "c"
+        );
+
+        // 不同的 repo_owner
+        assert_eq!(
+            SkillService::compute_namespace("skills/codeagent", "anthropics"),
+            "anthropics"
+        );
+    }
 }
