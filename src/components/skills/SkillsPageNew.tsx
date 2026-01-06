@@ -413,9 +413,9 @@ export const SkillsPageNew = forwardRef<
           </div>
         </div>
 
-        {/* Search & Filter */}
+        {/* Search & Stats Bar */}
         <div className="flex items-center gap-3">
-          <div className="relative flex-1">
+          <div className="relative w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder={t("skills.searchPlaceholder", "Search skills...")}
@@ -448,13 +448,13 @@ export const SkillsPageNew = forwardRef<
               </SelectContent>
             </Select>
           )}
-        </div>
 
-        {/* Stats Bar */}
-        <div className="mt-3 text-sm text-muted-foreground">
-          {t("skills.installed", { count: stats.total })} ·{" "}
-          {t("skills.apps.claude")}: {stats.claude} · {t("skills.apps.codex")}:{" "}
-          {stats.codex} · {t("skills.apps.gemini")}: {stats.gemini}
+          {/* Stats */}
+          <div className="text-sm text-muted-foreground">
+            {t("skills.installed", { count: stats.total })} ·{" "}
+            {t("skills.apps.claude")}: {stats.claude} · {t("skills.apps.codex")}:{" "}
+            {stats.codex} · {t("skills.apps.gemini")}: {stats.gemini}
+          </div>
         </div>
       </div>
 
