@@ -17,7 +17,5 @@ pub mod universal_providers;
 
 // 所有 DAO 方法都通过 Database impl 提供，无需单独导出
 // 导出特定类型供外部使用
-pub use agents::AgentDiscoveryCache;
-pub use commands::{CommandDiscoveryCache, CACHE_EXPIRY_SECONDS};
+pub use commands::CACHE_EXPIRY_SECONDS;
 pub use failover::FailoverQueueItem;
-pub use hooks::HookDiscoveryCache;

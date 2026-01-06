@@ -41,6 +41,7 @@ pub struct CommandMetadata {
 }
 
 /// 默认仓库配置
+#[allow(dead_code)]
 pub fn default_command_repos() -> Vec<CommandRepo> {
     vec![
         // 可以添加默认的 Commands 仓库

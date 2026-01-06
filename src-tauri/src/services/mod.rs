@@ -14,7 +14,7 @@ pub mod stream_check;
 pub mod usage_stats;
 
 pub use agent::{AgentMetadata, AgentService};
-pub use hook::{HookFileMetadata, HookService};
+pub use hook::HookService;
 pub use command::{CommandMetadata, CommandService};
 pub use config::ConfigService;
 pub use mcp::McpService;

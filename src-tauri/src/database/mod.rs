@@ -36,7 +36,7 @@ mod schema;
 mod tests;
 
 // DAO 类型导出供外部使用
-pub use dao::{AgentDiscoveryCache, FailoverQueueItem, CACHE_EXPIRY_SECONDS};
+pub use dao::{FailoverQueueItem, CACHE_EXPIRY_SECONDS};
 
 use crate::config::get_app_config_dir;
 use crate::error::AppError;

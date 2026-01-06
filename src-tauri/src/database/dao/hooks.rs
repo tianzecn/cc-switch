@@ -3,7 +3,7 @@
 //! 提供 hooks 表的 CRUD 操作
 
 use crate::app_config::{
-    DiscoverableHook, HookApps, HookEventType, HookNamespace, HookRule, InstalledHook,
+    DiscoverableHook, HookApps, HookEventType, HookNamespace, InstalledHook,
 };
 use crate::database::{lock_conn, to_json_string, Database};
 use crate::error::AppError;

@@ -105,7 +105,8 @@ pub struct OfficialHookCommand {
     pub cmd_type: String,
     /// 命令内容
     pub command: Option<String>,
-    /// 超时时间（毫秒）
+    /// 超时时间（毫秒）- 保留用于反序列化兼容
+    #[allow(dead_code)]
     pub timeout: Option<u64>,
 }
 
