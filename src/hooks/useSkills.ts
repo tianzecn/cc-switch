@@ -42,8 +42,8 @@ export function useInstallSkill() {
       currentApp: AppType;
     }) => skillsApi.installUnified(skill, currentApp),
     onSuccess: () => {
+      // 只刷新已安装列表，不刷新可发现列表（避免重新扫描仓库）
       queryClient.invalidateQueries({ queryKey: ["skills", "installed"] });
-      queryClient.invalidateQueries({ queryKey: ["skills", "discoverable"] });
     },
   });
 }
@@ -56,8 +56,8 @@ export function useUninstallSkill() {
   return useMutation({
     mutationFn: (id: string) => skillsApi.uninstallUnified(id),
     onSuccess: () => {
+      // 只刷新已安装列表，不刷新可发现列表（避免重新扫描仓库）
       queryClient.invalidateQueries({ queryKey: ["skills", "installed"] });
-      queryClient.invalidateQueries({ queryKey: ["skills", "discoverable"] });
     },
   });
 }

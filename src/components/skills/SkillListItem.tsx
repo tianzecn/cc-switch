@@ -40,100 +40,107 @@ export const SkillListItem: React.FC<SkillListItemProps> = ({
   return (
     <div
       className={cn(
-        "group flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all",
+        "group flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all",
         isSelected
           ? "border-primary bg-primary/5"
           : "border-border hover:border-primary/50 hover:bg-muted/50",
       )}
       onClick={onSelect}
     >
-      {/* 左侧：名称和描述 */}
+      {/* 左侧：名称、描述和操作按钮 */}
       <div className="flex-1 min-w-0">
+        {/* 第一行：名称 + Badge + 操作按钮 */}
         <div className="flex items-center gap-2">
           <h4 className="font-medium text-sm truncate">{skill.name}</h4>
-          <Badge variant="outline" className="text-xs flex items-center gap-1">
+          <Badge variant="outline" className="text-xs flex items-center gap-1 flex-shrink-0">
             <SourceIcon size={10} />
             <span className="truncate max-w-[100px]">{sourceName}</span>
           </Badge>
+          {/* 操作按钮 */}
+          <div className="flex items-center gap-0.5 ml-auto mr-4 opacity-0 group-hover:opacity-100 transition-opacity">
+            {skill.readmeUrl && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.open(skill.readmeUrl, "_blank");
+                    }}
+                  >
+                    <ExternalLink size={12} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {t("skills.viewReadme", "View README")}
+                </TooltipContent>
+              </Tooltip>
+            )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 hover:text-destructive"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUninstall();
+                  }}
+                >
+                  <Trash2 size={12} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t("skills.uninstall", "Uninstall")}</TooltipContent>
+            </Tooltip>
+          </div>
         </div>
+        {/* 第二行：描述 */}
         {skill.description && (
-          <p className="text-xs text-muted-foreground truncate mt-0.5">
+          <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
             {skill.description}
           </p>
         )}
       </div>
 
-      {/* 三应用开关 */}
-      <div className="flex items-center gap-2">
+      {/* 右侧：三应用开关 - 垂直排列 */}
+      <div
+        className="flex flex-col gap-1.5 flex-shrink-0 min-w-[100px] mr-1"
+        onClick={(e) => e.stopPropagation()}
+      >
         <AppSwitch
           app="claude"
+          skillId={skill.id}
           enabled={skill.apps.claude}
           onToggle={(enabled) => onToggleApp("claude", enabled)}
-          label="Claude"
+          label={t("skills.apps.claude")}
         />
         <AppSwitch
           app="codex"
+          skillId={skill.id}
           enabled={skill.apps.codex}
           onToggle={(enabled) => onToggleApp("codex", enabled)}
-          label="Codex"
+          label={t("skills.apps.codex")}
         />
         <AppSwitch
           app="gemini"
+          skillId={skill.id}
           enabled={skill.apps.gemini}
           onToggle={(enabled) => onToggleApp("gemini", enabled)}
-          label="Gemini"
+          label={t("skills.apps.gemini")}
         />
-      </div>
-
-      {/* 操作按钮 */}
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        {skill.readmeUrl && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  window.open(skill.readmeUrl, "_blank");
-                }}
-              >
-                <ExternalLink size={14} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {t("skills.viewReadme", "View README")}
-            </TooltipContent>
-          </Tooltip>
-        )}
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 hover:text-destructive"
-              onClick={(e) => {
-                e.stopPropagation();
-                onUninstall();
-              }}
-            >
-              <Trash2 size={14} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{t("skills.uninstall", "Uninstall")}</TooltipContent>
-        </Tooltip>
       </div>
     </div>
   );
 };
 
 /**
- * 应用开关组件
+ * 应用开关组件 - 带 label 的水平布局
  */
 interface AppSwitchProps {
   app: AppType;
+  skillId: string;
   enabled: boolean;
   onToggle: (enabled: boolean) => void;
   label: string;
@@ -141,6 +148,7 @@ interface AppSwitchProps {
 
 const AppSwitch: React.FC<AppSwitchProps> = ({
   app,
+  skillId,
   enabled,
   onToggle,
   label,
@@ -151,19 +159,23 @@ const AppSwitch: React.FC<AppSwitchProps> = ({
     gemini: "data-[state=checked]:bg-blue-500",
   }[app];
 
+  const switchId = `${skillId}-${app}`;
+
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <div className="flex items-center" onClick={(e) => e.stopPropagation()}>
-          <Switch
-            checked={enabled}
-            onCheckedChange={onToggle}
-            className={cn("h-4 w-7", colorClass)}
-          />
-        </div>
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
+    <div className="flex items-center justify-between gap-3">
+      <label
+        htmlFor={switchId}
+        className="text-xs cursor-pointer text-foreground/80"
+      >
+        {label}
+      </label>
+      <Switch
+        id={switchId}
+        checked={enabled}
+        onCheckedChange={onToggle}
+        className={cn("h-4 w-7", colorClass)}
+      />
+    </div>
   );
 };
 

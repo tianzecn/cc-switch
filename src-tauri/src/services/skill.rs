@@ -282,14 +282,9 @@ impl SkillService {
             let _ = fs::remove_dir_all(&temp_dir);
         }
 
-        // 从目录路径推断命名空间
-        // 例如：skill.directory = "code-review/my-skill" -> namespace = "code-review"
-        let namespace = Path::new(&skill.directory)
-            .parent()
-            .and_then(|p| p.to_str())
-            .filter(|s| !s.is_empty())
-            .map(String::from)
-            .unwrap_or_default();
+        // 直接使用 DiscoverableSkill 中已正确计算的 namespace
+        // （通过 compute_namespace 函数计算，找到 skills 目录的父目录）
+        let namespace = skill.namespace.clone();
 
         // 创建 InstalledSkill 记录
         let installed_skill = InstalledSkill {

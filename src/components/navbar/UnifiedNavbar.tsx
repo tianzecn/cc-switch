@@ -327,30 +327,8 @@ export function UnifiedNavbar({
           );
 
         case "skills":
-          return (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => pageActionRefs?.skillsPage?.current?.refresh()}
-                className="h-7"
-              >
-                <RefreshCw className="w-4 h-4 mr-2" />
-                {t("skills.refresh")}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  pageActionRefs?.skillsPage?.current?.openRepoManager()
-                }
-                className="h-7"
-              >
-                <Settings className="w-4 h-4 mr-2" />
-                {t("skills.repoManager")}
-              </Button>
-            </>
-          );
+          // Skills 页面的按钮已经在页面内部实现，不需要在 navbar 中显示
+          return null;
 
         default:
           // Empty placeholder for pages without actions

@@ -129,13 +129,6 @@ export const SkillNamespaceTree: React.FC<SkillNamespaceTreeProps> = ({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-medium text-muted-foreground">
-          {t("skills.namespaces", "Namespaces")}
-        </h3>
-      </div>
-
       {/* Namespace List */}
       <div className="flex-1 overflow-y-auto space-y-1">
         {/* All Skills */}

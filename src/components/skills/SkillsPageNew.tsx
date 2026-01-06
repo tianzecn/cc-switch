@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, RefreshCw, Download, Compass, Sparkles } from "lucide-react";
+import { Search, RefreshCw, Download, Compass, Sparkles, Loader2, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { SkillNamespaceTree } from "./SkillNamespaceTree";
 import { SkillDiscoveryTree } from "./SkillDiscoveryTree";
@@ -96,6 +96,8 @@ export const SkillsPageNew = forwardRef<
     onConfirm: () => void;
   } | null>(null);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  // 正在安装的技能 key（用于显示 loading 状态）
+  const [installingKey, setInstallingKey] = useState<string | null>(null);
 
   // Queries
   const {
@@ -270,6 +272,7 @@ export const SkillsPageNew = forwardRef<
   };
 
   const handleInstall = async (skill: DiscoverableSkill) => {
+    setInstallingKey(skill.key);
     try {
       await installMutation.mutateAsync({
         skill,
@@ -290,6 +293,8 @@ export const SkillsPageNew = forwardRef<
         description,
         duration: 10000,
       });
+    } finally {
+      setInstallingKey(null);
     }
   };
 
@@ -383,10 +388,6 @@ export const SkillsPageNew = forwardRef<
             >
               <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
             </Button>
-            <Button variant="outline" size="sm" onClick={handleOpenImport}>
-              <Download size={16} className="mr-1" />
-              {t("skills.import", "Import")}
-            </Button>
             <Button
               variant={viewMode === "discovery" ? "default" : "outline"}
               size="sm"
@@ -396,6 +397,18 @@ export const SkillsPageNew = forwardRef<
             >
               <Compass size={16} className="mr-1" />
               {t("skills.discover", "Discover")}
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleOpenImport}>
+              <Download size={16} className="mr-1" />
+              {t("skills.import", "Import")}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setRepoManagerOpen(true)}
+            >
+              <Settings size={16} className="mr-1" />
+              {t("skills.repoManager", "Repository")}
             </Button>
           </div>
         </div>
@@ -502,6 +515,7 @@ export const SkillsPageNew = forwardRef<
               skills={filteredDiscoverySkills}
               onInstall={handleInstall}
               isLoading={loading}
+              installingKey={installingKey}
             />
           ) : null}
         </div>
@@ -558,12 +572,14 @@ interface DiscoveryListProps {
   skills: Array<DiscoverableSkill & { installed: boolean }>;
   onInstall: (skill: DiscoverableSkill) => void;
   isLoading: boolean;
+  installingKey: string | null;
 }
 
 const DiscoveryList: React.FC<DiscoveryListProps> = ({
   skills,
   onInstall,
   isLoading,
+  installingKey,
 }) => {
   const { t } = useTranslation();
 
@@ -596,6 +612,7 @@ const DiscoveryList: React.FC<DiscoveryListProps> = ({
           key={skill.key}
           skill={skill}
           onInstall={() => onInstall(skill)}
+          isInstalling={installingKey === skill.key}
         />
       ))}
     </div>
@@ -608,9 +625,14 @@ const DiscoveryList: React.FC<DiscoveryListProps> = ({
 interface DiscoveryCardProps {
   skill: DiscoverableSkill & { installed: boolean };
   onInstall: () => void;
+  isInstalling: boolean;
 }
 
-const DiscoveryCard: React.FC<DiscoveryCardProps> = ({ skill, onInstall }) => {
+const DiscoveryCard: React.FC<DiscoveryCardProps> = ({
+  skill,
+  onInstall,
+  isInstalling,
+}) => {
   const { t } = useTranslation();
 
   return (
@@ -628,13 +650,20 @@ const DiscoveryCard: React.FC<DiscoveryCardProps> = ({ skill, onInstall }) => {
         <Button
           size="sm"
           variant={skill.installed ? "secondary" : "default"}
-          disabled={skill.installed}
+          disabled={skill.installed || isInstalling}
           onClick={onInstall}
           className="ml-3 flex-shrink-0"
         >
-          {skill.installed
-            ? t("skills.installed", "Installed")
-            : t("skills.install", "Install")}
+          {isInstalling ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin mr-1" />
+              {t("skills.installing", "Installing...")}
+            </>
+          ) : skill.installed ? (
+            t("skills.installed", "Installed")
+          ) : (
+            t("skills.install", "Install")
+          )}
         </Button>
       </div>
     </div>
