@@ -48,6 +48,7 @@ import { useBatchInstall } from "@/hooks/useBatchInstall";
 import { BatchInstallButton } from "./BatchInstallButton";
 import {
   useCheckSkillsUpdates,
+  useCheckSkillsUpdatesByIds,
   useUpdateSkillsBatch,
   useUpdatableResourceIds,
   useFixSkillsHash,
@@ -149,8 +150,8 @@ export const SkillsPageNew = forwardRef<
     data: updateCheckResult,
     isLoading: isCheckingUpdates,
     isFetching: isFetchingUpdates,
-    refetch: checkUpdates,
   } = useCheckSkillsUpdates();
+  const checkSkillsUpdatesByIdsMutation = useCheckSkillsUpdatesByIds();
   const updateSkillsBatchMutation = useUpdateSkillsBatch();
   const fixSkillsHashMutation = useFixSkillsHash();
   const updatableSkillIds = useUpdatableResourceIds(updateCheckResult);
@@ -303,9 +304,18 @@ export const SkillsPageNew = forwardRef<
     try {
       // 先修复缺少 file_hash 的 Skills（静默执行）
       await fixSkillsHashMutation.mutateAsync();
-      // 然后检查更新
-      const result = await checkUpdates();
-      if (result.data?.updateCount === 0) {
+
+      // 根据当前选择范围获取要检查的 Skill IDs
+      const skillIdsToCheck = filteredSkills.map((s) => s.id);
+
+      if (skillIdsToCheck.length === 0) {
+        toast.info(t("updates.noSkillsToCheck", "没有可检查的 Skills"));
+        return;
+      }
+
+      // 检查指定范围的 Skills 更新
+      const result = await checkSkillsUpdatesByIdsMutation.mutateAsync(skillIdsToCheck);
+      if (result.updateCount === 0) {
         toast.success(t("updates.noUpdates"));
       }
     } catch (error) {
@@ -313,7 +323,7 @@ export const SkillsPageNew = forwardRef<
         description: String(error),
       });
     }
-  }, [checkUpdates, fixSkillsHashMutation, t]);
+  }, [filteredSkills, checkSkillsUpdatesByIdsMutation, fixSkillsHashMutation, t]);
 
   const handleUpdateAll = useCallback(async () => {
     if (updatableSkillIds.length === 0) return;
@@ -508,7 +518,7 @@ export const SkillsPageNew = forwardRef<
               <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
             </Button>
             <CheckUpdatesButton
-              isChecking={isCheckingUpdates || isFetchingUpdates || fixSkillsHashMutation.isPending}
+              isChecking={isCheckingUpdates || isFetchingUpdates || checkSkillsUpdatesByIdsMutation.isPending || fixSkillsHashMutation.isPending}
               onCheck={handleCheckUpdates}
               result={updateCheckResult}
               disabled={loading}

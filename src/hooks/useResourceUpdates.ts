@@ -25,6 +25,21 @@ export function useCheckSkillsUpdates() {
 }
 
 /**
+ * 检查指定 Skills 的更新（按仓库/命名空间过滤）
+ * 使用 mutation 而非 query，因为 skillIds 是动态参数
+ */
+export function useCheckSkillsUpdatesByIds() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (skillIds: string[]) => updateApi.checkSkillsUpdatesByIds(skillIds),
+    onSuccess: (data) => {
+      // 将结果存入 query cache，以便其他组件访问
+      queryClient.setQueryData(["updates", "skills"], data);
+    },
+  });
+}
+
+/**
  * 检查单个 Skill 更新
  */
 export function useCheckSkillUpdate(skillId: string, enabled = false) {

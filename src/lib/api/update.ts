@@ -89,6 +89,11 @@ export const updateApi = {
     return await invoke("check_skills_updates");
   },
 
+  /** 检查指定 Skills 的更新（按仓库/命名空间过滤） */
+  async checkSkillsUpdatesByIds(skillIds: string[]): Promise<BatchCheckResult> {
+    return await invoke("check_skills_updates_by_ids", { skillIds });
+  },
+
   /** 检查单个 Skill 的更新 */
   async checkSkillUpdate(skillId: string): Promise<UpdateCheckResult> {
     return await invoke("check_skill_update", { skillId });

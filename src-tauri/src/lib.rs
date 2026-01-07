@@ -799,6 +799,7 @@ pub fn run() {
             commands::sync_hooks_to_apps,
             // Resource update detection (v3.12.0+)
             commands::check_skills_updates,
+            commands::check_skills_updates_by_ids,
             commands::check_skill_update,
             commands::check_commands_updates,
             commands::check_hooks_updates,

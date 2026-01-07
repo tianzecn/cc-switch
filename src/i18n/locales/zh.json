@@ -1519,6 +1519,7 @@
     "checking": "正在检查更新...",
     "available": "{{count}} 个更新可用",
     "noUpdates": "所有资源已是最新版本",
+    "noSkillsToCheck": "当前范围内没有可检查的 Skills",
     "updateAll": "全部更新",
     "updating": "更新中...",
     "updateSuccess": "更新成功",

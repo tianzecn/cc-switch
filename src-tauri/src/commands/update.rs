@@ -49,6 +49,38 @@ pub async fn check_skill_update(
     Ok(service.check_skill_update(&skill).await)
 }
 
+/// 批量检查指定 Skills 的更新
+///
+/// 根据传入的 skill_ids 只检查对应的 Skills，用于按仓库/命名空间过滤检查
+#[tauri::command]
+pub async fn check_skills_updates_by_ids(
+    app_state: State<'_, AppState>,
+    skill_ids: Vec<String>,
+) -> Result<BatchCheckResult, AppError> {
+    let db = &app_state.db;
+    let all_skills = db.get_all_installed_skills()?;
+
+    // 过滤出指定的 Skills
+    let skills_to_check: Vec<_> = skill_ids
+        .iter()
+        .filter_map(|id| all_skills.get(id).cloned())
+        .collect();
+
+    if skills_to_check.is_empty() {
+        return Ok(BatchCheckResult {
+            success_count: 0,
+            failed_count: 0,
+            update_count: 0,
+            deleted_count: 0,
+            results: vec![],
+        });
+    }
+
+    let github_token = db.get_setting("github_pat")?;
+    let service = UpdateService::new(github_token);
+    service.check_skills_updates_batch(skills_to_check).await
+}
+
 /// 检查所有 Commands 的更新
 #[tauri::command]
 pub async fn check_commands_updates(

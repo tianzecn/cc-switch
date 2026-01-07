@@ -1526,6 +1526,7 @@
     "checking": "Checking for updates...",
     "available": "{{count}} updates available",
     "noUpdates": "All resources are up to date",
+    "noSkillsToCheck": "No Skills to check in current scope",
     "updateAll": "Update All",
     "updating": "Updating...",
     "updateSuccess": "Update successful",

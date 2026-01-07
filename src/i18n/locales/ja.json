@@ -1525,6 +1525,7 @@
     "checking": "更新を確認中...",
     "available": "{{count}} 件の更新があります",
     "noUpdates": "すべてのリソースは最新です",
+    "noSkillsToCheck": "現在の範囲には確認可能なスキルがありません",
     "updateAll": "すべて更新",
     "updating": "更新中...",
     "updateSuccess": "更新しました",
