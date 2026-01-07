@@ -125,7 +125,7 @@ export function useSaveGitHubToken() {
 
 /**
  * 更新单个 Skill
- * 成功后自动刷新 Skills 列表和更新检测结果
+ * 成功后自动刷新 Skills 列表和清除更新检测结果
  */
 export function useUpdateSkill() {
   const queryClient = useQueryClient();
@@ -134,15 +134,15 @@ export function useUpdateSkill() {
     onSuccess: () => {
       // 刷新 Skills 列表
       queryClient.invalidateQueries({ queryKey: ["skills"] });
-      // 刷新更新检测结果
-      queryClient.invalidateQueries({ queryKey: ["updates", "skills"] });
+      // 清除更新检测结果（因为 enabled: false，invalidate 不会重新获取）
+      queryClient.removeQueries({ queryKey: ["updates", "skills"] });
     },
   });
 }
 
 /**
  * 批量更新 Skills
- * 成功后自动刷新 Skills 列表和更新检测结果
+ * 成功后自动刷新 Skills 列表和清除更新检测结果
  */
 export function useUpdateSkillsBatch() {
   const queryClient = useQueryClient();
@@ -151,8 +151,9 @@ export function useUpdateSkillsBatch() {
     onSuccess: () => {
       // 刷新 Skills 列表
       queryClient.invalidateQueries({ queryKey: ["skills"] });
-      // 刷新更新检测结果
-      queryClient.invalidateQueries({ queryKey: ["updates", "skills"] });
+      // 清除更新检测结果（因为 enabled: false，invalidate 不会重新获取）
+      // 直接移除缓存，这样徽章就不会显示了
+      queryClient.removeQueries({ queryKey: ["updates", "skills"] });
     },
   });
 }
