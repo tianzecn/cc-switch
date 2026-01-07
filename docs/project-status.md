@@ -13,13 +13,14 @@
 
 ### 2026-01-07
 
-- [x] **树形仓库选择功能 (Phase 1)** - OpenSpec: `add-tree-repo-selection`
+- [x] **树形仓库选择功能 (Phase 1)** - ✅ OpenSpec 已归档: `2026-01-07-add-tree-repo-selection`
   - `TreeSelection` 类型定义 (`src/types/tree.ts`)
   - `SkillNamespaceTree` / `SkillDiscoveryTree` 仓库选中支持
   - `GroupedSkillsList` 分组列表组件 (Sticky Headers, 分页)
   - `useBatchInstall` Hook + `BatchInstallButton` 组件
   - 全局搜索自动切换"全部"视图
   - 场景化空状态处理
+  - Spec 已更新: `specs/skills-management/spec.md`
 - [x] 重构 Skills 页面为命名空间树形结构
 - [x] 优化 Skills 页面 UI 布局
 - [x] 修复命名空间计算并优化安装体验
@@ -36,7 +37,7 @@
 
 | 任务 | 状态 | 备注 |
 |------|------|------|
-| 树形仓库选择 Phase 2 | ⏸️ 待启动 | 应用到 Commands/Hooks/Agents 模块 |
+| 树形仓库选择 Phase 2 | 📋 待提案 | 需创建新 OpenSpec 提案，应用到 Commands/Hooks/Agents 模块 |
 
 ### 中优先级
 
@@ -48,19 +49,22 @@
 
 ### 建议的下一步
 
-1. **OpenSpec Archive**
-   - 运行 `/openspec:archive add-tree-repo-selection` 归档已完成的提案
-   - 或继续 Phase 2 应用到其他模块
+1. **Phase 2: 跨模块复用**
+   - 创建新的 OpenSpec 提案，将树形选择功能应用到 Commands/Hooks/Agents 模块
+   - 抽取 `NamespaceTree<T>` 和 `GroupedList<T>` 通用组件
 
-2. **待定任务**
-   - 为新组件补充单元测试
+2. **测试补充（可选）**
+   - 为新组件补充单元测试 (树组件、分组列表、批量安装)
+   - 参考 `openspec/changes/archive/2026-01-07-add-tree-repo-selection/tasks.md` 中的 7.1-7.4 任务
+
+3. **版本发布**
    - 考虑 v3.9.0 正式版发布准备
 
 ### 上下文恢复清单
 
-- [ ] 检查 `openspec/changes/add-tree-repo-selection/tasks.md` 了解剩余任务
 - [ ] 检查 git status 了解未提交的更改
 - [ ] 运行 `pnpm dev` 启动开发环境测试功能
+- [ ] 查看归档的 spec: `openspec/changes/archive/2026-01-07-add-tree-repo-selection/`
 
 ## 技术债务
 

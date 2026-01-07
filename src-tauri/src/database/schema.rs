@@ -85,6 +85,7 @@ impl Database {
             enabled_claude BOOLEAN NOT NULL DEFAULT 0,
             enabled_codex BOOLEAN NOT NULL DEFAULT 0,
             enabled_gemini BOOLEAN NOT NULL DEFAULT 0,
+            file_hash TEXT,
             installed_at INTEGER NOT NULL DEFAULT 0
         )",
             [],
@@ -519,6 +520,11 @@ impl Database {
                         log::info!("迁移数据库从 v6 到 v7（Skills 命名空间支持）");
                         Self::migrate_v6_to_v7(conn)?;
                         Self::set_user_version(conn, 7)?;
+                    }
+                    7 => {
+                        log::info!("迁移数据库从 v7 到 v8（资源更新检测支持）");
+                        Self::migrate_v7_to_v8(conn)?;
+                        Self::set_user_version(conn, 8)?;
                     }
                     _ => {
                         return Err(AppError::Database(format!(
@@ -1009,6 +1015,7 @@ impl Database {
                 enabled_claude BOOLEAN NOT NULL DEFAULT 0,
                 enabled_codex BOOLEAN NOT NULL DEFAULT 0,
                 enabled_gemini BOOLEAN NOT NULL DEFAULT 0,
+                file_hash TEXT,
                 installed_at INTEGER NOT NULL DEFAULT 0
             )",
             [],
@@ -1264,6 +1271,24 @@ impl Database {
              - skills 表新增 namespace 列，用于分组管理\n\
              - 新增 idx_skills_namespace 索引\n\
              - 首次启动时将迁移 Skills SSOT 目录结构"
+        );
+
+        Ok(())
+    }
+
+    /// v7 -> v8 迁移：资源更新检测支持
+    ///
+    /// 为 skills 表添加 file_hash 列，与 commands/agents/hooks 表保持一致。
+    /// file_hash 用于存储安装时的文件内容 hash（GitHub blob SHA），支持更新检测。
+    fn migrate_v7_to_v8(conn: &Connection) -> Result<(), AppError> {
+        // 1. 添加 file_hash 列到 skills 表
+        Self::add_column_if_missing(conn, "skills", "file_hash", "TEXT")?;
+        log::info!("skills 表已添加 file_hash 列");
+
+        log::info!(
+            "数据库已迁移到 v8 结构（资源更新检测支持）。\n\
+             - skills 表新增 file_hash 列，用于存储安装时的文件 hash\n\
+             - 与 commands/agents/hooks 表保持一致，支持更新检测功能"
         );
 
         Ok(())

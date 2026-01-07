@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { InstalledSkill, AppType } from "@/hooks/useSkills";
+import { UpdateBadge } from "@/components/updates/UpdateBadge";
+import type { UpdateCheckResult } from "@/hooks/useResourceUpdates";
 
 interface SkillListItemProps {
   skill: InstalledSkill;
@@ -18,6 +20,8 @@ interface SkillListItemProps {
   onSelect: () => void;
   onToggleApp: (app: AppType, enabled: boolean) => void;
   onUninstall: () => void;
+  /** 更新状态 */
+  updateStatus?: UpdateCheckResult;
 }
 
 /**
@@ -29,6 +33,7 @@ export const SkillListItem: React.FC<SkillListItemProps> = ({
   onSelect,
   onToggleApp,
   onUninstall,
+  updateStatus,
 }) => {
   const { t } = useTranslation();
   const isLocal = !skill.repoOwner;
@@ -49,9 +54,11 @@ export const SkillListItem: React.FC<SkillListItemProps> = ({
     >
       {/* 左侧：名称、描述和操作按钮 */}
       <div className="flex-1 min-w-0">
-        {/* 第一行：名称 + Badge + 操作按钮 */}
+        {/* 第一行：名称 + 更新徽章 + Badge + 操作按钮 */}
         <div className="flex items-center gap-2">
           <h4 className="font-medium text-sm truncate">{skill.name}</h4>
+          {/* 更新徽章 */}
+          <UpdateBadge status={updateStatus} size="sm" />
           <Badge variant="outline" className="text-xs flex items-center gap-1 flex-shrink-0">
             <SourceIcon size={10} />
             <span className="truncate max-w-[100px]">{sourceName}</span>

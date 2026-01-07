@@ -38,6 +38,15 @@ impl Database {
         Ok(())
     }
 
+    /// 删除设置
+    pub fn delete_setting(&self, key: &str) -> Result<bool, AppError> {
+        let conn = lock_conn!(self.conn);
+        let affected = conn
+            .execute("DELETE FROM settings WHERE key = ?1", params![key])
+            .map_err(|e| AppError::Database(e.to_string()))?;
+        Ok(affected > 0)
+    }
+
     // --- Config Snippets 辅助方法 ---
 
     /// 获取通用配置片段

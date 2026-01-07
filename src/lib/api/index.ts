@@ -7,6 +7,7 @@ export { usageApi } from "./usage";
 export { vscodeApi } from "./vscode";
 export { proxyApi } from "./proxy";
 export { commandsApi } from "./commands";
+export { updateApi } from "./update";
 export * as configApi from "./config";
 export type { ProviderSwitchEvent } from "./providers";
 export type { Prompt } from "./prompts";
@@ -18,3 +19,12 @@ export type {
   CommandRepo,
   ChangeEvent,
 } from "./commands";
+export type {
+  ResourceType,
+  UpdateCheckResult,
+  BatchCheckResult,
+  RateLimitInfo,
+  SkillUpdateResult,
+  UpdateExecuteResult,
+  BatchUpdateResult,
+} from "./update";

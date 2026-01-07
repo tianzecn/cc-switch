@@ -194,7 +194,31 @@
       "data": {
         "title": "データ管理",
         "description": "設定のインポート/エクスポートとバックアップ/復元"
+      },
+      "github": {
+        "title": "GitHub API",
+        "description": "Personal Access Token を設定して API レート制限を増加"
       }
+    },
+    "github": {
+      "status": "ステータス",
+      "configured": "設定済み",
+      "notConfigured": "未設定",
+      "rateLimitWarning": "API レート制限の警告",
+      "rateLimitDescription": "トークンなしでは、GitHub API は 1 時間あたり 60 リクエストに制限されます。トークンを設定すると 5000 リクエストに増加します。",
+      "enterToken": "ghp_xxxxxxxxxxxx",
+      "enterNewToken": "新しいトークンを入力して置換...",
+      "tokenEmpty": "トークンを入力してください",
+      "tokenValid": "トークンは有効です！",
+      "tokenInvalid": "トークンが無効です",
+      "tokenSaved": "トークンを保存しました！",
+      "tokenDeleted": "トークンを削除しました",
+      "saveFailed": "保存に失敗しました",
+      "deleteFailed": "削除に失敗しました",
+      "validate": "検証",
+      "rateLimit": "レート制限",
+      "resetsAt": "リセット時刻",
+      "createToken": "GitHub で Personal Access Token を作成"
     },
     "language": "言語",
     "languageHint": "切り替えるとすぐにプレビューされ、保存後に永続化されます。",
@@ -1494,6 +1518,28 @@
       "manage": "リポジトリを管理",
       "addSuccess": "リポジトリを追加しました",
       "removeSuccess": "リポジトリを削除しました"
+    }
+  },
+  "updates": {
+    "check": "更新を確認",
+    "checking": "更新を確認中...",
+    "available": "{{count}} 件の更新があります",
+    "noUpdates": "すべてのリソースは最新です",
+    "updateAll": "すべて更新",
+    "updating": "更新中...",
+    "updateSuccess": "更新しました",
+    "updateFailed": "更新に失敗しました",
+    "notification": {
+      "available": "{{count}} 件の {{resource}} が更新可能です",
+      "deleted": "{{count}} 件のリソースがリモートで削除されました"
+    },
+    "badge": {
+      "available": "更新があります",
+      "deleted": "ソースが削除されました"
+    },
+    "error": {
+      "checkFailed": "更新の確認に失敗しました",
+      "updateFailed": "更新に失敗しました：{{error}}"
     }
   }
 }

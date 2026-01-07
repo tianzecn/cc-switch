@@ -17,6 +17,7 @@ mod proxy;
 mod settings;
 pub mod skill;
 mod stream_check;
+mod update;
 mod usage;
 
 pub use agent::*;
@@ -36,4 +37,5 @@ pub use proxy::*;
 pub use settings::*;
 pub use skill::*;
 pub use stream_check::*;
+pub use update::*;
 pub use usage::*;

@@ -7,6 +7,10 @@ import type { InstalledSkill, AppType } from "@/hooks/useSkills";
 import type { TreeSelection } from "@/types/tree";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import {
+  getResourceUpdateStatus,
+  type BatchCheckResult,
+} from "@/hooks/useResourceUpdates";
 
 /** 分组后的数据结构 */
 interface GroupedData {
@@ -32,6 +36,8 @@ interface GroupedSkillsListProps {
   pageSize?: number;
   /** 空状态类型 */
   emptyStateType?: "all" | "repo" | "namespace" | "search";
+  /** 更新检测结果 */
+  updateCheckResult?: BatchCheckResult;
 }
 
 /**
@@ -51,6 +57,7 @@ export const GroupedSkillsList: React.FC<GroupedSkillsListProps> = ({
   isLoading = false,
   pageSize = 50,
   emptyStateType = "all",
+  updateCheckResult,
 }) => {
   const { t } = useTranslation();
   const [displayCount, setDisplayCount] = React.useState(pageSize);
@@ -238,6 +245,7 @@ export const GroupedSkillsList: React.FC<GroupedSkillsListProps> = ({
                       onToggleApp(skill.id, app, enabled)
                     }
                     onUninstall={() => onUninstall(skill.id)}
+                    updateStatus={getResourceUpdateStatus(updateCheckResult, skill.id)}
                   />
                 ))}
               </div>

@@ -194,7 +194,31 @@
       "data": {
         "title": "数据管理",
         "description": "导入导出配置与备份恢复"
+      },
+      "github": {
+        "title": "GitHub API",
+        "description": "配置 Personal Access Token 提高 API 速率限制"
       }
+    },
+    "github": {
+      "status": "状态",
+      "configured": "已配置",
+      "notConfigured": "未配置",
+      "rateLimitWarning": "API 速率限制提醒",
+      "rateLimitDescription": "未配置 Token 时，GitHub API 限制为每小时 60 次请求。配置后可提升至每小时 5000 次。",
+      "enterToken": "ghp_xxxxxxxxxxxx",
+      "enterNewToken": "输入新 Token 以替换...",
+      "tokenEmpty": "请输入 Token",
+      "tokenValid": "Token 有效！",
+      "tokenInvalid": "Token 无效",
+      "tokenSaved": "Token 已保存",
+      "tokenDeleted": "Token 已删除",
+      "saveFailed": "保存失败",
+      "deleteFailed": "删除失败",
+      "validate": "验证",
+      "rateLimit": "速率限制",
+      "resetsAt": "重置于",
+      "createToken": "在 GitHub 上创建 Personal Access Token"
     },
     "language": "界面语言",
     "languageHint": "切换后立即预览界面语言，保存后永久生效。",
@@ -1488,6 +1512,28 @@
       "manage": "管理仓库",
       "addSuccess": "已添加仓库",
       "removeSuccess": "已移除仓库"
+    }
+  },
+  "updates": {
+    "check": "检查更新",
+    "checking": "正在检查更新...",
+    "available": "{{count}} 个更新可用",
+    "noUpdates": "所有资源已是最新版本",
+    "updateAll": "全部更新",
+    "updating": "更新中...",
+    "updateSuccess": "更新成功",
+    "updateFailed": "更新失败",
+    "notification": {
+      "available": "发现 {{count}} 个 {{resource}} 可以更新",
+      "deleted": "{{count}} 个资源已从远程删除"
+    },
+    "badge": {
+      "available": "有更新可用",
+      "deleted": "远程资源已删除"
+    },
+    "error": {
+      "checkFailed": "检查更新失败",
+      "updateFailed": "更新失败：{{error}}"
     }
   }
 }

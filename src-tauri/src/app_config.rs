@@ -519,6 +519,9 @@ pub struct InstalledSkill {
     pub readme_url: Option<String>,
     /// 应用启用状态
     pub apps: SkillApps,
+    /// 文件内容 hash（GitHub blob SHA，用于更新检测）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_hash: Option<String>,
     /// 安装时间（Unix 时间戳）
     pub installed_at: i64,
 }

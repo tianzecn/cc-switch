@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Search, RefreshCw, Download, Compass, Sparkles, Loader2, Settings } from "lucide-react";
+import { CheckUpdatesButton, UpdateNotificationBar } from "@/components/updates";
 import { toast } from "sonner";
 import { SkillNamespaceTree } from "./SkillNamespaceTree";
 import { SkillDiscoveryTree } from "./SkillDiscoveryTree";
@@ -45,6 +46,12 @@ import type { TreeSelection } from "@/types/tree";
 import { createAllSelection } from "@/types/tree";
 import { useBatchInstall } from "@/hooks/useBatchInstall";
 import { BatchInstallButton } from "./BatchInstallButton";
+import {
+  useCheckSkillsUpdates,
+  useUpdateSkillsBatch,
+  useUpdatableResourceIds,
+  useFixSkillsHash,
+} from "@/hooks/useResourceUpdates";
 
 /** 视图模式 */
 type ViewMode = "list" | "discovery" | "import";
@@ -136,6 +143,18 @@ export const SkillsPageNew = forwardRef<
     startBatchInstall,
     cancelInstall: cancelBatchInstall,
   } = useBatchInstall();
+
+  // 更新检测 Hook
+  const {
+    data: updateCheckResult,
+    isLoading: isCheckingUpdates,
+    isFetching: isFetchingUpdates,
+    refetch: checkUpdates,
+  } = useCheckSkillsUpdates();
+  const updateSkillsBatchMutation = useUpdateSkillsBatch();
+  const fixSkillsHashMutation = useFixSkillsHash();
+  const updatableSkillIds = useUpdatableResourceIds(updateCheckResult);
+  const [updatesDismissed, setUpdatesDismissed] = useState(false);
 
   // 统计数据
   const stats = useMemo(() => {
@@ -278,6 +297,43 @@ export const SkillsPageNew = forwardRef<
       refetchDiscoverable();
     }
   };
+
+  const handleCheckUpdates = useCallback(async () => {
+    setUpdatesDismissed(false);
+    try {
+      // 先修复缺少 file_hash 的 Skills（静默执行）
+      await fixSkillsHashMutation.mutateAsync();
+      // 然后检查更新
+      const result = await checkUpdates();
+      if (result.data?.updateCount === 0) {
+        toast.success(t("updates.noUpdates"));
+      }
+    } catch (error) {
+      toast.error(t("updates.error.checkFailed"), {
+        description: String(error),
+      });
+    }
+  }, [checkUpdates, fixSkillsHashMutation, t]);
+
+  const handleUpdateAll = useCallback(async () => {
+    if (updatableSkillIds.length === 0) return;
+    try {
+      const result = await updateSkillsBatchMutation.mutateAsync(updatableSkillIds);
+      if (result.successCount > 0) {
+        toast.success(t("updates.updateSuccess"), {
+          description: `${result.successCount} ${t("skills.title")}`,
+        });
+      }
+      if (result.failedCount > 0) {
+        toast.error(t("updates.updateFailed"), {
+          description: `${result.failedCount} ${t("skills.title")}`,
+        });
+      }
+      setUpdatesDismissed(true);
+    } catch (error) {
+      toast.error(t("updates.error.updateFailed", { error: String(error) }));
+    }
+  }, [updatableSkillIds, updateSkillsBatchMutation, t]);
 
   useImperativeHandle(ref, () => ({
     refresh: handleRefresh,
@@ -451,6 +507,12 @@ export const SkillsPageNew = forwardRef<
             >
               <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
             </Button>
+            <CheckUpdatesButton
+              isChecking={isCheckingUpdates || isFetchingUpdates || fixSkillsHashMutation.isPending}
+              onCheck={handleCheckUpdates}
+              result={updateCheckResult}
+              disabled={loading}
+            />
             <Button
               variant={viewMode === "discovery" ? "default" : "outline"}
               size="sm"
@@ -528,6 +590,19 @@ export const SkillsPageNew = forwardRef<
         </div>
       )}
 
+      {/* Update Notification Bar */}
+      {updateCheckResult && !updatesDismissed && (updateCheckResult.updateCount > 0 || updateCheckResult.deletedCount > 0) && (
+        <div className="flex-shrink-0 mb-4">
+          <UpdateNotificationBar
+            result={updateCheckResult}
+            resourceLabel={t("skills.title")}
+            onUpdateAll={handleUpdateAll}
+            onDismiss={() => setUpdatesDismissed(true)}
+            isUpdating={updateSkillsBatchMutation.isPending}
+          />
+        </div>
+      )}
+
       {/* Main Content */}
       <div className="flex-1 flex gap-4 overflow-hidden">
         {/* Left Sidebar - Tree */}
@@ -574,6 +649,7 @@ export const SkillsPageNew = forwardRef<
               onUninstall={handleUninstall}
               isLoading={loadingInstalled}
               emptyStateType={emptyStateType}
+              updateCheckResult={updateCheckResult}
             />
           ) : viewMode === "discovery" ? (
             <DiscoveryList

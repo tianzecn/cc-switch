@@ -194,7 +194,31 @@
       "data": {
         "title": "Data Management",
         "description": "Import/export configurations and backup/restore"
+      },
+      "github": {
+        "title": "GitHub API",
+        "description": "Configure Personal Access Token for higher API rate limits"
       }
+    },
+    "github": {
+      "status": "Status",
+      "configured": "Configured",
+      "notConfigured": "Not configured",
+      "rateLimitWarning": "API Rate Limit Warning",
+      "rateLimitDescription": "Without a token, GitHub API is limited to 60 requests/hour. With a token, you get 5000 requests/hour.",
+      "enterToken": "ghp_xxxxxxxxxxxx",
+      "enterNewToken": "Enter new token to replace...",
+      "tokenEmpty": "Please enter a token",
+      "tokenValid": "Token is valid!",
+      "tokenInvalid": "Token is invalid",
+      "tokenSaved": "Token saved successfully!",
+      "tokenDeleted": "Token deleted",
+      "saveFailed": "Failed to save token",
+      "deleteFailed": "Failed to delete token",
+      "validate": "Validate",
+      "rateLimit": "Rate limit",
+      "resetsAt": "Resets at",
+      "createToken": "Create a Personal Access Token on GitHub"
     },
     "language": "Language",
     "languageHint": "Preview interface language immediately after switching, takes effect permanently after saving.",
@@ -1495,6 +1519,28 @@
       "manage": "Manage Repositories",
       "addSuccess": "Repository added",
       "removeSuccess": "Repository removed"
+    }
+  },
+  "updates": {
+    "check": "Check Updates",
+    "checking": "Checking for updates...",
+    "available": "{{count}} updates available",
+    "noUpdates": "All resources are up to date",
+    "updateAll": "Update All",
+    "updating": "Updating...",
+    "updateSuccess": "Update successful",
+    "updateFailed": "Update failed",
+    "notification": {
+      "available": "{{count}} {{resource}} updates available",
+      "deleted": "{{count}} resources deleted from remote"
+    },
+    "badge": {
+      "available": "Update available",
+      "deleted": "Source has been removed"
+    },
+    "error": {
+      "checkFailed": "Failed to check updates",
+      "updateFailed": "Update failed: {{error}}"
     }
   }
 }

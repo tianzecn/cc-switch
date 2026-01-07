@@ -22,7 +22,7 @@ impl Database {
         let mut stmt = conn
             .prepare(
                 "SELECT id, name, description, directory, namespace, repo_owner, repo_name, repo_branch,
-                        readme_url, enabled_claude, enabled_codex, enabled_gemini, installed_at
+                        readme_url, enabled_claude, enabled_codex, enabled_gemini, file_hash, installed_at
                  FROM skills ORDER BY namespace ASC, name ASC",
             )
             .map_err(|e| AppError::Database(e.to_string()))?;
@@ -44,7 +44,8 @@ impl Database {
                         codex: row.get(10)?,
                         gemini: row.get(11)?,
                     },
-                    installed_at: row.get(12)?,
+                    file_hash: row.get(12)?,
+                    installed_at: row.get(13)?,
                 })
             })
             .map_err(|e| AppError::Database(e.to_string()))?;
@@ -63,7 +64,7 @@ impl Database {
         let mut stmt = conn
             .prepare(
                 "SELECT id, name, description, directory, namespace, repo_owner, repo_name, repo_branch,
-                        readme_url, enabled_claude, enabled_codex, enabled_gemini, installed_at
+                        readme_url, enabled_claude, enabled_codex, enabled_gemini, file_hash, installed_at
                  FROM skills WHERE id = ?1",
             )
             .map_err(|e| AppError::Database(e.to_string()))?;
@@ -84,7 +85,8 @@ impl Database {
                     codex: row.get(10)?,
                     gemini: row.get(11)?,
                 },
-                installed_at: row.get(12)?,
+                file_hash: row.get(12)?,
+                installed_at: row.get(13)?,
             })
         });
 
@@ -101,8 +103,8 @@ impl Database {
         conn.execute(
             "INSERT OR REPLACE INTO skills
              (id, name, description, directory, namespace, repo_owner, repo_name, repo_branch,
-              readme_url, enabled_claude, enabled_codex, enabled_gemini, installed_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+              readme_url, enabled_claude, enabled_codex, enabled_gemini, file_hash, installed_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
             params![
                 skill.id,
                 skill.name,
@@ -116,6 +118,7 @@ impl Database {
                 skill.apps.claude,
                 skill.apps.codex,
                 skill.apps.gemini,
+                skill.file_hash,
                 skill.installed_at,
             ],
         )
@@ -152,6 +155,22 @@ impl Database {
         Ok(affected > 0)
     }
 
+    /// 更新 Skill 的 file_hash（用于更新检测修复）
+    pub fn update_skill_file_hash(
+        &self,
+        id: &str,
+        file_hash: Option<&str>,
+    ) -> Result<bool, AppError> {
+        let conn = lock_conn!(self.conn);
+        let affected = conn
+            .execute(
+                "UPDATE skills SET file_hash = ?1 WHERE id = ?2",
+                params![file_hash, id],
+            )
+            .map_err(|e| AppError::Database(e.to_string()))?;
+        Ok(affected > 0)
+    }
+
     /// 获取所有命名空间列表
     pub fn get_skill_namespaces(&self) -> Result<Vec<String>, AppError> {
         let conn = lock_conn!(self.conn);
@@ -179,7 +198,7 @@ impl Database {
         let mut stmt = conn
             .prepare(
                 "SELECT id, name, description, directory, namespace, repo_owner, repo_name, repo_branch,
-                        readme_url, enabled_claude, enabled_codex, enabled_gemini, installed_at
+                        readme_url, enabled_claude, enabled_codex, enabled_gemini, file_hash, installed_at
                  FROM skills WHERE namespace = ?1 ORDER BY name ASC",
             )
             .map_err(|e| AppError::Database(e.to_string()))?;
@@ -201,7 +220,8 @@ impl Database {
                         codex: row.get(10)?,
                         gemini: row.get(11)?,
                     },
-                    installed_at: row.get(12)?,
+                    file_hash: row.get(12)?,
+                    installed_at: row.get(13)?,
                 })
             })
             .map_err(|e| AppError::Database(e.to_string()))?;

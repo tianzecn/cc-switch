@@ -20,6 +20,7 @@ use crate::app_config::{AppType, InstalledSkill, SkillApps, UnmanagedSkill};
 use crate::config::get_app_config_dir;
 use crate::database::Database;
 use crate::error::format_skill_error;
+use crate::services::github_api::GitHubApiService;
 
 // ========== 数据结构 ==========
 
@@ -48,6 +49,9 @@ pub struct DiscoverableSkill {
     /// 分支名称
     #[serde(rename = "repoBranch")]
     pub repo_branch: String,
+    /// 文件内容 hash（GitHub blob SHA，用于更新检测）
+    #[serde(rename = "fileHash", skip_serializing_if = "Option::is_none")]
+    pub file_hash: Option<String>,
 }
 
 /// 技能对象（兼容旧 API，内部使用 DiscoverableSkill）
@@ -287,6 +291,33 @@ impl SkillService {
         // （通过 compute_namespace 函数计算，找到 skills 目录的父目录）
         let namespace = skill.namespace.clone();
 
+        // 获取目录的 file_hash（用于更新检测）
+        // 优先使用已有的 hash，否则从 GitHub 获取
+        let file_hash = if skill.file_hash.is_some() {
+            skill.file_hash.clone()
+        } else {
+            // 从 GitHub 获取目录的组合 hash
+            let github_api = GitHubApiService::new(db.get_setting("github_pat").ok().flatten());
+            match github_api
+                .get_directory_hash(
+                    &skill.repo_owner,
+                    &skill.repo_name,
+                    &skill.repo_branch,
+                    &skill.directory,
+                )
+                .await
+            {
+                Ok(hash) => {
+                    log::info!("获取到 Skill {} 的 file_hash: {}", skill.name, hash);
+                    Some(hash)
+                }
+                Err(e) => {
+                    log::warn!("无法获取 Skill {} 的 file_hash: {}", skill.name, e);
+                    None
+                }
+            }
+        };
+
         // 创建 InstalledSkill 记录
         let installed_skill = InstalledSkill {
             id: skill.key.clone(),
@@ -303,6 +334,7 @@ impl SkillService {
             repo_branch: Some(skill.repo_branch.clone()),
             readme_url: skill.readme_url.clone(),
             apps: SkillApps::only(current_app),
+            file_hash, // 用于更新检测
             installed_at: chrono::Utc::now().timestamp(),
         };
 
@@ -539,6 +571,7 @@ impl SkillService {
                 repo_branch: None,
                 readme_url: None,
                 apps,
+                file_hash: None, // 本地导入的 Skill 没有远程 hash
                 installed_at: chrono::Utc::now().timestamp(),
             };
 
@@ -798,6 +831,7 @@ impl SkillService {
             repo_owner: repo.owner.clone(),
             repo_name: repo.name.clone(),
             repo_branch: repo.branch.clone(),
+            file_hash: None, // 发现阶段暂不获取 hash，安装时再获取
         })
     }
 
@@ -1160,6 +1194,7 @@ pub fn migrate_skills_to_ssot(db: &Arc<Database>) -> Result<usize> {
             repo_branch: None,
             readme_url: None,
             apps,
+            file_hash: None, // 迁移的本地 Skill 没有远程 hash
             installed_at: chrono::Utc::now().timestamp(),
         };
 
