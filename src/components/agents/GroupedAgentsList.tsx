@@ -181,25 +181,11 @@ export const GroupedAgentsList: React.FC<GroupedAgentsListProps> = ({
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="space-y-2">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <Skeleton key={i} className="h-16 w-full rounded-lg" />
-        ))}
-      </div>
-    );
-  }
-
-  if (agents.length === 0) {
-    return <EmptyState type={emptyStateType} />;
-  }
-
   // 根据选中状态决定渲染方式
   const shouldShowRepoHeaders = selection.type === "all";
   const shouldShowNamespaceHeaders = selection.type === "all" || selection.type === "repo";
 
-  // 计算当前显示的分组数据（考虑分页）
+  // 计算当前显示的分组数据（考虑分页）- 必须在条件返回之前调用
   const displayedGroupData = useMemo(() => {
     let count = 0;
     const result: GroupedData[] = [];
@@ -232,6 +218,21 @@ export const GroupedAgentsList: React.FC<GroupedAgentsListProps> = ({
 
     return result;
   }, [groupedData, displayCount]);
+
+  // 条件返回 - 必须在所有 Hooks 之后
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} className="h-16 w-full rounded-lg" />
+        ))}
+      </div>
+    );
+  }
+
+  if (agents.length === 0) {
+    return <EmptyState type={emptyStateType} />;
+  }
 
   return (
     <div className="space-y-4">
