@@ -35,6 +35,7 @@ use crate::app_config::{
 use crate::config::get_app_config_dir;
 use crate::database::Database;
 use anyhow::{anyhow, Result};
+use regex::Regex;
 use reqwest::Client;
 use serde::de::Deserializer;
 use serde::Deserialize;
@@ -199,6 +200,9 @@ impl AgentService {
     ///   - Write
     /// ---
     /// ```
+    ///
+    /// 如果 YAML 解析失败（例如 description 中包含未转义的冒号），
+    /// 会尝试使用正则表达式进行容错解析。
     pub fn parse_agent_metadata(content: &str) -> Result<AgentMetadata> {
         // 检查是否以 YAML frontmatter 开始
         if !content.starts_with("---") {
@@ -209,11 +213,124 @@ impl AgentService {
         let rest = &content[3..];
         if let Some(end_pos) = rest.find("\n---") {
             let yaml_content = &rest[..end_pos].trim();
-            let metadata: AgentMetadata = serde_yaml::from_str(yaml_content)?;
-            Ok(metadata)
+
+            // 首先尝试标准 YAML 解析
+            match serde_yaml::from_str::<AgentMetadata>(yaml_content) {
+                Ok(metadata) => Ok(metadata),
+                Err(_e) => {
+                    // YAML 解析失败，尝试容错解析
+                    // 这通常发生在 description 字段包含未转义的冒号时
+                    Ok(Self::parse_yaml_fallback(yaml_content))
+                }
+            }
         } else {
             Ok(AgentMetadata::default())
         }
+    }
+
+    /// 容错解析 YAML frontmatter
+    ///
+    /// 当标准 YAML 解析失败时，使用正则表达式提取关键字段。
+    /// 这可以处理 description 字段包含未转义冒号等情况。
+    fn parse_yaml_fallback(yaml_content: &str) -> AgentMetadata {
+        let mut metadata = AgentMetadata::default();
+
+        // 提取 name 字段（简单值，通常不包含特殊字符）
+        if let Some(caps) = Regex::new(r"(?m)^name:\s*(.+?)$")
+            .ok()
+            .and_then(|re| re.captures(yaml_content))
+        {
+            metadata.name = Some(caps[1].trim().to_string());
+        }
+
+        // 提取 model 字段（简单值）
+        if let Some(caps) = Regex::new(r"(?m)^model:\s*(\w+)")
+            .ok()
+            .and_then(|re| re.captures(yaml_content))
+        {
+            metadata.model = Some(caps[1].trim().to_string());
+        }
+
+        // 提取 color 字段（简单值）
+        // color 不在 AgentMetadata 中，但为了完整性保留注释
+
+        // 提取 description 字段
+        // description 可能包含冒号，所以我们需要特殊处理
+        // 策略：找到 description: 后，一直读到下一个已知字段或文档结束
+        if let Some(desc_start) = yaml_content.find("description:") {
+            let after_key = &yaml_content[desc_start + 12..]; // "description:" 长度为 12
+
+            // 找到下一个顶级字段的位置
+            let next_field_patterns = ["name:", "model:", "tools:", "color:"];
+            let mut end_pos = after_key.len();
+
+            for pattern in next_field_patterns {
+                if let Some(pos) = Regex::new(&format!(r"(?m)^{}", regex::escape(pattern)))
+                    .ok()
+                    .and_then(|re| re.find(after_key))
+                {
+                    if pos.start() < end_pos {
+                        end_pos = pos.start();
+                    }
+                }
+            }
+
+            let desc_value = after_key[..end_pos].trim();
+            if !desc_value.is_empty() {
+                // 清理可能的换行符和多余空白
+                let cleaned = desc_value
+                    .lines()
+                    .map(|l| l.trim())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+                    .trim()
+                    .to_string();
+                metadata.description = Some(cleaned);
+            }
+        }
+
+        // 提取 tools 字段
+        // 支持两种格式：
+        // 1. tools: Tool1, Tool2, Tool3
+        // 2. tools:\n  - Tool1\n  - Tool2
+        if let Some(tools_start) = yaml_content.find("tools:") {
+            let after_key = &yaml_content[tools_start + 6..]; // "tools:" 长度为 6
+
+            // 检查是内联格式还是列表格式
+            let first_line = after_key.lines().next().unwrap_or("");
+
+            if first_line.trim().is_empty() {
+                // 列表格式：tools:\n  - Tool1\n  - Tool2
+                let mut tools = Vec::new();
+                for line in after_key.lines().skip(1) {
+                    let trimmed = line.trim();
+                    if trimmed.starts_with('-') {
+                        let tool = trimmed[1..].trim();
+                        if !tool.is_empty() {
+                            tools.push(tool.to_string());
+                        }
+                    } else if !trimmed.is_empty() && !trimmed.starts_with('#') {
+                        // 遇到非列表项且非空行，结束解析
+                        break;
+                    }
+                }
+                if !tools.is_empty() {
+                    metadata.tools = Some(tools);
+                }
+            } else {
+                // 内联格式：tools: Tool1, Tool2, Tool3
+                let tools: Vec<String> = first_line
+                    .split(',')
+                    .map(|t| t.trim().to_string())
+                    .filter(|t| !t.is_empty())
+                    .collect();
+                if !tools.is_empty() {
+                    metadata.tools = Some(tools);
+                }
+            }
+        }
+
+        metadata
     }
 
     /// 计算内容的 SHA256 哈希

@@ -7,6 +7,7 @@
 
 use anyhow::{anyhow, Context, Result};
 use chrono::{DateTime, Utc};
+use regex::Regex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -842,6 +843,9 @@ impl SkillService {
     }
 
     /// 静态方法：解析技能元数据
+    ///
+    /// 如果 YAML 解析失败（例如 description 中包含未转义的冒号），
+    /// 会尝试使用正则表达式进行容错解析。
     fn parse_skill_metadata_static(path: &Path) -> Result<SkillMetadata> {
         let content = fs::read_to_string(path)?;
         let content = content.trim_start_matches('\u{feff}');
@@ -855,12 +859,65 @@ impl SkillService {
         }
 
         let front_matter = parts[1].trim();
-        let meta: SkillMetadata = serde_yaml::from_str(front_matter).unwrap_or(SkillMetadata {
+
+        // 首先尝试标准 YAML 解析
+        match serde_yaml::from_str::<SkillMetadata>(front_matter) {
+            Ok(meta) => Ok(meta),
+            Err(_) => {
+                // YAML 解析失败，尝试容错解析
+                Ok(Self::parse_yaml_fallback(front_matter))
+            }
+        }
+    }
+
+    /// 容错解析 YAML frontmatter
+    ///
+    /// 当标准 YAML 解析失败时，使用正则表达式提取关键字段。
+    fn parse_yaml_fallback(yaml_content: &str) -> SkillMetadata {
+        let mut metadata = SkillMetadata {
             name: None,
             description: None,
-        });
+        };
 
-        Ok(meta)
+        // 提取 name 字段
+        if let Some(caps) = Regex::new(r"(?m)^name:\s*(.+?)$")
+            .ok()
+            .and_then(|re| re.captures(yaml_content))
+        {
+            metadata.name = Some(caps[1].trim().to_string());
+        }
+
+        // 提取 description 字段（可能包含冒号）
+        if let Some(desc_start) = yaml_content.find("description:") {
+            let after_key = &yaml_content[desc_start + 12..];
+            let next_field_patterns = ["name:"];
+            let mut end_pos = after_key.len();
+
+            for pattern in next_field_patterns {
+                if let Some(pos) = Regex::new(&format!(r"(?m)^{}", regex::escape(pattern)))
+                    .ok()
+                    .and_then(|re| re.find(after_key))
+                {
+                    if pos.start() < end_pos {
+                        end_pos = pos.start();
+                    }
+                }
+            }
+
+            let desc_value = after_key[..end_pos].trim();
+            if !desc_value.is_empty() {
+                let cleaned = desc_value
+                    .lines()
+                    .map(|l| l.trim())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+                    .trim()
+                    .to_string();
+                metadata.description = Some(cleaned);
+            }
+        }
+
+        metadata
     }
 
     /// 去重技能列表

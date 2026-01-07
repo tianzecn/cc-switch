@@ -7,6 +7,7 @@
 //! - 支持命名空间组织（如 sc/agent, zcf/feat）
 
 use anyhow::{anyhow, Context, Result};
+use regex::Regex;
 use reqwest::Client;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -1107,6 +1108,9 @@ impl CommandService {
     // ========== 元数据解析 ==========
 
     /// 解析 Command 文件的 YAML frontmatter
+    ///
+    /// 如果 YAML 解析失败（例如 description 中包含未转义的冒号），
+    /// 会尝试使用正则表达式进行容错解析。
     pub fn parse_command_metadata(content: &str) -> Result<CommandMetadata> {
         let content = content.trim_start_matches('\u{feff}'); // Remove BOM
 
@@ -1116,9 +1120,103 @@ impl CommandService {
         }
 
         let front_matter = parts[1].trim();
-        let meta: CommandMetadata = serde_yaml::from_str(front_matter).unwrap_or_default();
 
-        Ok(meta)
+        // 首先尝试标准 YAML 解析
+        match serde_yaml::from_str::<CommandMetadata>(front_matter) {
+            Ok(meta) => Ok(meta),
+            Err(_) => {
+                // YAML 解析失败，尝试容错解析
+                Ok(Self::parse_yaml_fallback(front_matter))
+            }
+        }
+    }
+
+    /// 容错解析 YAML frontmatter
+    ///
+    /// 当标准 YAML 解析失败时，使用正则表达式提取关键字段。
+    fn parse_yaml_fallback(yaml_content: &str) -> CommandMetadata {
+        let mut metadata = CommandMetadata::default();
+
+        // 提取 name 字段
+        if let Some(caps) = Regex::new(r"(?m)^name:\s*(.+?)$")
+            .ok()
+            .and_then(|re| re.captures(yaml_content))
+        {
+            metadata.name = Some(caps[1].trim().to_string());
+        }
+
+        // 提取 category 字段
+        if let Some(caps) = Regex::new(r"(?m)^category:\s*(.+?)$")
+            .ok()
+            .and_then(|re| re.captures(yaml_content))
+        {
+            metadata.category = Some(caps[1].trim().to_string());
+        }
+
+        // 提取 description 字段（可能包含冒号）
+        if let Some(desc_start) = yaml_content.find("description:") {
+            let after_key = &yaml_content[desc_start + 12..];
+            let next_field_patterns = ["name:", "category:", "allowed_tools:", "mcp_servers:", "personas:"];
+            let mut end_pos = after_key.len();
+
+            for pattern in next_field_patterns {
+                if let Some(pos) = Regex::new(&format!(r"(?m)^{}", regex::escape(pattern)))
+                    .ok()
+                    .and_then(|re| re.find(after_key))
+                {
+                    if pos.start() < end_pos {
+                        end_pos = pos.start();
+                    }
+                }
+            }
+
+            let desc_value = after_key[..end_pos].trim();
+            if !desc_value.is_empty() {
+                let cleaned = desc_value
+                    .lines()
+                    .map(|l| l.trim())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+                    .trim()
+                    .to_string();
+                metadata.description = Some(cleaned);
+            }
+        }
+
+        // 提取 allowed_tools 字段
+        if let Some(tools_start) = yaml_content.find("allowed_tools:") {
+            let after_key = &yaml_content[tools_start + 14..];
+            let first_line = after_key.lines().next().unwrap_or("");
+
+            if first_line.trim().is_empty() {
+                let mut tools = Vec::new();
+                for line in after_key.lines().skip(1) {
+                    let trimmed = line.trim();
+                    if trimmed.starts_with('-') {
+                        let tool = trimmed[1..].trim();
+                        if !tool.is_empty() {
+                            tools.push(tool.to_string());
+                        }
+                    } else if !trimmed.is_empty() && !trimmed.starts_with('#') {
+                        break;
+                    }
+                }
+                if !tools.is_empty() {
+                    metadata.allowed_tools = Some(tools);
+                }
+            } else {
+                let tools: Vec<String> = first_line
+                    .split(',')
+                    .map(|t| t.trim().to_string())
+                    .filter(|t| !t.is_empty())
+                    .collect();
+                if !tools.is_empty() {
+                    metadata.allowed_tools = Some(tools);
+                }
+            }
+        }
+
+        metadata
     }
 
     /// 计算文件内容哈希
