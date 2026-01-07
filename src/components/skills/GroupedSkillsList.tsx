@@ -281,7 +281,7 @@ const RepoStickyHeader: React.FC<RepoStickyHeaderProps> = ({
 
   return (
     <div
-      className="sticky top-0 z-20 flex items-center gap-2 px-3 py-2 bg-background/95 backdrop-blur-sm border-b border-border/50"
+      className="flex items-center gap-2 px-3 py-2 bg-background/95 backdrop-blur-sm border-b border-border/50"
     >
       <Icon size={16} className={iconColor} />
       <span className="text-sm font-semibold text-foreground">{repoName}</span>
@@ -304,7 +304,7 @@ const NamespaceSubHeader: React.FC<NamespaceSubHeaderProps> = ({
   return (
     <div
       className={cn(
-        "sticky top-10 z-10 flex items-center gap-2 px-3 py-1.5 bg-muted/50 backdrop-blur-sm",
+        "flex items-center gap-2 px-3 py-1.5 bg-muted/50 backdrop-blur-sm",
         indent && "ml-4",
       )}
     >
