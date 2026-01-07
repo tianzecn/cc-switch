@@ -24,9 +24,11 @@ import {
   type DiscoverableAgent,
   type CommandRepo,
 } from "@/hooks/useAgents";
+import { useBatchInstallAgents } from "@/hooks/useBatchInstallAgents";
 import { toast } from "sonner";
 import { CommandRepoManager } from "@/components/commands/CommandRepoManager";
-import { AgentDiscoveryTree } from "./AgentDiscoveryTree";
+import { AgentDiscoveryTree, type DiscoverySelection } from "./AgentDiscoveryTree";
+import { BatchInstallAgentsButton } from "./BatchInstallAgentsButton";
 
 interface AgentDiscoveryProps {
   onBack: () => void;
@@ -42,12 +44,12 @@ export const AgentDiscovery: React.FC<AgentDiscoveryProps> = ({ onBack }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [showRepoManager, setShowRepoManager] = useState(false);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
-  const [selectedNamespace, setSelectedNamespace] = useState<string | null>(
-    null,
-  );
-  const [namespaceAgents, setNamespaceAgents] = useState<DiscoverableAgent[]>(
-    [],
-  );
+  // 选中状态（支持仓库和命名空间选择）
+  const [selection, setSelection] = useState<DiscoverySelection>({
+    type: "all",
+    id: null,
+    agents: [],
+  });
 
   // Queries
   const { data: discoverableAgents, isLoading } = useDiscoverableAgents();
@@ -57,6 +59,9 @@ export const AgentDiscovery: React.FC<AgentDiscoveryProps> = ({ onBack }) => {
   const addRepoMutation = useAddAgentRepo();
   const removeRepoMutation = useRemoveAgentRepo();
   const refreshMutation = useRefreshDiscoverableAgents();
+
+  // Batch install
+  const batchInstall = useBatchInstallAgents();
 
   // 已安装的 Agent ID 集合
   const installedIds = useMemo(() => {
@@ -79,6 +84,33 @@ export const AgentDiscovery: React.FC<AgentDiscoveryProps> = ({ onBack }) => {
       return true;
     });
   }, [discoverableAgents, searchQuery]);
+
+  // 当前显示的 agent 列表（根据选择状态）
+  const displayedAgents = useMemo(() => {
+    // 如果有选择（仓库或命名空间），使用选择的 agents
+    if (selection.type !== "all" && selection.agents.length > 0) {
+      return selection.agents;
+    }
+    // 否则返回空（需要用户选择仓库或命名空间）
+    return [];
+  }, [selection]);
+
+  // 计算未安装 agent 数量（基于当前显示的 agents）
+  const uninstalledCount = useMemo(() => {
+    if (displayedAgents.length === 0) return 0;
+    return displayedAgents.filter((agent) => {
+      const id = agent.namespace
+        ? `${agent.namespace}/${agent.filename}`
+        : agent.filename;
+      return !installedIds.has(id);
+    }).length;
+  }, [displayedAgents, installedIds]);
+
+  // 批量安装处理（只安装当前显示的未安装 agents）
+  const handleBatchInstall = () => {
+    if (displayedAgents.length === 0) return;
+    batchInstall.startBatchInstall(displayedAgents, installedIds);
+  };
 
   const handleInstall = async (agent: DiscoverableAgent) => {
     try {
@@ -127,14 +159,6 @@ export const AgentDiscovery: React.FC<AgentDiscoveryProps> = ({ onBack }) => {
       }
       return next;
     });
-  };
-
-  const handleSelectNamespace = (
-    namespaceId: string,
-    agents: DiscoverableAgent[],
-  ) => {
-    setSelectedNamespace(namespaceId);
-    setNamespaceAgents(agents);
   };
 
   const isAgentInstalled = (agent: DiscoverableAgent) => {
@@ -198,12 +222,18 @@ export const AgentDiscovery: React.FC<AgentDiscoveryProps> = ({ onBack }) => {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="flex-shrink-0 py-3 glass rounded-xl border border-white/10 mb-4 px-6">
+      {/* Stats + Batch Install */}
+      <div className="flex-shrink-0 py-3 glass rounded-xl border border-white/10 mb-4 px-6 flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
           {t("agents.available", { count: filteredAgents.length })} ·{" "}
           {t("agents.installedCount", { count: installedIds.size })}
         </div>
+        <BatchInstallAgentsButton
+          uninstalledCount={uninstalledCount}
+          state={batchInstall.state}
+          onStartInstall={handleBatchInstall}
+          onCancelInstall={batchInstall.cancelInstall}
+        />
       </div>
 
       {/* Main Content - 双栏布局 */}
@@ -224,8 +254,8 @@ export const AgentDiscovery: React.FC<AgentDiscoveryProps> = ({ onBack }) => {
             ) : (
               <AgentDiscoveryTree
                 agents={filteredAgents}
-                selectedNamespace={selectedNamespace}
-                onSelectNamespace={handleSelectNamespace}
+                selection={selection}
+                onSelectionChange={setSelection}
                 expandedNodes={expandedNodes}
                 onToggleNode={handleToggleNode}
               />
@@ -235,19 +265,21 @@ export const AgentDiscovery: React.FC<AgentDiscoveryProps> = ({ onBack }) => {
 
         {/* Right Panel - Agent List */}
         <div className="flex-1 rounded-xl border border-border bg-muted/30 overflow-hidden flex flex-col">
-          {selectedNamespace ? (
+          {displayedAgents.length > 0 ? (
             <>
               <div className="flex-shrink-0 px-4 py-3 border-b border-border/50">
                 <h3 className="text-sm font-medium text-foreground">
-                  {selectedNamespace.split("/").slice(-1)[0]}
+                  {selection.type === "repo"
+                    ? selection.id
+                    : selection.id?.split("/").slice(-1)[0]}
                 </h3>
                 <p className="text-xs text-muted-foreground">
-                  {namespaceAgents.length} {t("agents.title").toLowerCase()}
+                  {displayedAgents.length} {t("agents.title").toLowerCase()}
                 </p>
               </div>
               <div className="flex-1 overflow-y-auto p-2">
                 <div className="space-y-2">
-                  {namespaceAgents.map((agent) => (
+                  {displayedAgents.map((agent) => (
                     <AgentListItem
                       key={agent.key}
                       agent={agent}

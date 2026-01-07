@@ -3,23 +3,28 @@ import { useTranslation } from "react-i18next";
 import {
   Folder,
   FolderOpen,
-  Plus,
-  Trash2,
   ChevronRight,
   ChevronDown,
   GitBranch,
   HardDrive,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import type { InstalledAgent, AgentNamespace } from "@/hooks/useAgents";
+import { useCreateAgentNamespace, useDeleteAgentNamespace } from "@/hooks/useAgents";
+import type { TreeSelection } from "@/types/tree";
 import {
-  useCreateAgentNamespace,
-  useDeleteAgentNamespace,
-  type AgentNamespace,
-  type InstalledAgent,
-} from "@/hooks/useAgents";
+  isAllSelected,
+  isRepoSelected,
+  isNamespaceSelected,
+  createAllSelection,
+  createRepoSelection,
+  createNamespaceSelection,
+} from "@/types/tree";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 
 /** 仓库节点结构 */
 interface RepoNode {
@@ -32,34 +37,38 @@ interface RepoNode {
 
 /** 命名空间节点结构 */
 interface NamespaceNode {
+  id: string;
   name: string;
   displayName: string;
   count: number;
 }
 
 interface AgentNamespaceTreeProps {
+  agents: InstalledAgent[];
   namespaces: AgentNamespace[];
-  agents?: InstalledAgent[];
-  selectedNamespace: string | null;
-  onSelectNamespace: (namespace: string | null) => void;
+  /** 当前选中状态 */
+  selection: TreeSelection;
+  /** 选中状态变化回调 */
+  onSelectionChange: (selection: TreeSelection) => void;
 }
 
 /**
  * Agent 命名空间树组件
  * 左侧边栏，按 仓库 → 命名空间 的两级结构显示
+ * 支持选中仓库节点或命名空间节点
  */
 export const AgentNamespaceTree: React.FC<AgentNamespaceTreeProps> = ({
+  agents,
   namespaces,
-  agents = [],
-  selectedNamespace,
-  onSelectNamespace,
+  selection,
+  onSelectionChange,
 }) => {
   const { t } = useTranslation();
+  const [expandedRepos, setExpandedRepos] = React.useState<Set<string>>(
+    new Set(["local"]), // 默认展开本地
+  );
   const [isCreating, setIsCreating] = React.useState(false);
   const [newNamespaceName, setNewNamespaceName] = React.useState("");
-  const [expandedRepos, setExpandedRepos] = React.useState<Set<string>>(
-    new Set(["local"]),
-  );
   const [deleteConfirm, setDeleteConfirm] = React.useState<{
     isOpen: boolean;
     namespace: string;
@@ -70,16 +79,15 @@ export const AgentNamespaceTree: React.FC<AgentNamespaceTreeProps> = ({
   const deleteMutation = useDeleteAgentNamespace();
 
   // 计算总 Agent 数
-  const totalCount = React.useMemo(() => {
-    return namespaces.reduce((sum, ns) => sum + ns.agentCount, 0);
-  }, [namespaces]);
+  const totalCount = agents.length;
 
   // 构建仓库 → 命名空间树结构
   const repoTree = useMemo(() => {
     if (!agents || agents.length === 0) {
-      return null;
+      return [];
     }
 
+    // 按 repo 分组
     const repoMap = new Map<string, Map<string, number>>();
 
     for (const agent of agents) {
@@ -97,6 +105,7 @@ export const AgentNamespaceTree: React.FC<AgentNamespaceTreeProps> = ({
       nsMap.set(namespace, (nsMap.get(namespace) || 0) + 1);
     }
 
+    // 构建树结构
     const repos: RepoNode[] = [];
 
     for (const [repoKey, nsMap] of repoMap) {
@@ -104,6 +113,7 @@ export const AgentNamespaceTree: React.FC<AgentNamespaceTreeProps> = ({
       const namespaceNodes: NamespaceNode[] = [];
       let repoCount = 0;
 
+      // 对命名空间排序：根命名空间放最前面
       const sortedNs = Array.from(nsMap.entries()).sort(([a], [b]) => {
         if (a === "") return -1;
         if (b === "") return 1;
@@ -111,9 +121,12 @@ export const AgentNamespaceTree: React.FC<AgentNamespaceTreeProps> = ({
       });
 
       for (const [ns, count] of sortedNs) {
+        // 命名空间 ID: 组合 repoKey 和 namespace
+        const nsId = `${repoKey}/${ns}`;
         namespaceNodes.push({
+          id: nsId,
           name: ns,
-          displayName: ns || t("agents.rootNamespace"),
+          displayName: ns || t("agents.rootNamespace", "Root"),
           count,
         });
         repoCount += count;
@@ -121,13 +134,14 @@ export const AgentNamespaceTree: React.FC<AgentNamespaceTreeProps> = ({
 
       repos.push({
         id: repoKey,
-        name: isLocal ? t("agents.localAgents") : repoKey,
+        name: isLocal ? t("agents.localAgents", "Local Agents") : repoKey,
         isLocal,
         namespaces: namespaceNodes,
         count: repoCount,
       });
     }
 
+    // 排序：本地放最前面，其他按名称排序
     return repos.sort((a, b) => {
       if (a.isLocal) return -1;
       if (b.isLocal) return 1;
@@ -135,18 +149,31 @@ export const AgentNamespaceTree: React.FC<AgentNamespaceTreeProps> = ({
     });
   }, [agents, t]);
 
-  const toggleRepo = (repoId: string) => {
-    setExpandedRepos((prev) => {
-      const next = new Set(prev);
-      if (next.has(repoId)) {
-        next.delete(repoId);
-      } else {
+  // 点击仓库：展开 + 选中
+  const handleRepoClick = (repoId: string) => {
+    // 展开仓库（如果未展开）
+    if (!expandedRepos.has(repoId)) {
+      setExpandedRepos((prev) => {
+        const next = new Set(prev);
         next.add(repoId);
-      }
-      return next;
-    });
+        return next;
+      });
+    }
+    // 选中仓库
+    onSelectionChange(createRepoSelection(repoId));
   };
 
+  // 点击命名空间：仅选中（独占）
+  const handleNamespaceClick = (repoId: string, nsId: string) => {
+    onSelectionChange(createNamespaceSelection(repoId, nsId));
+  };
+
+  // 点击"全部"
+  const handleAllClick = () => {
+    onSelectionChange(createAllSelection());
+  };
+
+  // 创建命名空间
   const handleCreate = async () => {
     const name = newNamespaceName.trim();
     if (!name) {
@@ -154,6 +181,7 @@ export const AgentNamespaceTree: React.FC<AgentNamespaceTreeProps> = ({
       return;
     }
 
+    // 验证命名空间名称格式
     if (!/^[a-z][a-z0-9-]*$/.test(name)) {
       toast.error(t("agents.namespaceNameInvalid"));
       return;
@@ -173,6 +201,7 @@ export const AgentNamespaceTree: React.FC<AgentNamespaceTreeProps> = ({
     }
   };
 
+  // 删除命名空间
   const handleDelete = async () => {
     if (!deleteConfirm) return;
 
@@ -184,8 +213,12 @@ export const AgentNamespaceTree: React.FC<AgentNamespaceTreeProps> = ({
       );
       setDeleteConfirm(null);
 
-      if (selectedNamespace === deleteConfirm.namespace) {
-        onSelectNamespace(null);
+      // 如果删除的是当前选中的命名空间，重置选择
+      if (
+        selection.type === "namespace" &&
+        selection.namespaceId?.endsWith(`/${deleteConfirm.namespace}`)
+      ) {
+        onSelectionChange(createAllSelection());
       }
     } catch (error) {
       toast.error(t("common.error"), {
@@ -251,52 +284,32 @@ export const AgentNamespaceTree: React.FC<AgentNamespaceTreeProps> = ({
       {/* Namespace List */}
       <div className="flex-1 overflow-y-auto space-y-1">
         {/* All Agents */}
-        <NamespaceItem
-          name={null}
-          displayName={t("agents.allAgents")}
+        <AllAgentsItem
           count={totalCount}
-          isSelected={selectedNamespace === null}
-          onClick={() => onSelectNamespace(null)}
+          isSelected={isAllSelected(selection)}
+          onClick={handleAllClick}
         />
 
         {/* 树形结构 */}
-        {repoTree
-          ? repoTree.map((repo) => (
-              <RepoTreeItem
-                key={repo.id}
-                repo={repo}
-                isExpanded={expandedRepos.has(repo.id)}
-                onToggle={() => toggleRepo(repo.id)}
-                selectedNamespace={selectedNamespace}
-                onSelectNamespace={onSelectNamespace}
-                namespaces={namespaces}
-                onDeleteNamespace={(ns, displayName) =>
-                  setDeleteConfirm({
-                    isOpen: true,
-                    namespace: ns,
-                    displayName,
-                  })
-                }
-              />
-            ))
-          : namespaces.map((ns) => (
-              <NamespaceItem
-                key={ns.name}
-                name={ns.name}
-                displayName={ns.displayName}
-                count={ns.agentCount}
-                isSelected={selectedNamespace === ns.name}
-                onClick={() => onSelectNamespace(ns.name)}
-                onDelete={() =>
-                  setDeleteConfirm({
-                    isOpen: true,
-                    namespace: ns.name,
-                    displayName: ns.displayName,
-                  })
-                }
-                canDelete={ns.agentCount === 0 && ns.name !== ""}
-              />
-            ))}
+        {repoTree.map((repo) => (
+          <RepoTreeItem
+            key={repo.id}
+            repo={repo}
+            isExpanded={expandedRepos.has(repo.id)}
+            isRepoSelected={isRepoSelected(selection, repo.id)}
+            selection={selection}
+            namespaces={namespaces}
+            onRepoClick={() => handleRepoClick(repo.id)}
+            onNamespaceClick={(nsId) => handleNamespaceClick(repo.id, nsId)}
+            onDeleteNamespace={(ns, displayName) =>
+              setDeleteConfirm({
+                isOpen: true,
+                namespace: ns,
+                displayName,
+              })
+            }
+          />
+        ))}
       </div>
 
       {/* Delete Confirmation Dialog */}
@@ -316,26 +329,20 @@ export const AgentNamespaceTree: React.FC<AgentNamespaceTreeProps> = ({
 };
 
 /**
- * 命名空间列表项
+ * "全部代理" 节点
  */
-interface NamespaceItemProps {
-  name: string | null;
-  displayName: string;
+interface AllAgentsItemProps {
   count: number;
   isSelected: boolean;
   onClick: () => void;
-  onDelete?: () => void;
-  canDelete?: boolean;
 }
 
-const NamespaceItem: React.FC<NamespaceItemProps> = ({
-  displayName,
+const AllAgentsItem: React.FC<AllAgentsItemProps> = ({
   count,
   isSelected,
   onClick,
-  onDelete,
-  canDelete,
 }) => {
+  const { t } = useTranslation();
   const Icon = isSelected ? FolderOpen : Folder;
 
   return (
@@ -349,22 +356,10 @@ const NamespaceItem: React.FC<NamespaceItemProps> = ({
       onClick={onClick}
     >
       <Icon size={16} className="flex-shrink-0" />
-      <span className="flex-1 text-sm truncate">{displayName}</span>
+      <span className="flex-1 text-sm truncate">
+        {t("agents.allAgents", "All Agents")}
+      </span>
       <span className="text-xs text-muted-foreground">{count}</span>
-
-      {canDelete && onDelete && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-5 w-5 opacity-0 group-hover:opacity-100 hover:text-red-500"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
-        >
-          <Trash2 size={12} />
-        </Button>
-      )}
     </div>
   );
 };
@@ -375,30 +370,37 @@ const NamespaceItem: React.FC<NamespaceItemProps> = ({
 interface RepoTreeItemProps {
   repo: RepoNode;
   isExpanded: boolean;
-  onToggle: () => void;
-  selectedNamespace: string | null;
-  onSelectNamespace: (namespace: string | null) => void;
+  isRepoSelected: boolean;
+  selection: TreeSelection;
   namespaces: AgentNamespace[];
+  onRepoClick: () => void;
+  onNamespaceClick: (nsId: string) => void;
   onDeleteNamespace: (namespace: string, displayName: string) => void;
 }
 
 const RepoTreeItem: React.FC<RepoTreeItemProps> = ({
   repo,
   isExpanded,
-  onToggle,
-  selectedNamespace,
-  onSelectNamespace,
+  isRepoSelected: repoSelected,
+  selection,
   namespaces,
+  onRepoClick,
+  onNamespaceClick,
   onDeleteNamespace,
 }) => {
   const RepoIcon = repo.isLocal ? HardDrive : GitBranch;
 
   return (
     <div>
-      {/* 仓库头部 */}
+      {/* 仓库头部 - 点击时展开 + 选中 */}
       <div
-        className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-muted transition-colors"
-        onClick={onToggle}
+        className={cn(
+          "flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors",
+          repoSelected
+            ? "bg-primary/15 border-l-2 border-primary"
+            : "hover:bg-muted",
+        )}
+        onClick={onRepoClick}
       >
         {isExpanded ? (
           <ChevronDown size={14} className="text-muted-foreground" />
@@ -409,7 +411,14 @@ const RepoTreeItem: React.FC<RepoTreeItemProps> = ({
           size={14}
           className={repo.isLocal ? "text-green-500" : "text-blue-500"}
         />
-        <span className="flex-1 text-sm font-medium truncate">{repo.name}</span>
+        <span
+          className={cn(
+            "flex-1 text-sm font-medium truncate",
+            repoSelected && "text-primary",
+          )}
+        >
+          {repo.name}
+        </span>
         <span className="text-xs text-muted-foreground">{repo.count}</span>
       </div>
 
@@ -417,35 +426,29 @@ const RepoTreeItem: React.FC<RepoTreeItemProps> = ({
       {isExpanded && (
         <div className="ml-4 border-l border-border/50 pl-2 space-y-0.5">
           {repo.namespaces.map((ns) => {
+            const nsSelected = isNamespaceSelected(selection, ns.id);
+            // 查找是否可删除（空的本地命名空间）
             const nsInfo = namespaces.find((n) => n.name === ns.name);
             const canDelete =
-              nsInfo && nsInfo.agentCount === 0 && ns.name !== "";
+              repo.isLocal && nsInfo && nsInfo.agentCount === 0 && ns.name !== "";
 
             return (
               <div
-                key={ns.name}
+                key={ns.id}
                 className={cn(
                   "group flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors",
-                  selectedNamespace === ns.name
+                  nsSelected
                     ? "bg-primary/10 text-primary"
                     : "hover:bg-muted text-foreground",
                 )}
-                onClick={() => onSelectNamespace(ns.name)}
+                onClick={() => onNamespaceClick(ns.id)}
               >
                 <Folder
                   size={14}
-                  className={
-                    selectedNamespace === ns.name
-                      ? "text-primary"
-                      : "text-yellow-500"
-                  }
+                  className={nsSelected ? "text-primary" : "text-yellow-500"}
                 />
-                <span className="flex-1 text-sm truncate">
-                  {ns.displayName}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {ns.count}
-                </span>
+                <span className="flex-1 text-sm truncate">{ns.displayName}</span>
+                <span className="text-xs text-muted-foreground">{ns.count}</span>
 
                 {canDelete && (
                   <Button
