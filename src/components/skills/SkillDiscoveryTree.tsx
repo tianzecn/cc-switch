@@ -3,6 +3,15 @@ import { useTranslation } from "react-i18next";
 import { ChevronRight, ChevronDown, GitBranch, Folder } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DiscoverableSkill } from "@/lib/api/skills";
+import type { TreeSelection } from "@/types/tree";
+import {
+  isAllSelected,
+  isRepoSelected,
+  isNamespaceSelected,
+  createAllSelection,
+  createRepoSelection,
+  createNamespaceSelection,
+} from "@/types/tree";
 
 // ========== 类型定义 ==========
 
@@ -25,6 +34,8 @@ interface RepoNode extends TreeNode {
   repoName: string;
   branch: string;
   children: NamespaceNode[];
+  /** 该仓库下的所有技能 */
+  allSkills: DiscoverableSkill[];
 }
 
 /** 命名空间节点 */
@@ -80,6 +91,7 @@ function buildTree(skills: DiscoverableSkill[]): RepoNode[] {
 
     const namespaces: NamespaceNode[] = [];
     let repoCount = 0;
+    const allSkills: DiscoverableSkill[] = [];
 
     // 对命名空间排序：(root) 放最前面，其他按字母排序
     const sortedNamespaces = Array.from(namespaceMap.entries()).sort(
@@ -91,16 +103,18 @@ function buildTree(skills: DiscoverableSkill[]): RepoNode[] {
     );
 
     for (const [namespace, nsSkills] of sortedNamespaces) {
+      const sortedSkills = nsSkills.sort((a, b) => a.name.localeCompare(b.name));
       namespaces.push({
         id: `${repoKey}/${namespace}`,
         name: namespace === ROOT_NAMESPACE ? "skills" : namespace,
         type: "namespace",
         namespace,
         count: nsSkills.length,
-        skills: nsSkills.sort((a, b) => a.name.localeCompare(b.name)),
+        skills: sortedSkills,
       });
 
       repoCount += nsSkills.length;
+      allSkills.push(...sortedSkills);
     }
 
     repos.push({
@@ -112,6 +126,7 @@ function buildTree(skills: DiscoverableSkill[]): RepoNode[] {
       branch,
       count: repoCount,
       children: namespaces,
+      allSkills,
     });
   }
 
@@ -123,25 +138,23 @@ function buildTree(skills: DiscoverableSkill[]): RepoNode[] {
 
 interface SkillDiscoveryTreeProps {
   skills: DiscoverableSkill[];
-  /** 选中的命名空间 ID（格式: owner/repo/namespace） */
-  selectedNamespace: string | null;
-  /** 命名空间被选中时的回调 */
-  onSelectNamespace: (
-    namespaceId: string | null,
-    skills: DiscoverableSkill[],
-  ) => void;
+  /** 当前选中状态 */
+  selection: TreeSelection;
+  /** 选中状态变化回调 */
+  onSelectionChange: (selection: TreeSelection, skills: DiscoverableSkill[]) => void;
   expandedNodes?: Set<string>;
   onToggleNode?: (nodeId: string) => void;
 }
 
 /**
  * 技能发现树组件
- * 以 repo → namespace 的层级结构展示，点击命名空间在右侧显示技能列表
+ * 以 repo → namespace 的层级结构展示
+ * 支持选中仓库节点或命名空间节点
  */
 export const SkillDiscoveryTree: React.FC<SkillDiscoveryTreeProps> = ({
   skills,
-  selectedNamespace,
-  onSelectNamespace,
+  selection,
+  onSelectionChange,
   expandedNodes: controlledExpanded,
   onToggleNode: controlledToggle,
 }) => {
@@ -173,14 +186,24 @@ export const SkillDiscoveryTree: React.FC<SkillDiscoveryTreeProps> = ({
   // 计算总数
   const totalCount = skills.length;
 
-  // 处理命名空间选中
-  const handleSelectNamespace = (node: NamespaceNode) => {
-    onSelectNamespace(node.id, node.skills);
+  // 点击仓库：展开 + 选中
+  const handleRepoClick = (repo: RepoNode) => {
+    // 展开仓库（如果未展开）
+    if (!expanded.has(repo.id)) {
+      toggleNode(repo.id);
+    }
+    // 选中仓库，传递该仓库下所有技能
+    onSelectionChange(createRepoSelection(repo.id), repo.allSkills);
   };
 
-  // 处理"全部"选中
+  // 点击命名空间：仅选中（独占）
+  const handleNamespaceClick = (repoId: string, ns: NamespaceNode) => {
+    onSelectionChange(createNamespaceSelection(repoId, ns.id), ns.skills);
+  };
+
+  // 点击"全部"
   const handleSelectAll = () => {
-    onSelectNamespace(null, skills);
+    onSelectionChange(createAllSelection(), skills);
   };
 
   if (tree.length === 0) {
@@ -197,7 +220,7 @@ export const SkillDiscoveryTree: React.FC<SkillDiscoveryTreeProps> = ({
       <div
         className={cn(
           "flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors",
-          selectedNamespace === null
+          isAllSelected(selection)
             ? "bg-primary/10 text-primary font-medium"
             : "hover:bg-muted",
         )}
@@ -206,7 +229,7 @@ export const SkillDiscoveryTree: React.FC<SkillDiscoveryTreeProps> = ({
         <Folder
           size={14}
           className={
-            selectedNamespace === null
+            isAllSelected(selection)
               ? "text-primary"
               : "text-muted-foreground"
           }
@@ -223,9 +246,9 @@ export const SkillDiscoveryTree: React.FC<SkillDiscoveryTreeProps> = ({
           key={repo.id}
           node={repo}
           expanded={expanded}
-          toggleNode={toggleNode}
-          selectedNamespace={selectedNamespace}
-          onSelectNamespace={handleSelectNamespace}
+          selection={selection}
+          onRepoClick={() => handleRepoClick(repo)}
+          onNamespaceClick={(ns) => handleNamespaceClick(repo.id, ns)}
         />
       ))}
     </div>
@@ -237,26 +260,32 @@ export const SkillDiscoveryTree: React.FC<SkillDiscoveryTreeProps> = ({
 interface RepoTreeNodeProps {
   node: RepoNode;
   expanded: Set<string>;
-  toggleNode: (nodeId: string) => void;
-  selectedNamespace: string | null;
-  onSelectNamespace: (node: NamespaceNode) => void;
+  selection: TreeSelection;
+  onRepoClick: () => void;
+  onNamespaceClick: (ns: NamespaceNode) => void;
 }
 
 const RepoTreeNode: React.FC<RepoTreeNodeProps> = ({
   node,
   expanded,
-  toggleNode,
-  selectedNamespace,
-  onSelectNamespace,
+  selection,
+  onRepoClick,
+  onNamespaceClick,
 }) => {
   const isExpanded = expanded.has(node.id);
+  const repoSelected = isRepoSelected(selection, node.id);
 
   return (
     <div>
-      {/* Repo Header */}
+      {/* Repo Header - 点击时展开 + 选中 */}
       <div
-        className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-muted transition-colors"
-        onClick={() => toggleNode(node.id)}
+        className={cn(
+          "flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors",
+          repoSelected
+            ? "bg-primary/15 border-l-2 border-primary"
+            : "hover:bg-muted",
+        )}
+        onClick={onRepoClick}
       >
         {isExpanded ? (
           <ChevronDown size={14} className="text-muted-foreground" />
@@ -264,7 +293,14 @@ const RepoTreeNode: React.FC<RepoTreeNodeProps> = ({
           <ChevronRight size={14} className="text-muted-foreground" />
         )}
         <GitBranch size={14} className="text-blue-500" />
-        <span className="flex-1 text-sm font-medium truncate">{node.name}</span>
+        <span
+          className={cn(
+            "flex-1 text-sm font-medium truncate",
+            repoSelected && "text-primary",
+          )}
+        >
+          {node.name}
+        </span>
         <span className="text-xs text-muted-foreground">{node.count}</span>
       </div>
 
@@ -275,8 +311,8 @@ const RepoTreeNode: React.FC<RepoTreeNodeProps> = ({
             <NamespaceTreeNode
               key={ns.id}
               node={ns}
-              isSelected={selectedNamespace === ns.id}
-              onSelect={() => onSelectNamespace(ns)}
+              isSelected={isNamespaceSelected(selection, ns.id)}
+              onSelect={() => onNamespaceClick(ns)}
             />
           ))}
         </div>

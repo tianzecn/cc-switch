@@ -16,7 +16,6 @@ import {
   Book,
   Wrench,
   Server,
-  RefreshCw,
   Download,
   Terminal,
   Webhook,

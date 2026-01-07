@@ -10,6 +10,15 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { InstalledSkill } from "@/hooks/useSkills";
+import type { TreeSelection } from "@/types/tree";
+import {
+  isAllSelected,
+  isRepoSelected,
+  isNamespaceSelected,
+  createAllSelection,
+  createRepoSelection,
+  createNamespaceSelection,
+} from "@/types/tree";
 
 /** 仓库节点结构 */
 interface RepoNode {
@@ -22,6 +31,7 @@ interface RepoNode {
 
 /** 命名空间节点结构 */
 interface NamespaceNode {
+  id: string;
   name: string;
   displayName: string;
   count: number;
@@ -29,18 +39,21 @@ interface NamespaceNode {
 
 interface SkillNamespaceTreeProps {
   skills: InstalledSkill[];
-  selectedNamespace: string | null;
-  onSelectNamespace: (namespace: string | null) => void;
+  /** 当前选中状态 */
+  selection: TreeSelection;
+  /** 选中状态变化回调 */
+  onSelectionChange: (selection: TreeSelection) => void;
 }
 
 /**
  * Skill 命名空间树组件
  * 左侧边栏，按 仓库 → 命名空间 的两级结构显示
+ * 支持选中仓库节点或命名空间节点
  */
 export const SkillNamespaceTree: React.FC<SkillNamespaceTreeProps> = ({
   skills,
-  selectedNamespace,
-  onSelectNamespace,
+  selection,
+  onSelectionChange,
 }) => {
   const { t } = useTranslation();
   const [expandedRepos, setExpandedRepos] = React.useState<Set<string>>(
@@ -90,7 +103,10 @@ export const SkillNamespaceTree: React.FC<SkillNamespaceTreeProps> = ({
       });
 
       for (const [ns, count] of sortedNs) {
+        // 命名空间 ID: 组合 repoKey 和 namespace
+        const nsId = `${repoKey}/${ns}`;
         namespaceNodes.push({
+          id: nsId,
           name: ns,
           displayName: ns || t("skills.rootNamespace", "Root"),
           count,
@@ -115,16 +131,28 @@ export const SkillNamespaceTree: React.FC<SkillNamespaceTreeProps> = ({
     });
   }, [skills, t]);
 
-  const toggleRepo = (repoId: string) => {
-    setExpandedRepos((prev) => {
-      const next = new Set(prev);
-      if (next.has(repoId)) {
-        next.delete(repoId);
-      } else {
+  // 点击仓库：展开 + 选中
+  const handleRepoClick = (repoId: string) => {
+    // 展开仓库（如果未展开）
+    if (!expandedRepos.has(repoId)) {
+      setExpandedRepos((prev) => {
+        const next = new Set(prev);
         next.add(repoId);
-      }
-      return next;
-    });
+        return next;
+      });
+    }
+    // 选中仓库
+    onSelectionChange(createRepoSelection(repoId));
+  };
+
+  // 点击命名空间：仅选中（独占）
+  const handleNamespaceClick = (repoId: string, nsId: string) => {
+    onSelectionChange(createNamespaceSelection(repoId, nsId));
+  };
+
+  // 点击"全部"
+  const handleAllClick = () => {
+    onSelectionChange(createAllSelection());
   };
 
   return (
@@ -132,12 +160,10 @@ export const SkillNamespaceTree: React.FC<SkillNamespaceTreeProps> = ({
       {/* Namespace List */}
       <div className="flex-1 overflow-y-auto space-y-1">
         {/* All Skills */}
-        <NamespaceItem
-          name={null}
-          displayName={t("skills.allSkills", "All Skills")}
+        <AllSkillsItem
           count={totalCount}
-          isSelected={selectedNamespace === null}
-          onClick={() => onSelectNamespace(null)}
+          isSelected={isAllSelected(selection)}
+          onClick={handleAllClick}
         />
 
         {/* 树形结构 */}
@@ -146,9 +172,10 @@ export const SkillNamespaceTree: React.FC<SkillNamespaceTreeProps> = ({
             key={repo.id}
             repo={repo}
             isExpanded={expandedRepos.has(repo.id)}
-            onToggle={() => toggleRepo(repo.id)}
-            selectedNamespace={selectedNamespace}
-            onSelectNamespace={onSelectNamespace}
+            isRepoSelected={isRepoSelected(selection, repo.id)}
+            selection={selection}
+            onRepoClick={() => handleRepoClick(repo.id)}
+            onNamespaceClick={(nsId) => handleNamespaceClick(repo.id, nsId)}
           />
         ))}
       </div>
@@ -157,23 +184,20 @@ export const SkillNamespaceTree: React.FC<SkillNamespaceTreeProps> = ({
 };
 
 /**
- * 命名空间列表项
+ * "全部技能" 节点
  */
-interface NamespaceItemProps {
-  name: string | null;
-  displayName: string;
+interface AllSkillsItemProps {
   count: number;
   isSelected: boolean;
   onClick: () => void;
 }
 
-const NamespaceItem: React.FC<NamespaceItemProps> = ({
-  name: _name,
-  displayName,
+const AllSkillsItem: React.FC<AllSkillsItemProps> = ({
   count,
   isSelected,
   onClick,
 }) => {
+  const { t } = useTranslation();
   const Icon = isSelected ? FolderOpen : Folder;
 
   return (
@@ -187,7 +211,9 @@ const NamespaceItem: React.FC<NamespaceItemProps> = ({
       onClick={onClick}
     >
       <Icon size={16} className="flex-shrink-0" />
-      <span className="flex-1 text-sm truncate">{displayName}</span>
+      <span className="flex-1 text-sm truncate">
+        {t("skills.allSkills", "All Skills")}
+      </span>
       <span className="text-xs text-muted-foreground">{count}</span>
     </div>
   );
@@ -199,26 +225,33 @@ const NamespaceItem: React.FC<NamespaceItemProps> = ({
 interface RepoTreeItemProps {
   repo: RepoNode;
   isExpanded: boolean;
-  onToggle: () => void;
-  selectedNamespace: string | null;
-  onSelectNamespace: (namespace: string | null) => void;
+  isRepoSelected: boolean;
+  selection: TreeSelection;
+  onRepoClick: () => void;
+  onNamespaceClick: (nsId: string) => void;
 }
 
 const RepoTreeItem: React.FC<RepoTreeItemProps> = ({
   repo,
   isExpanded,
-  onToggle,
-  selectedNamespace,
-  onSelectNamespace,
+  isRepoSelected: repoSelected,
+  selection,
+  onRepoClick,
+  onNamespaceClick,
 }) => {
   const RepoIcon = repo.isLocal ? HardDrive : GitBranch;
 
   return (
     <div>
-      {/* 仓库头部 */}
+      {/* 仓库头部 - 点击时展开 + 选中 */}
       <div
-        className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-muted transition-colors"
-        onClick={onToggle}
+        className={cn(
+          "flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors",
+          repoSelected
+            ? "bg-primary/15 border-l-2 border-primary"
+            : "hover:bg-muted",
+        )}
+        onClick={onRepoClick}
       >
         {isExpanded ? (
           <ChevronDown size={14} className="text-muted-foreground" />
@@ -229,36 +262,42 @@ const RepoTreeItem: React.FC<RepoTreeItemProps> = ({
           size={14}
           className={repo.isLocal ? "text-green-500" : "text-blue-500"}
         />
-        <span className="flex-1 text-sm font-medium truncate">{repo.name}</span>
+        <span
+          className={cn(
+            "flex-1 text-sm font-medium truncate",
+            repoSelected && "text-primary",
+          )}
+        >
+          {repo.name}
+        </span>
         <span className="text-xs text-muted-foreground">{repo.count}</span>
       </div>
 
       {/* 命名空间列表 */}
       {isExpanded && (
         <div className="ml-4 border-l border-border/50 pl-2 space-y-0.5">
-          {repo.namespaces.map((ns) => (
-            <div
-              key={ns.name}
-              className={cn(
-                "group flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors",
-                selectedNamespace === ns.name
-                  ? "bg-primary/10 text-primary"
-                  : "hover:bg-muted text-foreground",
-              )}
-              onClick={() => onSelectNamespace(ns.name)}
-            >
-              <Folder
-                size={14}
-                className={
-                  selectedNamespace === ns.name
-                    ? "text-primary"
-                    : "text-yellow-500"
-                }
-              />
-              <span className="flex-1 text-sm truncate">{ns.displayName}</span>
-              <span className="text-xs text-muted-foreground">{ns.count}</span>
-            </div>
-          ))}
+          {repo.namespaces.map((ns) => {
+            const nsSelected = isNamespaceSelected(selection, ns.id);
+            return (
+              <div
+                key={ns.id}
+                className={cn(
+                  "group flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors",
+                  nsSelected
+                    ? "bg-primary/10 text-primary"
+                    : "hover:bg-muted text-foreground",
+                )}
+                onClick={() => onNamespaceClick(ns.id)}
+              >
+                <Folder
+                  size={14}
+                  className={nsSelected ? "text-primary" : "text-yellow-500"}
+                />
+                <span className="flex-1 text-sm truncate">{ns.displayName}</span>
+                <span className="text-xs text-muted-foreground">{ns.count}</span>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

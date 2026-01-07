@@ -802,6 +802,19 @@ For users upgrading from v2.x (Electron version):
 
 ## [Unreleased]
 
+### Added
+
+- **Skills Tree Repository Selection** - Enhanced Skills management page with hierarchical tree navigation
+  - Click repository nodes to view all skills in that repository
+  - Differentiated selection styling (deeper background + left border for repos)
+  - Namespace exclusive selection mode
+  - Grouped list display with Sticky Headers
+  - Global search auto-switches to "All" view
+  - Batch install functionality with progress tracking
+  - Infinite scroll pagination (50 items per page)
+  - Contextual empty states (all/repo/namespace/search)
+  - New files: `src/types/tree.ts`, `src/hooks/useBatchInstall.ts`, `src/components/skills/BatchInstallButton.tsx`, `src/components/skills/GroupedSkillsList.tsx`
+
 ### ⚠️ Breaking Changes
 
 - **Runtime auto-migration from v1 to v2 config format has been removed**

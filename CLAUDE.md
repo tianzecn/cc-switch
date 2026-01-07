@@ -117,6 +117,9 @@ Components (UI) ←→ Hooks (Business Logic) ←→ TanStack Query (Cache) ←�
 | `mcp/` | MCP server management and sync |
 | `proxy/` | Local proxy server for API requests |
 | `services/skill.rs` | GitHub skills repository management |
+| `services/command.rs` | Slash commands management (GitHub repos) |
+| `services/agent.rs` | Agents configuration management |
+| `services/hook.rs` | Hooks (event triggers) management |
 | `services/prompt.rs` | System prompt preset management |
 | `usage_script.rs` | Usage statistics script injection |
 
@@ -127,6 +130,9 @@ Components (UI) ←→ Hooks (Business Logic) ←→ TanStack Query (Cache) ←�
 | `components/providers/` | Provider management UI |
 | `components/mcp/` | MCP server panel |
 | `components/skills/` | Skills discovery and installation |
+| `components/commands/` | Slash commands management |
+| `components/agents/` | Agents configuration UI |
+| `components/hooks/` | Hooks (event triggers) management |
 | `components/prompts/` | Prompt preset editor |
 | `components/settings/` | App settings dialogs |
 
@@ -153,3 +159,60 @@ Components (UI) ←→ Hooks (Business Logic) ←→ TanStack Query (Cache) ←�
 - All database mutations go through DAO layer
 - Use `thiserror` for Rust error types
 - i18n keys in `src/i18n/locales/` (zh/en/ja)
+
+## 自动化文档维护规范
+
+本项目采用自动化文档系统，确保项目知识持续更新。以下文档需要在特定时机更新：
+
+### 文档职责
+
+| 文档 | 用途 | 更新时机 |
+|------|------|----------|
+| `docs/architecture.md` | 系统架构设计 | 架构变更时 |
+| `CHANGELOG.md` | 版本变更历史 | 功能完成/bug修复后 |
+| `docs/project-status.md` | 当前进度和续点 | 每次会话结束时 |
+| `CLAUDE.md` | 项目入口指南 | 重大架构变更时 |
+
+### 更新触发条件
+
+**自动更新场景**（AI 应主动执行）：
+
+1. **完成重要开发任务后**
+   - 更新 `CHANGELOG.md`（新功能/修复）
+   - 更新 `docs/project-status.md`（进度变化）
+   - 如涉及架构变更，更新 `docs/architecture.md`
+
+2. **OpenSpec archive 后**
+   - 自动更新 `CHANGELOG.md` 记录变更
+   - 更新 `docs/project-status.md` 标记完成
+
+3. **会话结束前**
+   - 确保 `docs/project-status.md` 反映当前状态
+   - 记录"下次继续"的建议
+
+4. **用户明确要求时**
+   - 按需更新指定文档
+
+5. **Git commit 前检查**
+   - 提交代码前，检查是否需要更新相关文档
+   - 如有功能变更，确保 `CHANGELOG.md` 已更新
+   - 如有重要进度，确保 `docs/project-status.md` 已更新
+
+### 格式规范
+
+**CHANGELOG.md** 遵循 [Keep a Changelog](https://keepachangelog.com/) 格式：
+- Added: 新功能
+- Changed: 功能变更
+- Fixed: Bug 修复
+- Removed: 移除的功能
+
+**project-status.md** 包含：
+- 近期完成的工作（带日期）
+- 进行中的工作（带状态）
+- 下次继续的建议
+- 技术债务追踪
+
+**architecture.md** 包含：
+- 系统架构图
+- 模块职责
+- 设计决策记录 (ADR)

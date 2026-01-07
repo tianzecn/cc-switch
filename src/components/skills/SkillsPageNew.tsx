@@ -3,6 +3,7 @@ import React, {
   useMemo,
   forwardRef,
   useImperativeHandle,
+  useCallback,
 } from "react";
 import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
@@ -18,7 +19,7 @@ import { Search, RefreshCw, Download, Compass, Sparkles, Loader2, Settings } fro
 import { toast } from "sonner";
 import { SkillNamespaceTree } from "./SkillNamespaceTree";
 import { SkillDiscoveryTree } from "./SkillDiscoveryTree";
-import { SkillsList } from "./SkillsList";
+import { GroupedSkillsList } from "./GroupedSkillsList";
 import { SkillDetailPanel } from "./SkillDetailPanel";
 import { SkillConflictPanel } from "./SkillConflictPanel";
 import { RepoManagerPanel } from "./RepoManagerPanel";
@@ -40,6 +41,10 @@ import {
 } from "@/hooks/useSkills";
 import type { DiscoverableSkill, SkillRepo } from "@/lib/api/skills";
 import { formatSkillError } from "@/lib/errors/skillErrorParser";
+import type { TreeSelection } from "@/types/tree";
+import { createAllSelection } from "@/types/tree";
+import { useBatchInstall } from "@/hooks/useBatchInstall";
+import { BatchInstallButton } from "./BatchInstallButton";
 
 /** 视图模式 */
 type ViewMode = "list" | "discovery" | "import";
@@ -67,8 +72,9 @@ export const SkillsPageNew = forwardRef<
 
   // 状态
   const [viewMode, setViewMode] = useState<ViewMode>("list");
-  const [selectedNamespace, setSelectedNamespace] = useState<string | null>(
-    null,
+  // 列表模式：树选中状态
+  const [listSelection, setListSelection] = useState<TreeSelection>(
+    createAllSelection(),
   );
   const [selectedSkill, setSelectedSkill] = useState<InstalledSkill | null>(
     null,
@@ -80,8 +86,8 @@ export const SkillsPageNew = forwardRef<
   const [repoManagerOpen, setRepoManagerOpen] = useState(false);
 
   // 发现模式状态
-  const [discoverySelectedNs, setDiscoverySelectedNs] = useState<string | null>(
-    null,
+  const [discoverySelection, setDiscoverySelection] = useState<TreeSelection>(
+    createAllSelection(),
   );
   const [discoveryNsSkills, setDiscoveryNsSkills] = useState<
     DiscoverableSkill[]
@@ -124,6 +130,13 @@ export const SkillsPageNew = forwardRef<
   const addRepoMutation = useAddSkillRepo();
   const removeRepoMutation = useRemoveSkillRepo();
 
+  // 批量安装 Hook
+  const {
+    state: batchInstallState,
+    startBatchInstall,
+    cancelInstall: cancelBatchInstall,
+  } = useBatchInstall();
+
   // 统计数据
   const stats = useMemo(() => {
     const counts = { total: 0, claude: 0, codex: 0, gemini: 0 };
@@ -141,14 +154,32 @@ export const SkillsPageNew = forwardRef<
     return new Set(installedSkills.map((s) => s.directory.toLowerCase()));
   }, [installedSkills]);
 
-  // 按命名空间和搜索过滤 Skills
+  // 根据 TreeSelection 计算仓库 key
+  const getRepoKey = useCallback((skill: InstalledSkill): string => {
+    return skill.repoOwner && skill.repoName
+      ? `${skill.repoOwner}/${skill.repoName}`
+      : "local";
+  }, []);
+
+  // 根据 TreeSelection 计算命名空间 ID
+  const getNamespaceId = useCallback((skill: InstalledSkill): string => {
+    const repoKey = getRepoKey(skill);
+    return `${repoKey}/${skill.namespace || ""}`;
+  }, [getRepoKey]);
+
+  // 按树选中状态和搜索过滤 Skills
   const filteredSkills = useMemo(() => {
     let result = installedSkills;
 
-    // 按命名空间过滤
-    if (selectedNamespace !== null) {
-      result = result.filter((s) => s.namespace === selectedNamespace);
+    // 按树选中状态过滤
+    if (listSelection.type === "repo" && listSelection.repoId) {
+      // 选中仓库：显示该仓库下所有 Skills
+      result = result.filter((s) => getRepoKey(s) === listSelection.repoId);
+    } else if (listSelection.type === "namespace" && listSelection.namespaceId) {
+      // 选中命名空间：显示该命名空间下的 Skills
+      result = result.filter((s) => getNamespaceId(s) === listSelection.namespaceId);
     }
+    // type === "all" 时不过滤
 
     // 按搜索词过滤
     if (searchQuery.trim()) {
@@ -162,7 +193,7 @@ export const SkillsPageNew = forwardRef<
     }
 
     return result;
-  }, [installedSkills, selectedNamespace, searchQuery]);
+  }, [installedSkills, listSelection, searchQuery, getRepoKey, getNamespaceId]);
 
   // 发现模式的 Skills 列表
   const discoverySkills = useMemo(() => {
@@ -199,10 +230,10 @@ export const SkillsPageNew = forwardRef<
     return result;
   }, [discoverableSkills, viewMode, filterStatus, searchQuery, installedDirs]);
 
-  // 发现模式按命名空间过滤后的列表
+  // 发现模式按树选中状态过滤后的列表
   const filteredDiscoverySkills = useMemo(() => {
-    // 如果选中了特定命名空间，显示该命名空间下的技能
-    if (discoverySelectedNs !== null && discoveryNsSkills.length > 0) {
+    // 如果选中了特定仓库或命名空间，显示对应技能
+    if (discoverySelection.type !== "all" && discoveryNsSkills.length > 0) {
       // 将命名空间下的技能与已安装状态合并
       return discoveryNsSkills.map((d) => {
         const installName =
@@ -216,7 +247,28 @@ export const SkillsPageNew = forwardRef<
     }
     // 否则显示全部
     return discoverySkills;
-  }, [discoverySelectedNs, discoveryNsSkills, discoverySkills, installedDirs]);
+  }, [discoverySelection, discoveryNsSkills, discoverySkills, installedDirs]);
+
+  // 计算空状态类型
+  const emptyStateType = useMemo((): "all" | "repo" | "namespace" | "search" => {
+    if (searchQuery.trim()) return "search";
+    if (listSelection.type === "namespace") return "namespace";
+    if (listSelection.type === "repo") return "repo";
+    return "all";
+  }, [searchQuery, listSelection]);
+
+  // 搜索处理：输入时自动切换到"全部"视图
+  const handleSearchChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value;
+      setSearchQuery(value);
+      // 输入搜索词时自动切换到"全部"视图
+      if (value.trim() && listSelection.type !== "all") {
+        setListSelection(createAllSelection());
+      }
+    },
+    [listSelection],
+  );
 
   // Handlers
   const handleRefresh = () => {
@@ -357,6 +409,17 @@ export const SkillsPageNew = forwardRef<
     }
   };
 
+  // 批量安装处理函数
+  const handleBatchInstall = useCallback(() => {
+    // 获取当前显示的技能列表（去除已安装标记的原始数据）
+    const skillsToInstall = filteredDiscoverySkills.map((s) => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { installed, ...skill } = s;
+      return skill as DiscoverableSkill;
+    });
+    startBatchInstall(skillsToInstall, installedDirs, initialApp);
+  }, [filteredDiscoverySkills, installedDirs, initialApp, startBatchInstall]);
+
   const loading =
     loadingInstalled ||
     (viewMode === "discovery" && (loadingDiscoverable || fetchingDiscoverable));
@@ -420,7 +483,7 @@ export const SkillsPageNew = forwardRef<
             <Input
               placeholder={t("skills.searchPlaceholder", "Search skills...")}
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={handleSearchChange}
               className="pl-9"
             />
           </div>
@@ -472,15 +535,15 @@ export const SkillsPageNew = forwardRef<
           {viewMode === "list" ? (
             <SkillNamespaceTree
               skills={installedSkills}
-              selectedNamespace={selectedNamespace}
-              onSelectNamespace={setSelectedNamespace}
+              selection={listSelection}
+              onSelectionChange={setListSelection}
             />
           ) : viewMode === "discovery" ? (
             <SkillDiscoveryTree
               skills={discoverableSkills}
-              selectedNamespace={discoverySelectedNs}
-              onSelectNamespace={(nsId, skills) => {
-                setDiscoverySelectedNs(nsId);
+              selection={discoverySelection}
+              onSelectionChange={(selection, skills) => {
+                setDiscoverySelection(selection);
                 setDiscoveryNsSkills(skills);
               }}
               expandedNodes={discoveryExpandedNodes}
@@ -502,13 +565,15 @@ export const SkillsPageNew = forwardRef<
         {/* Middle - Skills List */}
         <div className="flex-1 overflow-y-auto">
           {viewMode === "list" ? (
-            <SkillsList
+            <GroupedSkillsList
               skills={filteredSkills}
+              selection={listSelection}
               selectedSkillId={selectedSkill?.id ?? null}
               onSelectSkill={setSelectedSkill}
               onToggleApp={handleToggleApp}
               onUninstall={handleUninstall}
               isLoading={loadingInstalled}
+              emptyStateType={emptyStateType}
             />
           ) : viewMode === "discovery" ? (
             <DiscoveryList
@@ -516,6 +581,9 @@ export const SkillsPageNew = forwardRef<
               onInstall={handleInstall}
               isLoading={loading}
               installingKey={installingKey}
+              batchState={batchInstallState}
+              onBatchInstall={handleBatchInstall}
+              onCancelBatch={cancelBatchInstall}
             />
           ) : null}
         </div>
@@ -573,6 +641,10 @@ interface DiscoveryListProps {
   onInstall: (skill: DiscoverableSkill) => void;
   isLoading: boolean;
   installingKey: string | null;
+  /** 批量安装相关 */
+  batchState?: import("@/hooks/useBatchInstall").BatchInstallState;
+  onBatchInstall?: () => void;
+  onCancelBatch?: () => void;
 }
 
 const DiscoveryList: React.FC<DiscoveryListProps> = ({
@@ -580,8 +652,14 @@ const DiscoveryList: React.FC<DiscoveryListProps> = ({
   onInstall,
   isLoading,
   installingKey,
+  batchState,
+  onBatchInstall,
+  onCancelBatch,
 }) => {
   const { t } = useTranslation();
+
+  // 计算未安装数量
+  const uninstalledCount = skills.filter((s) => !s.installed).length;
 
   if (isLoading) {
     return (
@@ -606,15 +684,29 @@ const DiscoveryList: React.FC<DiscoveryListProps> = ({
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {skills.map((skill) => (
-        <DiscoveryCard
-          key={skill.key}
-          skill={skill}
-          onInstall={() => onInstall(skill)}
-          isInstalling={installingKey === skill.key}
+    <div className="space-y-4">
+      {/* 批量安装按钮/进度 */}
+      {batchState && onBatchInstall && onCancelBatch && (
+        <BatchInstallButton
+          uninstalledCount={uninstalledCount}
+          state={batchState}
+          onStartInstall={onBatchInstall}
+          onCancelInstall={onCancelBatch}
+          disabled={batchState.isInstalling}
         />
-      ))}
+      )}
+
+      {/* Skills 列表 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {skills.map((skill) => (
+          <DiscoveryCard
+            key={skill.key}
+            skill={skill}
+            onInstall={() => onInstall(skill)}
+            isInstalling={installingKey === skill.key || Boolean(batchState?.isInstalling && batchState?.currentName === skill.name)}
+          />
+        ))}
+      </div>
     </div>
   );
 };
