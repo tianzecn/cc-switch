@@ -127,27 +127,36 @@ function buildTree(commands: DiscoverableCommand[]): RepoNode[] {
 
 // ========== 组件 Props ==========
 
+/** 选择类型 */
+export type DiscoverySelectionType = "all" | "repo" | "namespace";
+
+/** 选择状态 */
+export interface DiscoverySelection {
+  type: DiscoverySelectionType;
+  id: string | null;
+  commands: DiscoverableCommand[];
+}
+
 interface CommandDiscoveryTreeProps {
   commands: DiscoverableCommand[];
-  /** 选中的命名空间 ID（格式: owner/repo/namespace） */
-  selectedNamespace: string | null;
-  /** 命名空间被选中时的回调 */
-  onSelectNamespace: (
-    namespaceId: string,
-    commands: DiscoverableCommand[],
-  ) => void;
+  /** 当前选择状态 */
+  selection: DiscoverySelection;
+  /** 选择变化回调 */
+  onSelectionChange: (selection: DiscoverySelection) => void;
   expandedNodes?: Set<string>;
   onToggleNode?: (nodeId: string) => void;
 }
 
 /**
  * 命令发现树组件
- * 以 repo → namespace 的层级结构展示，点击命名空间在右侧显示命令列表
+ * 以 repo → namespace 的层级结构展示
+ * 点击仓库：展开 + 显示该仓库下所有命令
+ * 点击命名空间：显示该命名空间下的命令
  */
 export const CommandDiscoveryTree: React.FC<CommandDiscoveryTreeProps> = ({
   commands,
-  selectedNamespace,
-  onSelectNamespace,
+  selection,
+  onSelectionChange,
   expandedNodes: controlledExpanded,
   onToggleNode: controlledToggle,
 }) => {
@@ -176,10 +185,29 @@ export const CommandDiscoveryTree: React.FC<CommandDiscoveryTreeProps> = ({
   // 构建树结构
   const tree = useMemo(() => buildTree(commands), [commands]);
 
+  // 处理仓库选中（点击仓库 = 展开 + 选中）
+  const handleSelectRepo = (node: RepoNode) => {
+    // 展开仓库
+    if (!expanded.has(node.id)) {
+      toggleNode(node.id);
+    }
+    // 获取仓库下所有命令
+    const cmds = node.children.flatMap((ns) => ns.children.map((c) => c.command));
+    onSelectionChange({
+      type: "repo",
+      id: node.id,
+      commands: cmds,
+    });
+  };
+
   // 处理命名空间选中
   const handleSelectNamespace = (node: NamespaceNode) => {
     const cmds = node.children.map((c) => c.command);
-    onSelectNamespace(node.id, cmds);
+    onSelectionChange({
+      type: "namespace",
+      id: node.id,
+      commands: cmds,
+    });
   };
 
   if (tree.length === 0) {
@@ -197,8 +225,8 @@ export const CommandDiscoveryTree: React.FC<CommandDiscoveryTreeProps> = ({
           key={repo.id}
           node={repo}
           expanded={expanded}
-          toggleNode={toggleNode}
-          selectedNamespace={selectedNamespace}
+          selection={selection}
+          onSelectRepo={handleSelectRepo}
           onSelectNamespace={handleSelectNamespace}
         />
       ))}
@@ -211,26 +239,32 @@ export const CommandDiscoveryTree: React.FC<CommandDiscoveryTreeProps> = ({
 interface RepoTreeNodeProps {
   node: RepoNode;
   expanded: Set<string>;
-  toggleNode: (nodeId: string) => void;
-  selectedNamespace: string | null;
+  selection: DiscoverySelection;
+  onSelectRepo: (node: RepoNode) => void;
   onSelectNamespace: (node: NamespaceNode) => void;
 }
 
 const RepoTreeNode: React.FC<RepoTreeNodeProps> = ({
   node,
   expanded,
-  toggleNode,
-  selectedNamespace,
+  selection,
+  onSelectRepo,
   onSelectNamespace,
 }) => {
   const isExpanded = expanded.has(node.id);
+  const isRepoSelected = selection.type === "repo" && selection.id === node.id;
 
   return (
     <div>
-      {/* Repo Header */}
+      {/* Repo Header - 点击选中仓库并展开 */}
       <div
-        className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-muted transition-colors"
-        onClick={() => toggleNode(node.id)}
+        className={cn(
+          "flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors",
+          isRepoSelected
+            ? "bg-primary/15 border-l-2 border-primary"
+            : "hover:bg-muted",
+        )}
+        onClick={() => onSelectRepo(node)}
       >
         {isExpanded ? (
           <ChevronDown size={14} className="text-muted-foreground" />
@@ -238,7 +272,14 @@ const RepoTreeNode: React.FC<RepoTreeNodeProps> = ({
           <ChevronRight size={14} className="text-muted-foreground" />
         )}
         <GitBranch size={14} className="text-blue-500" />
-        <span className="flex-1 text-sm font-medium truncate">{node.name}</span>
+        <span
+          className={cn(
+            "flex-1 text-sm font-medium truncate",
+            isRepoSelected && "text-primary",
+          )}
+        >
+          {node.name}
+        </span>
         <span className="text-xs text-muted-foreground">{node.count}</span>
       </div>
 
@@ -249,7 +290,7 @@ const RepoTreeNode: React.FC<RepoTreeNodeProps> = ({
             <NamespaceTreeNode
               key={ns.id}
               node={ns}
-              isSelected={selectedNamespace === ns.id}
+              isSelected={selection.type === "namespace" && selection.id === ns.id}
               onSelect={() => onSelectNamespace(ns)}
             />
           ))}

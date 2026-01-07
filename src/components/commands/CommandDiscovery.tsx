@@ -31,9 +31,14 @@ import {
   type DiscoverableCommand,
   type CommandRepo,
 } from "@/hooks/useCommands";
+import { useBatchInstallCommands } from "@/hooks/useBatchInstallCommands";
 import { toast } from "sonner";
 import { CommandRepoManager } from "./CommandRepoManager";
-import { CommandDiscoveryTree } from "./CommandDiscoveryTree";
+import {
+  CommandDiscoveryTree,
+  type DiscoverySelection,
+} from "./CommandDiscoveryTree";
+import { BatchInstallCommandsButton } from "./BatchInstallCommandsButton";
 
 interface CommandDiscoveryProps {
   onBack: () => void;
@@ -52,13 +57,12 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [showRepoManager, setShowRepoManager] = useState(false);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
-  // 选中的命名空间及其命令列表
-  const [selectedNamespace, setSelectedNamespace] = useState<string | null>(
-    null,
-  );
-  const [namespaceCommands, setNamespaceCommands] = useState<
-    DiscoverableCommand[]
-  >([]);
+  // 选中状态（支持仓库和命名空间选择）
+  const [selection, setSelection] = useState<DiscoverySelection>({
+    type: "all",
+    id: null,
+    commands: [],
+  });
 
   // Queries
   const { data: discoverableCommands, isLoading } = useDiscoverableCommands();
@@ -68,6 +72,9 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
   const addRepoMutation = useAddCommandRepo();
   const removeRepoMutation = useRemoveCommandRepo();
   const refreshMutation = useRefreshDiscoverableCommands();
+
+  // Batch install
+  const batchInstall = useBatchInstallCommands();
 
   // 已安装的命令 ID 集合
   const installedIds = useMemo(() => {
@@ -107,6 +114,33 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
       return true;
     });
   }, [discoverableCommands, searchQuery, categoryFilter]);
+
+  // 当前显示的命令列表（根据选择状态）
+  const displayedCommands = useMemo(() => {
+    // 如果有选择（仓库或命名空间），使用选择的命令
+    if (selection.type !== "all" && selection.commands.length > 0) {
+      return selection.commands;
+    }
+    // 否则返回空（需要用户选择仓库或命名空间）
+    return [];
+  }, [selection]);
+
+  // 计算未安装命令数量（基于当前显示的命令）
+  const uninstalledCount = useMemo(() => {
+    if (displayedCommands.length === 0) return 0;
+    return displayedCommands.filter((cmd) => {
+      const id = cmd.namespace
+        ? `${cmd.namespace}/${cmd.filename}`
+        : cmd.filename;
+      return !installedIds.has(id);
+    }).length;
+  }, [displayedCommands, installedIds]);
+
+  // 批量安装处理（只安装当前显示的未安装命令）
+  const handleBatchInstall = () => {
+    if (displayedCommands.length === 0) return;
+    batchInstall.startBatchInstall(displayedCommands, installedIds);
+  };
 
   const handleInstall = async (command: DiscoverableCommand) => {
     try {
@@ -156,15 +190,6 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
       }
       return next;
     });
-  };
-
-  // 命名空间选择处理
-  const handleSelectNamespace = (
-    namespaceId: string,
-    commands: DiscoverableCommand[],
-  ) => {
-    setSelectedNamespace(namespaceId);
-    setNamespaceCommands(commands);
   };
 
   // 检查命令是否已安装
@@ -242,12 +267,18 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
         </Select>
       </div>
 
-      {/* Stats */}
-      <div className="flex-shrink-0 py-3 glass rounded-xl border border-white/10 mb-4 px-6">
+      {/* Stats + Batch Install */}
+      <div className="flex-shrink-0 py-3 glass rounded-xl border border-white/10 mb-4 px-6 flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
           {t("commands.available", { count: filteredCommands.length })} ·{" "}
           {t("commands.installedCount", { count: installedIds.size })}
         </div>
+        <BatchInstallCommandsButton
+          uninstalledCount={uninstalledCount}
+          state={batchInstall.state}
+          onStartInstall={handleBatchInstall}
+          onCancelInstall={batchInstall.cancelInstall}
+        />
       </div>
 
       {/* Main Content - 双栏布局 */}
@@ -268,8 +299,8 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
             ) : (
               <CommandDiscoveryTree
                 commands={filteredCommands}
-                selectedNamespace={selectedNamespace}
-                onSelectNamespace={handleSelectNamespace}
+                selection={selection}
+                onSelectionChange={setSelection}
                 expandedNodes={expandedNodes}
                 onToggleNode={handleToggleNode}
               />
@@ -279,19 +310,21 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
 
         {/* Right Panel - Command List */}
         <div className="flex-1 rounded-xl border border-border bg-muted/30 overflow-hidden flex flex-col">
-          {selectedNamespace ? (
+          {displayedCommands.length > 0 ? (
             <>
               <div className="flex-shrink-0 px-4 py-3 border-b border-border/50">
                 <h3 className="text-sm font-medium text-foreground">
-                  {selectedNamespace.split("/").slice(-1)[0]}
+                  {selection.type === "repo"
+                    ? selection.id
+                    : selection.id?.split("/").slice(-1)[0]}
                 </h3>
                 <p className="text-xs text-muted-foreground">
-                  {namespaceCommands.length} {t("commands.title").toLowerCase()}
+                  {displayedCommands.length} {t("commands.title").toLowerCase()}
                 </p>
               </div>
               <div className="flex-1 overflow-y-auto p-2">
                 <div className="space-y-2">
-                  {namespaceCommands.map((cmd) => (
+                  {displayedCommands.map((cmd) => (
                     <CommandListItem
                       key={cmd.key}
                       command={cmd}

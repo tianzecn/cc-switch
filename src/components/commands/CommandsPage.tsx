@@ -1,48 +1,77 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Terminal, Download, RefreshCw, FileUp } from "lucide-react";
+import { Terminal, Download, RefreshCw, FileUp, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   useInstalledCommands,
   useCommandNamespaces,
   useRefreshFromSsot,
+  useToggleCommandApp,
+  useUninstallCommand,
+  useOpenCommandInEditor,
+  useAppCommandsSupport,
+  type InstalledCommand,
+  type AppType,
 } from "@/hooks/useCommands";
-import { NamespaceTree } from "./NamespaceTree";
-import { CommandsList } from "./CommandsList";
+import { CommandNamespaceTree } from "./CommandNamespaceTree";
+import { GroupedCommandsList } from "./GroupedCommandsList";
+import { CommandDetailPanel } from "./CommandDetailPanel";
 import { CommandDiscovery } from "./CommandDiscovery";
 import { CommandImport } from "./CommandImport";
 import { ConflictDetectionPanel } from "./ConflictDetectionPanel";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { toast } from "sonner";
+import type { TreeSelection } from "@/types/tree";
+import { createAllSelection } from "@/types/tree";
 
 type ViewMode = "list" | "discovery" | "import";
 
 /**
  * Commands 管理主页面
- * v3.11.0 统一管理架构：双栏布局 + 三应用开关
+ * v3.11.0+ 统一管理架构：树形导航 + 分组列表
  */
 export const CommandsPage: React.FC = () => {
   const { t } = useTranslation();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
-  const [selectedNamespace, setSelectedNamespace] = useState<string | null>(
-    null,
+  // 树选中状态（使用 TreeSelection 类型）
+  const [listSelection, setListSelection] = useState<TreeSelection>(
+    createAllSelection(),
   );
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCommand, setSelectedCommand] = useState<InstalledCommand | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   // Queries
-  const { data: commands, isLoading } = useInstalledCommands();
-  const { data: namespaces } = useCommandNamespaces();
+  const { data: commands = [], isLoading } = useInstalledCommands();
+  const { data: namespaces = [] } = useCommandNamespaces();
   const refreshMutation = useRefreshFromSsot();
+  const toggleAppMutation = useToggleCommandApp();
+  const uninstallMutation = useUninstallCommand();
+  const openEditorMutation = useOpenCommandInEditor();
 
-  // 按命名空间筛选命令
-  const filteredCommands = useMemo(() => {
-    if (!commands) return [];
-    if (selectedNamespace === null) return commands;
-    return commands.filter((cmd) => cmd.namespace === selectedNamespace);
-  }, [commands, selectedNamespace]);
+  // 检查各应用的 Commands 支持状态
+  const { data: claudeSupported = true } = useAppCommandsSupport("claude");
+  const { data: codexSupported = false } = useAppCommandsSupport("codex");
+  const { data: geminiSupported = false } = useAppCommandsSupport("gemini");
+
+  const appSupport = useMemo(
+    () => ({
+      claude: claudeSupported,
+      codex: codexSupported,
+      gemini: geminiSupported,
+    }),
+    [claudeSupported, codexSupported, geminiSupported],
+  );
 
   // 统计各应用启用数量
   const enabledCounts = useMemo(() => {
     const counts = { claude: 0, codex: 0, gemini: 0, total: 0 };
-    if (!commands) return counts;
     counts.total = commands.length;
     commands.forEach((cmd) => {
       if (cmd.apps.claude) counts.claude++;
@@ -52,12 +81,120 @@ export const CommandsPage: React.FC = () => {
     return counts;
   }, [commands]);
 
+  // 根据 TreeSelection 计算仓库 key
+  const getRepoKey = useCallback((cmd: InstalledCommand): string => {
+    return cmd.repoOwner && cmd.repoName
+      ? `${cmd.repoOwner}/${cmd.repoName}`
+      : "local";
+  }, []);
+
+  // 根据 TreeSelection 计算命名空间 ID
+  const getNamespaceId = useCallback(
+    (cmd: InstalledCommand): string => {
+      const repoKey = getRepoKey(cmd);
+      return `${repoKey}/${cmd.namespace || ""}`;
+    },
+    [getRepoKey],
+  );
+
+  // 按树选中状态和搜索过滤 Commands
+  const filteredCommands = useMemo(() => {
+    let result = commands;
+
+    // 按树选中状态过滤
+    if (listSelection.type === "repo" && listSelection.repoId) {
+      result = result.filter((c) => getRepoKey(c) === listSelection.repoId);
+    } else if (listSelection.type === "namespace" && listSelection.namespaceId) {
+      result = result.filter((c) => getNamespaceId(c) === listSelection.namespaceId);
+    }
+    // type === "all" 时不过滤
+
+    // 按搜索词过滤
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(
+        (c) =>
+          c.name.toLowerCase().includes(query) ||
+          c.id.toLowerCase().includes(query) ||
+          (c.description?.toLowerCase().includes(query) ?? false),
+      );
+    }
+
+    return result;
+  }, [commands, listSelection, searchQuery, getRepoKey, getNamespaceId]);
+
+  // 计算空状态类型
+  const emptyStateType = useMemo((): "all" | "repo" | "namespace" | "search" => {
+    if (searchQuery.trim()) return "search";
+    if (listSelection.type === "namespace") return "namespace";
+    if (listSelection.type === "repo") return "repo";
+    return "all";
+  }, [searchQuery, listSelection]);
+
+  // 搜索处理：输入时自动切换到"全部"视图
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      setSearchQuery(value);
+      if (value.trim() && listSelection.type !== "all") {
+        setListSelection(createAllSelection());
+      }
+    },
+    [listSelection],
+  );
+
   const handleRefresh = async () => {
     try {
       const count = await refreshMutation.mutateAsync();
       toast.success(t("commands.refreshSuccess", { count }), {
         closeButton: true,
       });
+    } catch (error) {
+      toast.error(t("common.error"), {
+        description: String(error),
+      });
+    }
+  };
+
+  const handleToggleApp = async (id: string, app: AppType, enabled: boolean) => {
+    try {
+      await toggleAppMutation.mutateAsync({ id, app, enabled });
+    } catch (error) {
+      toast.error(t("common.error"), {
+        description: String(error),
+      });
+    }
+  };
+
+  const handleUninstall = (commandId: string) => {
+    const command = commands.find((c) => c.id === commandId);
+    if (!command) return;
+
+    setConfirmDialog({
+      isOpen: true,
+      title: t("commands.uninstall"),
+      message: t("commands.uninstallConfirm", { name: command.name }),
+      onConfirm: async () => {
+        try {
+          await uninstallMutation.mutateAsync(commandId);
+          setConfirmDialog(null);
+          if (selectedCommand?.id === commandId) {
+            setSelectedCommand(null);
+          }
+          toast.success(t("commands.uninstallSuccess", { name: command.name }), {
+            closeButton: true,
+          });
+        } catch (error) {
+          toast.error(t("common.error"), {
+            description: String(error),
+          });
+        }
+      },
+    });
+  };
+
+  const handleOpenEditor = async (commandId: string) => {
+    try {
+      await openEditorMutation.mutateAsync(commandId);
     } catch (error) {
       toast.error(t("common.error"), {
         description: String(error),
@@ -92,6 +229,21 @@ export const CommandsPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* 搜索框 */}
+          <div className="relative">
+            <Search
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              type="text"
+              placeholder={t("commands.searchPlaceholder", "Search commands...")}
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              className="pl-9 w-48"
+            />
+          </div>
+
           <Button
             variant="outline"
             size="sm"
@@ -136,27 +288,56 @@ export const CommandsPage: React.FC = () => {
       {/* Conflict Detection Panel */}
       <ConflictDetectionPanel className="flex-shrink-0 mb-4" />
 
-      {/* Main Content - Two Column Layout */}
+      {/* Main Content - Three Column Layout */}
       <div className="flex-1 flex gap-4 overflow-hidden pb-8">
         {/* Left Sidebar - Namespace Tree */}
         <div className="w-64 flex-shrink-0 flex flex-col overflow-hidden">
-          <NamespaceTree
-            namespaces={namespaces || []}
+          <CommandNamespaceTree
             commands={commands}
-            selectedNamespace={selectedNamespace}
-            onSelectNamespace={setSelectedNamespace}
+            namespaces={namespaces}
+            selection={listSelection}
+            onSelectionChange={setListSelection}
           />
         </div>
 
-        {/* Right Content - Commands List */}
-        <div className="flex-1 overflow-hidden">
-          <CommandsList
+        {/* Middle - Commands List */}
+        <div className="flex-1 overflow-y-auto">
+          <GroupedCommandsList
             commands={filteredCommands}
+            selection={listSelection}
+            selectedCommandId={selectedCommand?.id ?? null}
+            onSelectCommand={setSelectedCommand}
+            onToggleApp={handleToggleApp}
+            onUninstall={handleUninstall}
+            onOpenEditor={handleOpenEditor}
+            appSupport={appSupport}
             isLoading={isLoading}
-            selectedNamespace={selectedNamespace}
+            emptyStateType={emptyStateType}
           />
         </div>
+
+        {/* Right Sidebar - Detail Panel */}
+        {selectedCommand && (
+          <div className="w-80 flex-shrink-0">
+            <CommandDetailPanel
+              command={selectedCommand}
+              onClose={() => setSelectedCommand(null)}
+              onOpenEditor={() => handleOpenEditor(selectedCommand.id)}
+            />
+          </div>
+        )}
       </div>
+
+      {/* Confirm Dialog */}
+      {confirmDialog && (
+        <ConfirmDialog
+          isOpen={confirmDialog.isOpen}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(null)}
+        />
+      )}
     </div>
   );
 };
