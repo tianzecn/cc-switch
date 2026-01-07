@@ -75,8 +75,31 @@ export const AgentsPage: React.FC = () => {
         return agentRepoId === repoId;
       });
     } else if (selection.type === "namespace" && selection.namespaceId) {
-      const [repoId, ...nsParts] = selection.namespaceId.split("/");
-      const namespace = nsParts.join("/");
+      // namespaceId 格式: "owner/repo/namespace" 或 "local/namespace"
+      // 需要正确分割 repoId 和 namespace
+      const namespaceId = selection.namespaceId;
+      let repoId: string;
+      let namespace: string;
+
+      if (namespaceId.startsWith("local/")) {
+        // 本地仓库: "local/namespace"
+        repoId = "local";
+        namespace = namespaceId.slice(6); // 去掉 "local/"
+      } else {
+        // 远程仓库: "owner/repo/namespace"
+        // 找到第二个 "/" 的位置来分割
+        const firstSlash = namespaceId.indexOf("/");
+        const secondSlash = namespaceId.indexOf("/", firstSlash + 1);
+        if (secondSlash !== -1) {
+          repoId = namespaceId.slice(0, secondSlash);
+          namespace = namespaceId.slice(secondSlash + 1);
+        } else {
+          // 没有命名空间的情况: "owner/repo"
+          repoId = namespaceId;
+          namespace = "";
+        }
+      }
+
       result = result.filter((agent) => {
         const agentRepoId =
           agent.repoOwner && agent.repoName
