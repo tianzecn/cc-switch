@@ -804,6 +804,13 @@ For users upgrading from v2.x (Electron version):
 
 ### Added
 
+- **Update Detection UX Improvements** - Enhanced update checking experience across all resource types
+  - Added `gcTime: Infinity` to all update detection query hooks to persist cache across page switches
+  - Added toast notification showing "Checking X resources for updates..." when initiating update check
+  - Discovery mode now displays `UpdateBadge` for installed resources with available updates
+  - Affected pages: Skills, Commands, Agents discovery modes
+  - New i18n key: `updates.checkingRange`
+
 - **Commands/Agents Update Installation** - Extended resource update functionality to Commands and Agents
   - Backend update commands: `update_command`, `update_commands_batch`, `update_agent`, `update_agents_batch`
   - Hash fix utilities: `fix_commands_hash`, `fix_agents_hash` for resources installed before update tracking

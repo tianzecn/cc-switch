@@ -25,6 +25,12 @@ import {
   type CommandRepo,
 } from "@/hooks/useAgents";
 import { useBatchInstallAgents } from "@/hooks/useBatchInstallAgents";
+import {
+  useCheckAgentsUpdates,
+  getResourceUpdateStatus,
+  type UpdateCheckResult,
+} from "@/hooks/useResourceUpdates";
+import { UpdateBadge } from "@/components/updates";
 import { toast } from "sonner";
 import { CommandRepoManager } from "@/components/commands/CommandRepoManager";
 import { AgentDiscoveryTree, type DiscoverySelection } from "./AgentDiscoveryTree";
@@ -59,6 +65,7 @@ export const AgentDiscovery: React.FC<AgentDiscoveryProps> = ({ onBack }) => {
   const addRepoMutation = useAddAgentRepo();
   const removeRepoMutation = useRemoveAgentRepo();
   const refreshMutation = useRefreshDiscoverableAgents();
+  const { data: updateCheckResult } = useCheckAgentsUpdates(); // 读取缓存的更新检测结果
 
   // Batch install
   const batchInstall = useBatchInstallAgents();
@@ -166,6 +173,15 @@ export const AgentDiscovery: React.FC<AgentDiscoveryProps> = ({ onBack }) => {
       ? `${agent.namespace}/${agent.filename}`
       : agent.filename;
     return installedIds.has(id);
+  };
+
+  // 获取 agent 的更新状态
+  const getAgentUpdateStatus = (agent: DiscoverableAgent): UpdateCheckResult | undefined => {
+    if (!updateCheckResult) return undefined;
+    const id = agent.namespace
+      ? `${agent.namespace}/${agent.filename}`
+      : agent.filename;
+    return getResourceUpdateStatus(updateCheckResult, id);
   };
 
   return (
@@ -284,6 +300,7 @@ export const AgentDiscovery: React.FC<AgentDiscoveryProps> = ({ onBack }) => {
                       key={agent.key}
                       agent={agent}
                       isInstalled={isAgentInstalled(agent)}
+                      updateStatus={getAgentUpdateStatus(agent)}
                       isInstalling={
                         installMutation.isPending &&
                         installMutation.variables?.agent.key === agent.key
@@ -323,6 +340,7 @@ export const AgentDiscovery: React.FC<AgentDiscoveryProps> = ({ onBack }) => {
 interface AgentListItemProps {
   agent: DiscoverableAgent;
   isInstalled: boolean;
+  updateStatus?: UpdateCheckResult;
   isInstalling: boolean;
   onInstall: () => void;
 }
@@ -330,6 +348,7 @@ interface AgentListItemProps {
 const AgentListItem: React.FC<AgentListItemProps> = ({
   agent,
   isInstalled,
+  updateStatus,
   isInstalling,
   onInstall,
 }) => {
@@ -342,6 +361,9 @@ const AgentListItem: React.FC<AgentListItemProps> = ({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className="font-medium text-sm">{agent.name}</span>
+            {isInstalled && updateStatus && (
+              <UpdateBadge status={updateStatus} size="sm" />
+            )}
           </div>
           <p className="text-xs text-muted-foreground mb-2">
             {agent.description}

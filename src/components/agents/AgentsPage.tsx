@@ -190,6 +190,15 @@ export const AgentsPage: React.FC = () => {
   const handleCheckUpdates = useCallback(async () => {
     setUpdatesDismissed(false);
     try {
+      const agentCount = agents?.length ?? 0;
+      if (agentCount === 0) {
+        toast.info(t("updates.noSkillsToCheck"));
+        return;
+      }
+
+      // 显示检查范围提示
+      toast.info(t("updates.checkingRange", { count: agentCount }));
+
       const result = await checkUpdates();
       if (result.data?.updateCount === 0) {
         toast.success(t("updates.noUpdates"));
@@ -199,7 +208,7 @@ export const AgentsPage: React.FC = () => {
         description: String(error),
       });
     }
-  }, [checkUpdates, t]);
+  }, [checkUpdates, agents?.length, t]);
 
   const handleUpdateAll = useCallback(async () => {
     if (updatableIds.length === 0) return;

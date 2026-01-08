@@ -23,6 +23,7 @@ export function useCheckSkillsUpdates() {
     queryFn: () => updateApi.checkSkillsUpdates(),
     enabled: false, // 手动触发
     staleTime: 0, // 不缓存，每次都重新请求
+    gcTime: Infinity, // 永久保留缓存，直到手动清除
   });
 }
 
@@ -50,6 +51,7 @@ export function useCheckSkillUpdate(skillId: string, enabled = false) {
     queryFn: () => updateApi.checkSkillUpdate(skillId),
     enabled,
     staleTime: 0,
+    gcTime: Infinity, // 永久保留缓存，直到手动清除
   });
 }
 
@@ -62,6 +64,7 @@ export function useCheckCommandsUpdates() {
     queryFn: () => updateApi.checkCommandsUpdates(),
     enabled: false,
     staleTime: 0,
+    gcTime: Infinity, // 永久保留缓存，直到手动清除
   });
 }
 
@@ -74,6 +77,7 @@ export function useCheckHooksUpdates() {
     queryFn: () => updateApi.checkHooksUpdates(),
     enabled: false,
     staleTime: 0,
+    gcTime: Infinity, // 永久保留缓存，直到手动清除
   });
 }
 
@@ -86,6 +90,7 @@ export function useCheckAgentsUpdates() {
     queryFn: () => updateApi.checkAgentsUpdates(),
     enabled: false,
     staleTime: 0,
+    gcTime: Infinity, // 永久保留缓存，直到手动清除
   });
 }
 
@@ -99,6 +104,7 @@ export function useCheckResourceUpdates(resourceType: ResourceType) {
     queryFn: () => updateApi.checkResourceUpdates(resourceType),
     enabled: false,
     staleTime: 0,
+    gcTime: Infinity, // 永久保留缓存，直到手动清除
   });
 }
 

@@ -1533,6 +1533,7 @@
   "updates": {
     "check": "Check Updates",
     "checking": "Checking for updates...",
+    "checkingRange": "Checking {{count}} resources for updates...",
     "available": "{{count}} updates available",
     "noUpdates": "All resources are up to date",
     "noSkillsToCheck": "No Skills to check in current scope",

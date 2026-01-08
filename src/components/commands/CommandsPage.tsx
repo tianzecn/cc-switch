@@ -177,6 +177,14 @@ export const CommandsPage: React.FC = () => {
   const handleCheckUpdates = useCallback(async () => {
     setUpdatesDismissed(false);
     try {
+      if (commands.length === 0) {
+        toast.info(t("updates.noSkillsToCheck"));
+        return;
+      }
+
+      // 显示检查范围提示
+      toast.info(t("updates.checkingRange", { count: commands.length }));
+
       const result = await checkUpdates();
       if (result.data?.updateCount === 0) {
         toast.success(t("updates.noUpdates"));
@@ -186,7 +194,7 @@ export const CommandsPage: React.FC = () => {
         description: String(error),
       });
     }
-  }, [checkUpdates, t]);
+  }, [checkUpdates, commands.length, t]);
 
   const handleUpdateAll = useCallback(async () => {
     if (updatableIds.length === 0) return;

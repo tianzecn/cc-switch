@@ -13,6 +13,11 @@
 
 ### 2026-01-08
 
+- [x] **更新检测体验优化** - 修复三个更新检测机制问题
+  - 添加 `gcTime: Infinity` 确保更新检测结果在页面切换后持久保留
+  - 添加检查范围提示 toast "正在检查 X 个资源的更新..."
+  - 发现模式支持更新徽章显示（Skills, Commands, Agents）
+
 - [x] **Commands/Agents 更新安装功能** - 扩展资源更新功能到 Commands 和 Agents
   - 后端更新命令：`update_command`, `update_commands_batch`, `update_agent`, `update_agents_batch`
   - Hash 修复工具：`fix_commands_hash`, `fix_agents_hash`

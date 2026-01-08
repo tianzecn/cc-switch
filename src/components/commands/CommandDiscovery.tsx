@@ -32,6 +32,12 @@ import {
   type CommandRepo,
 } from "@/hooks/useCommands";
 import { useBatchInstallCommands } from "@/hooks/useBatchInstallCommands";
+import {
+  useCheckCommandsUpdates,
+  getResourceUpdateStatus,
+  type UpdateCheckResult,
+} from "@/hooks/useResourceUpdates";
+import { UpdateBadge } from "@/components/updates";
 import { toast } from "sonner";
 import { CommandRepoManager } from "./CommandRepoManager";
 import {
@@ -68,6 +74,7 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
   const { data: discoverableCommands, isLoading } = useDiscoverableCommands();
   const { data: installedCommands } = useInstalledCommands();
   const { data: repos = [] } = useCommandRepos();
+  const { data: updateCheckResult } = useCheckCommandsUpdates(); // 读取缓存的更新检测结果
   const installMutation = useInstallCommand();
   const addRepoMutation = useAddCommandRepo();
   const removeRepoMutation = useRemoveCommandRepo();
@@ -200,6 +207,15 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
     return installedIds.has(id);
   };
 
+  // 获取命令的更新状态
+  const getCommandUpdateStatus = (cmd: DiscoverableCommand): UpdateCheckResult | undefined => {
+    if (!updateCheckResult) return undefined;
+    const id = cmd.namespace
+      ? `${cmd.namespace}/${cmd.filename}`
+      : cmd.filename;
+    return getResourceUpdateStatus(updateCheckResult, id);
+  };
+
   return (
     <div className="mx-auto max-w-[72rem] px-6 flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
       {/* Header */}
@@ -329,6 +345,7 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
                       key={cmd.key}
                       command={cmd}
                       isInstalled={isCommandInstalled(cmd)}
+                      updateStatus={getCommandUpdateStatus(cmd)}
                       isInstalling={
                         installMutation.isPending &&
                         installMutation.variables?.command.key === cmd.key
@@ -368,6 +385,7 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
 interface CommandListItemProps {
   command: DiscoverableCommand;
   isInstalled: boolean;
+  updateStatus?: UpdateCheckResult;
   isInstalling: boolean;
   onInstall: () => void;
 }
@@ -375,6 +393,7 @@ interface CommandListItemProps {
 const CommandListItem: React.FC<CommandListItemProps> = ({
   command,
   isInstalled,
+  updateStatus,
   isInstalling,
   onInstall,
 }) => {
@@ -391,6 +410,9 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className="font-medium text-sm">{command.name}</span>
+            {isInstalled && updateStatus && (
+              <UpdateBadge status={updateStatus} size="sm" />
+            )}
             {command.category && (
               <span className="px-1.5 py-0.5 text-xs rounded bg-primary/10 text-primary flex-shrink-0">
                 {command.category}

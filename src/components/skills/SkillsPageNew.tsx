@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Search, RefreshCw, Download, Compass, Sparkles, Loader2, Settings, Trash2 } from "lucide-react";
-import { CheckUpdatesButton, UpdateNotificationBar } from "@/components/updates";
+import { CheckUpdatesButton, UpdateNotificationBar, UpdateBadge } from "@/components/updates";
 import { toast } from "sonner";
 import { SkillNamespaceTree } from "./SkillNamespaceTree";
 import { SkillDiscoveryTree } from "./SkillDiscoveryTree";
@@ -53,6 +53,8 @@ import {
   useUpdateSkillsBatch,
   useUpdatableResourceIds,
   useFixSkillsHash,
+  getResourceUpdateStatus,
+  type UpdateCheckResult,
 } from "@/hooks/useResourceUpdates";
 
 /** 视图模式 */
@@ -225,9 +227,23 @@ export const SkillsPageNew = forwardRef<
       const installName =
         d.directory.split("/").pop()?.toLowerCase() ||
         d.directory.toLowerCase();
+      const installed = installedDirs.has(installName);
+
+      // 查找已安装版本的更新状态
+      let updateStatus: UpdateCheckResult | undefined = undefined;
+      if (installed && updateCheckResult) {
+        const installedSkill = installedSkills.find(
+          (s) => s.directory.toLowerCase() === installName
+        );
+        if (installedSkill) {
+          updateStatus = getResourceUpdateStatus(updateCheckResult, installedSkill.id);
+        }
+      }
+
       return {
         ...d,
-        installed: installedDirs.has(installName),
+        installed,
+        updateStatus,
       };
     });
 
@@ -250,26 +266,40 @@ export const SkillsPageNew = forwardRef<
     }
 
     return result;
-  }, [discoverableSkills, viewMode, filterStatus, searchQuery, installedDirs]);
+  }, [discoverableSkills, viewMode, filterStatus, searchQuery, installedDirs, updateCheckResult, installedSkills]);
 
   // 发现模式按树选中状态过滤后的列表
   const filteredDiscoverySkills = useMemo(() => {
     // 如果选中了特定仓库或命名空间，显示对应技能
     if (discoverySelection.type !== "all" && discoveryNsSkills.length > 0) {
-      // 将命名空间下的技能与已安装状态合并
+      // 将命名空间下的技能与已安装状态和更新状态合并
       return discoveryNsSkills.map((d) => {
         const installName =
           d.directory.split("/").pop()?.toLowerCase() ||
           d.directory.toLowerCase();
+        const installed = installedDirs.has(installName);
+
+        // 查找已安装版本的更新状态
+        let updateStatus: UpdateCheckResult | undefined = undefined;
+        if (installed && updateCheckResult) {
+          const installedSkill = installedSkills.find(
+            (s) => s.directory.toLowerCase() === installName
+          );
+          if (installedSkill) {
+            updateStatus = getResourceUpdateStatus(updateCheckResult, installedSkill.id);
+          }
+        }
+
         return {
           ...d,
-          installed: installedDirs.has(installName),
+          installed,
+          updateStatus,
         };
       });
     }
     // 否则显示全部
     return discoverySkills;
-  }, [discoverySelection, discoveryNsSkills, discoverySkills, installedDirs]);
+  }, [discoverySelection, discoveryNsSkills, discoverySkills, installedDirs, updateCheckResult, installedSkills]);
 
   // 计算空状态类型
   const emptyStateType = useMemo((): "all" | "repo" | "namespace" | "search" => {
@@ -314,6 +344,9 @@ export const SkillsPageNew = forwardRef<
         toast.info(t("updates.noSkillsToCheck", "没有可检查的 Skills"));
         return;
       }
+
+      // 显示检查范围提示
+      toast.info(t("updates.checkingRange", { count: skillIdsToCheck.length }));
 
       // 检查指定范围的 Skills 更新
       const result = await checkSkillsUpdatesByIdsMutation.mutateAsync(skillIdsToCheck);
@@ -840,7 +873,7 @@ const DiscoveryList: React.FC<DiscoveryListProps> = ({
  * 发现卡片组件
  */
 interface DiscoveryCardProps {
-  skill: DiscoverableSkill & { installed: boolean };
+  skill: DiscoverableSkill & { installed: boolean; updateStatus?: UpdateCheckResult };
   onInstall: () => void;
   isInstalling: boolean;
 }
@@ -856,7 +889,12 @@ const DiscoveryCard: React.FC<DiscoveryCardProps> = ({
     <div className="p-4 rounded-lg border border-border bg-card hover:shadow-sm transition-shadow">
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
-          <h4 className="font-medium truncate">{skill.name}</h4>
+          <div className="flex items-center gap-2">
+            <h4 className="font-medium truncate">{skill.name}</h4>
+            {skill.installed && skill.updateStatus && (
+              <UpdateBadge status={skill.updateStatus} size="sm" />
+            )}
+          </div>
           <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
             {skill.description}
           </p>
