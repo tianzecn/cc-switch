@@ -128,6 +128,11 @@ export const updateApi = {
     return await invoke("check_commands_updates");
   },
 
+  /** 检查指定 Commands 的更新（按仓库/命名空间过滤） */
+  async checkCommandsUpdatesByIds(commandIds: string[]): Promise<BatchCheckResult> {
+    return await invoke("check_commands_updates_by_ids", { commandIds });
+  },
+
   /** 检查所有 Hooks 的更新 */
   async checkHooksUpdates(): Promise<BatchCheckResult> {
     return await invoke("check_hooks_updates");
@@ -136,6 +141,11 @@ export const updateApi = {
   /** 检查所有 Agents 的更新 */
   async checkAgentsUpdates(): Promise<BatchCheckResult> {
     return await invoke("check_agents_updates");
+  },
+
+  /** 检查指定 Agents 的更新（按仓库/命名空间过滤） */
+  async checkAgentsUpdatesByIds(agentIds: string[]): Promise<BatchCheckResult> {
+    return await invoke("check_agents_updates_by_ids", { agentIds });
   },
 
   /** 检查指定资源类型的更新 */

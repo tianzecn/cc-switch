@@ -69,6 +69,21 @@ export function useCheckCommandsUpdates() {
 }
 
 /**
+ * 检查指定 Commands 的更新（按仓库/命名空间过滤）
+ * 使用 mutation 而非 query，因为 commandIds 是动态参数
+ */
+export function useCheckCommandsUpdatesByIds() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (commandIds: string[]) => updateApi.checkCommandsUpdatesByIds(commandIds),
+    onSuccess: (data) => {
+      // 将结果存入 query cache，以便其他组件访问
+      queryClient.setQueryData(["updates", "commands"], data);
+    },
+  });
+}
+
+/**
  * 检查 Hooks 更新
  */
 export function useCheckHooksUpdates() {
@@ -91,6 +106,21 @@ export function useCheckAgentsUpdates() {
     enabled: false,
     staleTime: 0,
     gcTime: Infinity, // 永久保留缓存，直到手动清除
+  });
+}
+
+/**
+ * 检查指定 Agents 的更新（按仓库/命名空间过滤）
+ * 使用 mutation 而非 query，因为 agentIds 是动态参数
+ */
+export function useCheckAgentsUpdatesByIds() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (agentIds: string[]) => updateApi.checkAgentsUpdatesByIds(agentIds),
+    onSuccess: (data) => {
+      // 将结果存入 query cache，以便其他组件访问
+      queryClient.setQueryData(["updates", "agents"], data);
+    },
   });
 }
 

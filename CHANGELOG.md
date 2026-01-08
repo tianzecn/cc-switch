@@ -5,6 +5,12 @@ All notable changes to CC Switch will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **范围更新检测** - Commands/Agents 页面支持按仓库/命名空间范围检查更新，与 Skills 页面保持一致
+
 ## [3.9.0-3] - 2025-12-29
 
 ### Beta Release

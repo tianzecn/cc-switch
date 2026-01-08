@@ -17,8 +17,10 @@ import {
 } from "@/hooks/useAgents";
 import {
   useCheckAgentsUpdates,
+  useCheckAgentsUpdatesByIds,
   useUpdateAgentsBatch,
   useUpdatableResourceIds,
+  useFixAgentsHash,
 } from "@/hooks/useResourceUpdates";
 import { CheckUpdatesButton, UpdateNotificationBar } from "@/components/updates";
 import { AgentNamespaceTree } from "./AgentNamespaceTree";
@@ -62,8 +64,9 @@ export const AgentsPage: React.FC = () => {
     data: updateCheckResult,
     isLoading: isCheckingUpdates,
     isFetching: isFetchingUpdates,
-    refetch: checkUpdates,
   } = useCheckAgentsUpdates();
+  const checkAgentsUpdatesByIdsMutation = useCheckAgentsUpdatesByIds();
+  const fixAgentsHashMutation = useFixAgentsHash();
   const [updatesDismissed, setUpdatesDismissed] = useState(false);
   const updateBatchMutation = useUpdateAgentsBatch();
   const updatableIds = useUpdatableResourceIds(updateCheckResult);
@@ -190,17 +193,23 @@ export const AgentsPage: React.FC = () => {
   const handleCheckUpdates = useCallback(async () => {
     setUpdatesDismissed(false);
     try {
-      const agentCount = agents?.length ?? 0;
-      if (agentCount === 0) {
+      // 先修复缺少 file_hash 的 Agents（静默执行）
+      await fixAgentsHashMutation.mutateAsync();
+
+      // 根据当前选择范围获取要检查的 Agent IDs
+      const agentIdsToCheck = filteredAgents.map((a) => a.id);
+
+      if (agentIdsToCheck.length === 0) {
         toast.info(t("updates.noSkillsToCheck"));
         return;
       }
 
       // 显示检查范围提示
-      toast.info(t("updates.checkingRange", { count: agentCount }));
+      toast.info(t("updates.checkingRange", { count: agentIdsToCheck.length }));
 
-      const result = await checkUpdates();
-      if (result.data?.updateCount === 0) {
+      // 检查指定范围的 Agents 更新
+      const result = await checkAgentsUpdatesByIdsMutation.mutateAsync(agentIdsToCheck);
+      if (result.updateCount === 0) {
         toast.success(t("updates.noUpdates"));
       }
     } catch (error) {
@@ -208,7 +217,7 @@ export const AgentsPage: React.FC = () => {
         description: String(error),
       });
     }
-  }, [checkUpdates, agents?.length, t]);
+  }, [filteredAgents, checkAgentsUpdatesByIdsMutation, fixAgentsHashMutation, t]);
 
   const handleUpdateAll = useCallback(async () => {
     if (updatableIds.length === 0) return;
@@ -352,7 +361,7 @@ export const AgentsPage: React.FC = () => {
             <span className="ml-2">{t("agents.refresh")}</span>
           </Button>
           <CheckUpdatesButton
-            isChecking={isCheckingUpdates || isFetchingUpdates}
+            isChecking={isCheckingUpdates || isFetchingUpdates || checkAgentsUpdatesByIdsMutation.isPending || fixAgentsHashMutation.isPending}
             onCheck={handleCheckUpdates}
             result={updateCheckResult}
             disabled={isLoading}

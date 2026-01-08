@@ -17,8 +17,10 @@ import {
 } from "@/hooks/useCommands";
 import {
   useCheckCommandsUpdates,
+  useCheckCommandsUpdatesByIds,
   useUpdateCommandsBatch,
   useUpdatableResourceIds,
+  useFixCommandsHash,
 } from "@/hooks/useResourceUpdates";
 import { CheckUpdatesButton, UpdateNotificationBar } from "@/components/updates";
 import { CommandNamespaceTree } from "./CommandNamespaceTree";
@@ -73,8 +75,9 @@ export const CommandsPage: React.FC = () => {
     data: updateCheckResult,
     isLoading: isCheckingUpdates,
     isFetching: isFetchingUpdates,
-    refetch: checkUpdates,
   } = useCheckCommandsUpdates();
+  const checkCommandsUpdatesByIdsMutation = useCheckCommandsUpdatesByIds();
+  const fixCommandsHashMutation = useFixCommandsHash();
   const [updatesDismissed, setUpdatesDismissed] = useState(false);
   const updateBatchMutation = useUpdateCommandsBatch();
   const updatableIds = useUpdatableResourceIds(updateCheckResult);
@@ -177,16 +180,23 @@ export const CommandsPage: React.FC = () => {
   const handleCheckUpdates = useCallback(async () => {
     setUpdatesDismissed(false);
     try {
-      if (commands.length === 0) {
+      // 先修复缺少 file_hash 的 Commands（静默执行）
+      await fixCommandsHashMutation.mutateAsync();
+
+      // 根据当前选择范围获取要检查的 Command IDs
+      const commandIdsToCheck = filteredCommands.map((c) => c.id);
+
+      if (commandIdsToCheck.length === 0) {
         toast.info(t("updates.noSkillsToCheck"));
         return;
       }
 
       // 显示检查范围提示
-      toast.info(t("updates.checkingRange", { count: commands.length }));
+      toast.info(t("updates.checkingRange", { count: commandIdsToCheck.length }));
 
-      const result = await checkUpdates();
-      if (result.data?.updateCount === 0) {
+      // 检查指定范围的 Commands 更新
+      const result = await checkCommandsUpdatesByIdsMutation.mutateAsync(commandIdsToCheck);
+      if (result.updateCount === 0) {
         toast.success(t("updates.noUpdates"));
       }
     } catch (error) {
@@ -194,7 +204,7 @@ export const CommandsPage: React.FC = () => {
         description: String(error),
       });
     }
-  }, [checkUpdates, commands.length, t]);
+  }, [filteredCommands, checkCommandsUpdatesByIdsMutation, fixCommandsHashMutation, t]);
 
   const handleUpdateAll = useCallback(async () => {
     if (updatableIds.length === 0) return;
@@ -352,7 +362,7 @@ export const CommandsPage: React.FC = () => {
             <span className="ml-2">{t("commands.refresh")}</span>
           </Button>
           <CheckUpdatesButton
-            isChecking={isCheckingUpdates || isFetchingUpdates}
+            isChecking={isCheckingUpdates || isFetchingUpdates || checkCommandsUpdatesByIdsMutation.isPending || fixCommandsHashMutation.isPending}
             onCheck={handleCheckUpdates}
             result={updateCheckResult}
             disabled={isLoading}

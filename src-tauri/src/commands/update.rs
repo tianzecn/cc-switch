@@ -124,6 +124,66 @@ pub async fn check_commands_updates(
     })
 }
 
+/// 批量检查指定 Commands 的更新
+///
+/// 根据传入的 command_ids 只检查对应的 Commands，用于按仓库/命名空间过滤检查
+#[tauri::command]
+pub async fn check_commands_updates_by_ids(
+    app_state: State<'_, AppState>,
+    command_ids: Vec<String>,
+) -> Result<BatchCheckResult, AppError> {
+    let db = &app_state.db;
+    let all_commands = db.get_all_installed_commands()?;
+
+    // 过滤出指定的 Commands
+    let commands_to_check: Vec<_> = command_ids
+        .iter()
+        .filter_map(|id| all_commands.get(id).cloned())
+        .collect();
+
+    if commands_to_check.is_empty() {
+        return Ok(BatchCheckResult {
+            success_count: 0,
+            failed_count: 0,
+            update_count: 0,
+            deleted_count: 0,
+            results: vec![],
+        });
+    }
+
+    let github_token = db.get_setting("github_pat")?;
+    let service = UpdateService::new(github_token);
+
+    let mut results: Vec<UpdateCheckResult> = Vec::new();
+
+    for command in commands_to_check {
+        let result = service
+            .check_file_resource_update(
+                &command.id,
+                command.repo_owner.as_deref(),
+                command.repo_name.as_deref(),
+                command.repo_branch.as_deref(),
+                command.source_path.as_deref(),
+                command.file_hash.as_deref(),
+            )
+            .await;
+        results.push(result);
+    }
+
+    let success_count = results.iter().filter(|r| r.error.is_none()).count() as u32;
+    let failed_count = results.iter().filter(|r| r.error.is_some()).count() as u32;
+    let update_count = results.iter().filter(|r| r.has_update).count() as u32;
+    let deleted_count = results.iter().filter(|r| r.remote_deleted).count() as u32;
+
+    Ok(BatchCheckResult {
+        success_count,
+        failed_count,
+        update_count,
+        deleted_count,
+        results,
+    })
+}
+
 /// 检查所有 Hooks 的更新
 #[tauri::command]
 pub async fn check_hooks_updates(
@@ -177,6 +237,66 @@ pub async fn check_agents_updates(
     let mut results: Vec<UpdateCheckResult> = Vec::new();
 
     for agent in agents.values() {
+        let result = service
+            .check_file_resource_update(
+                &agent.id,
+                agent.repo_owner.as_deref(),
+                agent.repo_name.as_deref(),
+                agent.repo_branch.as_deref(),
+                agent.source_path.as_deref(),
+                agent.file_hash.as_deref(),
+            )
+            .await;
+        results.push(result);
+    }
+
+    let success_count = results.iter().filter(|r| r.error.is_none()).count() as u32;
+    let failed_count = results.iter().filter(|r| r.error.is_some()).count() as u32;
+    let update_count = results.iter().filter(|r| r.has_update).count() as u32;
+    let deleted_count = results.iter().filter(|r| r.remote_deleted).count() as u32;
+
+    Ok(BatchCheckResult {
+        success_count,
+        failed_count,
+        update_count,
+        deleted_count,
+        results,
+    })
+}
+
+/// 批量检查指定 Agents 的更新
+///
+/// 根据传入的 agent_ids 只检查对应的 Agents，用于按仓库/命名空间过滤检查
+#[tauri::command]
+pub async fn check_agents_updates_by_ids(
+    app_state: State<'_, AppState>,
+    agent_ids: Vec<String>,
+) -> Result<BatchCheckResult, AppError> {
+    let db = &app_state.db;
+    let all_agents = db.get_all_installed_agents()?;
+
+    // 过滤出指定的 Agents
+    let agents_to_check: Vec<_> = agent_ids
+        .iter()
+        .filter_map(|id| all_agents.get(id).cloned())
+        .collect();
+
+    if agents_to_check.is_empty() {
+        return Ok(BatchCheckResult {
+            success_count: 0,
+            failed_count: 0,
+            update_count: 0,
+            deleted_count: 0,
+            results: vec![],
+        });
+    }
+
+    let github_token = db.get_setting("github_pat")?;
+    let service = UpdateService::new(github_token);
+
+    let mut results: Vec<UpdateCheckResult> = Vec::new();
+
+    for agent in agents_to_check {
         let result = service
             .check_file_resource_update(
                 &agent.id,
