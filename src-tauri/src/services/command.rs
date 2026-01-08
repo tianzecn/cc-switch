@@ -23,6 +23,7 @@ use crate::app_config::{
 };
 use crate::config::get_app_config_dir;
 use crate::database::Database;
+use crate::services::github_api::GitHubApiService;
 
 // ========== 数据结构 ==========
 
@@ -196,7 +197,42 @@ impl CommandService {
         // 读取并解析文件
         let content = fs::read_to_string(&dest)?;
         let metadata = Self::parse_command_metadata(&content)?;
-        let file_hash = Self::compute_hash(&content);
+
+        // 从 GitHub 获取 blob SHA（与更新检测使用相同的 hash 算法）
+        // 如果获取失败则回退到本地计算（但会导致更新检测不准确）
+        let file_hash = if let Some(ref source_path) = command.source_path {
+            let github_token = db.get_setting("github_pat").ok().flatten();
+            let github_api = GitHubApiService::new(github_token);
+            match github_api
+                .get_file_blob_sha(
+                    &command.repo_owner,
+                    &command.repo_name,
+                    &command.repo_branch,
+                    source_path,
+                )
+                .await
+            {
+                Ok((sha, _size)) => {
+                    log::debug!(
+                        "Command {} 获取 GitHub blob SHA: {}",
+                        command.name,
+                        sha
+                    );
+                    sha
+                }
+                Err(e) => {
+                    log::warn!(
+                        "Command {} 获取 GitHub blob SHA 失败，回退到本地计算: {}",
+                        command.name,
+                        e
+                    );
+                    Self::compute_hash(&content)
+                }
+            }
+        } else {
+            // 没有 source_path 的情况下使用本地计算
+            Self::compute_hash(&content)
+        };
 
         let (namespace, filename) = Self::parse_id(&command.key);
 
@@ -222,6 +258,7 @@ impl CommandService {
             repo_name: Some(command.repo_name.clone()),
             repo_branch: Some(command.repo_branch.clone()),
             readme_url: command.readme_url.clone(),
+            source_path: command.source_path.clone(),
             apps: CommandApps::only(current_app),
             file_hash: Some(file_hash),
             installed_at: chrono::Utc::now().timestamp(),
@@ -540,6 +577,7 @@ impl CommandService {
                 repo_name: None,
                 repo_branch: None,
                 readme_url: None,
+                source_path: None, // 本地导入的没有远程源路径
                 apps,
                 file_hash: Some(file_hash),
                 installed_at: chrono::Utc::now().timestamp(),

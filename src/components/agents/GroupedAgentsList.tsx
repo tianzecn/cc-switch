@@ -5,6 +5,8 @@ import { cn } from "@/lib/utils";
 import { AgentListItem } from "./AgentListItem";
 import type { InstalledAgent, AppType } from "@/hooks/useAgents";
 import type { TreeSelection } from "@/types/tree";
+import type { BatchCheckResult } from "@/hooks/useResourceUpdates";
+import { getResourceUpdateStatus } from "@/hooks/useResourceUpdates";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -40,6 +42,8 @@ interface GroupedAgentsListProps {
   pageSize?: number;
   /** 空状态类型 */
   emptyStateType?: "all" | "repo" | "namespace" | "search";
+  /** 更新检测结果 */
+  updateCheckResult?: BatchCheckResult;
 }
 
 /**
@@ -62,6 +66,7 @@ export const GroupedAgentsList: React.FC<GroupedAgentsListProps> = ({
   isLoading = false,
   pageSize = 50,
   emptyStateType = "all",
+  updateCheckResult,
 }) => {
   const { t } = useTranslation();
   const [displayCount, setDisplayCount] = useState(pageSize);
@@ -277,6 +282,7 @@ export const GroupedAgentsList: React.FC<GroupedAgentsListProps> = ({
                         : undefined
                     }
                     appSupport={appSupport}
+                    updateStatus={getResourceUpdateStatus(updateCheckResult, agent.id)}
                   />
                 ))}
               </div>

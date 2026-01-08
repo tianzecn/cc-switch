@@ -70,6 +70,24 @@ pub fn uninstall_agent_unified(id: String, app_state: State<'_, AppState>) -> Re
     Ok(true)
 }
 
+/// 批量卸载 Agents
+///
+/// 返回成功卸载的数量
+#[tauri::command]
+pub fn uninstall_agents_batch(
+    ids: Vec<String>,
+    app_state: State<'_, AppState>,
+) -> Result<usize, String> {
+    let mut success_count = 0;
+    for id in &ids {
+        match AgentService::uninstall(&app_state.db, id) {
+            Ok(_) => success_count += 1,
+            Err(e) => log::warn!("卸载 Agent {} 失败: {}", id, e),
+        }
+    }
+    Ok(success_count)
+}
+
 /// 切换 Agent 的应用启用状态
 #[tauri::command]
 pub fn toggle_agent_app(

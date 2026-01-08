@@ -111,11 +111,6 @@ impl UpdateService {
         }
     }
 
-    /// 使用 Token 创建实例
-    pub fn with_token(token: String) -> Self {
-        Self::new(Some(token))
-    }
-
     // ========== Skills 更新检测 ==========
 
     /// 检查单个 Skill 的更新

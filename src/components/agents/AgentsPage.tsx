@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Bot, Download, RefreshCw, FileUp, Search } from "lucide-react";
+import { Bot, Download, RefreshCw, FileUp, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -9,11 +9,18 @@ import {
   useRefreshAgentsFromSsot,
   useToggleAgentApp,
   useUninstallAgent,
+  useUninstallAgentsBatch,
   useOpenAgentInEditor,
   useAppAgentsSupport,
   type InstalledAgent,
   type AppType,
 } from "@/hooks/useAgents";
+import {
+  useCheckAgentsUpdates,
+  useUpdateAgentsBatch,
+  useUpdatableResourceIds,
+} from "@/hooks/useResourceUpdates";
+import { CheckUpdatesButton, UpdateNotificationBar } from "@/components/updates";
 import { AgentNamespaceTree } from "./AgentNamespaceTree";
 import { GroupedAgentsList } from "./GroupedAgentsList";
 import { AgentDiscovery } from "./AgentDiscovery";
@@ -42,12 +49,24 @@ export const AgentsPage: React.FC = () => {
   const refreshMutation = useRefreshAgentsFromSsot();
   const toggleAppMutation = useToggleAgentApp();
   const uninstallMutation = useUninstallAgent();
+  const uninstallBatchMutation = useUninstallAgentsBatch();
   const openEditorMutation = useOpenAgentInEditor();
 
   // 检查各应用的 Agents 支持状态
   const { data: claudeSupported = true } = useAppAgentsSupport("claude");
   const { data: codexSupported = false } = useAppAgentsSupport("codex");
   const { data: geminiSupported = false } = useAppAgentsSupport("gemini");
+
+  // 更新检测
+  const {
+    data: updateCheckResult,
+    isLoading: isCheckingUpdates,
+    isFetching: isFetchingUpdates,
+    refetch: checkUpdates,
+  } = useCheckAgentsUpdates();
+  const [updatesDismissed, setUpdatesDismissed] = useState(false);
+  const updateBatchMutation = useUpdateAgentsBatch();
+  const updatableIds = useUpdatableResourceIds(updateCheckResult);
 
   const appSupport = useMemo(
     () => ({
@@ -168,6 +187,39 @@ export const AgentsPage: React.FC = () => {
     }
   };
 
+  const handleCheckUpdates = useCallback(async () => {
+    setUpdatesDismissed(false);
+    try {
+      const result = await checkUpdates();
+      if (result.data?.updateCount === 0) {
+        toast.success(t("updates.noUpdates"));
+      }
+    } catch (error) {
+      toast.error(t("updates.error.checkFailed"), {
+        description: String(error),
+      });
+    }
+  }, [checkUpdates, t]);
+
+  const handleUpdateAll = useCallback(async () => {
+    if (updatableIds.length === 0) return;
+
+    try {
+      const result = await updateBatchMutation.mutateAsync(updatableIds);
+      if (result.successCount > 0) {
+        toast.success(t("updates.updateSuccess", { count: result.successCount }));
+        setUpdatesDismissed(true);
+      }
+      if (result.failedCount > 0) {
+        toast.error(t("updates.updatePartialFailed", { count: result.failedCount }));
+      }
+    } catch (error) {
+      toast.error(t("updates.error.updateFailed"), {
+        description: String(error),
+      });
+    }
+  }, [updatableIds, updateBatchMutation, t]);
+
   const handleToggleApp = async (
     agentId: string,
     app: AppType,
@@ -217,6 +269,28 @@ export const AgentsPage: React.FC = () => {
     }
   };
 
+  const handleUninstallAll = async () => {
+    if (!agents || agents.length === 0) return;
+
+    const confirmed = window.confirm(
+      t("agents.uninstallAllConfirm", { count: agents.length }),
+    );
+    if (!confirmed) return;
+
+    try {
+      const ids = agents.map((agent) => agent.id);
+      const count = await uninstallBatchMutation.mutateAsync(ids);
+      toast.success(t("agents.uninstallAllSuccess", { count }), {
+        closeButton: true,
+      });
+      setSelectedAgent(null);
+    } catch (error) {
+      toast.error(t("common.error"), {
+        description: String(error),
+      });
+    }
+  };
+
   if (viewMode === "discovery") {
     return <AgentDiscovery onBack={() => setViewMode("list")} />;
   }
@@ -244,6 +318,18 @@ export const AgentsPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          {agents && agents.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleUninstallAll}
+              disabled={uninstallBatchMutation.isPending}
+              className="text-destructive hover:text-destructive"
+            >
+              <Trash2 size={16} />
+              <span className="ml-2">{t("agents.uninstallAll")}</span>
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -256,6 +342,12 @@ export const AgentsPage: React.FC = () => {
             />
             <span className="ml-2">{t("agents.refresh")}</span>
           </Button>
+          <CheckUpdatesButton
+            isChecking={isCheckingUpdates || isFetchingUpdates}
+            onCheck={handleCheckUpdates}
+            result={updateCheckResult}
+            disabled={isLoading}
+          />
           <Button
             variant="outline"
             size="sm"
@@ -302,6 +394,19 @@ export const AgentsPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Update Notification Bar */}
+      {updateCheckResult && !updatesDismissed && (updateCheckResult.updateCount > 0 || updateCheckResult.deletedCount > 0) && (
+        <div className="flex-shrink-0 mb-4">
+          <UpdateNotificationBar
+            result={updateCheckResult}
+            resourceLabel={t("agents.title")}
+            onDismiss={() => setUpdatesDismissed(true)}
+            onUpdateAll={handleUpdateAll}
+            isUpdating={updateBatchMutation.isPending}
+          />
+        </div>
+      )}
+
       {/* Main Content - Three Column Layout */}
       <div className="flex-1 flex gap-4 overflow-hidden pb-8">
         {/* Left Sidebar - Namespace Tree */}
@@ -328,6 +433,7 @@ export const AgentsPage: React.FC = () => {
             appSupport={appSupport}
             isLoading={isLoading}
             emptyStateType={emptyStateType}
+            updateCheckResult={updateCheckResult}
           />
         </div>
       </div>

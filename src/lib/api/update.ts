@@ -59,6 +59,30 @@ export interface SkillUpdateResult {
   error?: string;
 }
 
+/** 单个 Command 更新执行结果 */
+export interface CommandUpdateResult {
+  /** Command ID */
+  id: string;
+  /** 是否成功 */
+  success: boolean;
+  /** 新的 hash（如果成功） */
+  newHash?: string;
+  /** 错误信息（如果失败） */
+  error?: string;
+}
+
+/** 单个 Agent 更新执行结果 */
+export interface AgentUpdateResult {
+  /** Agent ID */
+  id: string;
+  /** 是否成功 */
+  success: boolean;
+  /** 新的 hash（如果成功） */
+  newHash?: string;
+  /** 错误信息（如果失败） */
+  error?: string;
+}
+
 /** 单个资源更新执行结果 */
 export interface UpdateExecuteResult {
   /** 资源 ID */
@@ -150,10 +174,44 @@ export const updateApi = {
     return await invoke("update_skills_batch", { skillIds });
   },
 
+  // ========== Commands 更新执行 ==========
+
+  /** 更新单个 Command */
+  async updateCommand(commandId: string): Promise<CommandUpdateResult> {
+    return await invoke("update_command", { commandId });
+  },
+
+  /** 批量更新 Commands */
+  async updateCommandsBatch(commandIds: string[]): Promise<BatchUpdateResult> {
+    return await invoke("update_commands_batch", { commandIds });
+  },
+
+  // ========== Agents 更新执行 ==========
+
+  /** 更新单个 Agent */
+  async updateAgent(agentId: string): Promise<AgentUpdateResult> {
+    return await invoke("update_agent", { agentId });
+  },
+
+  /** 批量更新 Agents */
+  async updateAgentsBatch(agentIds: string[]): Promise<BatchUpdateResult> {
+    return await invoke("update_agents_batch", { agentIds });
+  },
+
   // ========== 修复工具 ==========
 
   /** 修复缺少 file_hash 的 Skills（用于更新检测） */
   async fixSkillsHash(): Promise<BatchUpdateResult> {
     return await invoke("fix_skills_hash");
+  },
+
+  /** 修复缺少 file_hash 的 Commands（用于更新检测） */
+  async fixCommandsHash(): Promise<BatchUpdateResult> {
+    return await invoke("fix_commands_hash");
+  },
+
+  /** 修复缺少 file_hash 的 Agents（用于更新检测） */
+  async fixAgentsHash(): Promise<BatchUpdateResult> {
+    return await invoke("fix_agents_hash");
   },
 };

@@ -174,6 +174,21 @@ export function useUninstallCommand() {
 }
 
 /**
+ * 批量卸载 Commands
+ */
+export function useUninstallCommandsBatch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => commandsApi.uninstallBatch(ids),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: commandKeys.installed() });
+      queryClient.invalidateQueries({ queryKey: commandKeys.namespaces() });
+      queryClient.invalidateQueries({ queryKey: commandKeys.discoverable() });
+    },
+  });
+}
+
+/**
  * 切换 Command 在特定应用的启用状态
  */
 export function useToggleCommandApp() {

@@ -27,6 +27,7 @@ export interface InstalledCommand {
   repoName?: string;
   repoBranch?: string;
   readmeUrl?: string;
+  sourcePath?: string; // 文件在仓库中的完整路径
   apps: CommandApps;
   fileHash?: string;
   installedAt: number;
@@ -115,6 +116,11 @@ export const commandsApi = {
   /** 卸载 Command（统一卸载） */
   async uninstallUnified(id: string): Promise<boolean> {
     return await invoke("uninstall_command_unified", { id });
+  },
+
+  /** 批量卸载 Commands */
+  async uninstallBatch(ids: string[]): Promise<number> {
+    return await invoke("uninstall_commands_batch", { ids });
   },
 
   /** 切换 Command 的应用启用状态 */

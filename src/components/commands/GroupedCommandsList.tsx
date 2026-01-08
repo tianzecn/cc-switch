@@ -5,6 +5,8 @@ import { cn } from "@/lib/utils";
 import { CommandListItem } from "./CommandListItem";
 import type { InstalledCommand, AppType } from "@/hooks/useCommands";
 import type { TreeSelection } from "@/types/tree";
+import type { BatchCheckResult } from "@/hooks/useResourceUpdates";
+import { getResourceUpdateStatus } from "@/hooks/useResourceUpdates";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 
@@ -38,6 +40,8 @@ interface GroupedCommandsListProps {
   pageSize?: number;
   /** 空状态类型 */
   emptyStateType?: "all" | "repo" | "namespace" | "search";
+  /** 更新检测结果 */
+  updateCheckResult?: BatchCheckResult;
 }
 
 /**
@@ -59,6 +63,7 @@ export const GroupedCommandsList: React.FC<GroupedCommandsListProps> = ({
   isLoading = false,
   pageSize = 50,
   emptyStateType = "all",
+  updateCheckResult,
 }) => {
   const { t } = useTranslation();
   const [displayCount, setDisplayCount] = React.useState(pageSize);
@@ -248,6 +253,7 @@ export const GroupedCommandsList: React.FC<GroupedCommandsListProps> = ({
                     onUninstall={() => onUninstall(cmd.id)}
                     onOpenEditor={() => onOpenEditor(cmd.id)}
                     appSupport={appSupport}
+                    updateStatus={getResourceUpdateStatus(updateCheckResult, cmd.id)}
                   />
                 ))}
               </div>

@@ -117,6 +117,11 @@ export const agentsApi = {
     return await invoke("uninstall_agent_unified", { id });
   },
 
+  /** 批量卸载 Agents */
+  async uninstallBatch(ids: string[]): Promise<number> {
+    return await invoke("uninstall_agents_batch", { ids });
+  },
+
   /** 切换 Agent 的应用启用状态 */
   async toggleApp(
     id: string,

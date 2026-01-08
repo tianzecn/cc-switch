@@ -804,6 +804,19 @@ For users upgrading from v2.x (Electron version):
 
 ### Added
 
+- **Commands/Agents Update Installation** - Extended resource update functionality to Commands and Agents
+  - Backend update commands: `update_command`, `update_commands_batch`, `update_agent`, `update_agents_batch`
+  - Hash fix utilities: `fix_commands_hash`, `fix_agents_hash` for resources installed before update tracking
+  - Frontend integration: `useUpdateCommand`, `useUpdateCommandsBatch`, `useUpdateAgent`, `useUpdateAgentsBatch` hooks
+  - `CheckUpdatesButton` and `UpdateNotificationBar` components integrated into Commands/Agents pages
+  - Update flow preserves original app enablement state and syncs to all enabled apps
+  - Database `source_path` field added for precise update file location tracking
+
+- **Batch Uninstall** - Added batch uninstall functionality for Commands and Agents
+  - `useUninstallCommandsBatch`, `useUninstallAgentsBatch` hooks
+  - "Uninstall All" button with confirmation dialog
+  - Supports filtered context (respects namespace selection)
+
 - **Skills Tree Repository Selection** - Enhanced Skills management page with hierarchical tree navigation
   - Click repository nodes to view all skills in that repository
   - Differentiated selection styling (deeper background + left border for repos)

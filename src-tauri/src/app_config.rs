@@ -218,6 +218,9 @@ pub struct InstalledCommand {
     /// README/文档 URL
     #[serde(skip_serializing_if = "Option::is_none")]
     pub readme_url: Option<String>,
+    /// 文件在仓库中的完整路径（如 plugins/bun/commands/agent.md）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_path: Option<String>,
     /// 应用启用状态
     pub apps: CommandApps,
     /// 文件内容哈希（用于变更检测）

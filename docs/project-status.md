@@ -2,7 +2,7 @@
 
 > 本文档记录项目当前进度和下次继续的位置。每次开发会话结束时应更新。
 >
-> **最后更新**: 2026-01-07
+> **最后更新**: 2026-01-08
 
 ## 当前版本
 
@@ -10,6 +10,21 @@
 - **分支**: main
 
 ## 近期完成的工作
+
+### 2026-01-08
+
+- [x] **Commands/Agents 更新安装功能** - 扩展资源更新功能到 Commands 和 Agents
+  - 后端更新命令：`update_command`, `update_commands_batch`, `update_agent`, `update_agents_batch`
+  - Hash 修复工具：`fix_commands_hash`, `fix_agents_hash`
+  - 前端 Hooks：`useUpdateCommand`, `useUpdateCommandsBatch`, `useUpdateAgent`, `useUpdateAgentsBatch`
+  - UI 集成：更新检测按钮和更新通知栏
+  - 更新流程保持原有应用启用状态并同步到所有已启用应用
+  - 数据库新增 `source_path` 字段用于精确定位更新文件
+
+- [x] **批量卸载功能** - Commands 和 Agents 页面新增批量卸载
+  - `useUninstallCommandsBatch`, `useUninstallAgentsBatch` Hooks
+  - "全部卸载" 按钮带确认对话框
+  - 支持命名空间过滤上下文
 
 ### 2026-01-07
 
@@ -37,25 +52,26 @@
 
 | 任务 | 状态 | 备注 |
 |------|------|------|
-| 树形仓库选择 Phase 2 | 📋 待提案 | 需创建新 OpenSpec 提案，应用到 Commands/Hooks/Agents 模块 |
+| 树形仓库选择 Phase 2 | ✅ 部分完成 | Commands/Agents 页面已集成更新功能 |
 
 ### 中优先级
 
 | 任务 | 状态 | 备注 |
 |------|------|------|
+| Hooks 更新功能 | 📋 待开发 | 将更新功能扩展到 Hooks 模块 |
 | 单元测试补充 | 📋 可选 | 为新组件编写测试 (tasks.md 7.1-7.4) |
 
 ## 下次继续
 
 ### 建议的下一步
 
-1. **Phase 2: 跨模块复用**
-   - 创建新的 OpenSpec 提案，将树形选择功能应用到 Commands/Hooks/Agents 模块
-   - 抽取 `NamespaceTree<T>` 和 `GroupedList<T>` 通用组件
+1. **Hooks 更新功能**
+   - 将更新检测和安装功能扩展到 Hooks 模块
+   - 复用 Commands/Agents 的实现模式
 
 2. **测试补充（可选）**
-   - 为新组件补充单元测试 (树组件、分组列表、批量安装)
-   - 参考 `openspec/changes/archive/2026-01-07-add-tree-repo-selection/tasks.md` 中的 7.1-7.4 任务
+   - 为更新相关 Hooks 补充单元测试
+   - 为批量卸载功能补充测试
 
 3. **版本发布**
    - 考虑 v3.9.0 正式版发布准备

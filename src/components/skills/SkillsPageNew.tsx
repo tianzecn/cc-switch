@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, RefreshCw, Download, Compass, Sparkles, Loader2, Settings } from "lucide-react";
+import { Search, RefreshCw, Download, Compass, Sparkles, Loader2, Settings, Trash2 } from "lucide-react";
 import { CheckUpdatesButton, UpdateNotificationBar } from "@/components/updates";
 import { toast } from "sonner";
 import { SkillNamespaceTree } from "./SkillNamespaceTree";
@@ -29,6 +29,7 @@ import {
   useInstalledSkills,
   useToggleSkillApp,
   useUninstallSkill,
+  useUninstallSkillsBatch,
   useSkillConflicts,
   useScanUnmanagedSkills,
   useImportSkillsFromApps,
@@ -133,6 +134,7 @@ export const SkillsPageNew = forwardRef<
   // Mutations
   const toggleAppMutation = useToggleSkillApp();
   const uninstallMutation = useUninstallSkill();
+  const uninstallBatchMutation = useUninstallSkillsBatch();
   const installMutation = useInstallSkill();
   const importMutation = useImportSkillsFromApps();
   const addRepoMutation = useAddSkillRepo();
@@ -389,6 +391,31 @@ export const SkillsPageNew = forwardRef<
     });
   };
 
+  const handleUninstallAll = () => {
+    if (filteredSkills.length === 0) return;
+
+    setConfirmDialog({
+      isOpen: true,
+      title: t("skills.uninstallAll"),
+      message: t("skills.uninstallAllConfirm", { count: filteredSkills.length }),
+      onConfirm: async () => {
+        try {
+          const ids = filteredSkills.map((s) => s.id);
+          const count = await uninstallBatchMutation.mutateAsync(ids);
+          setConfirmDialog(null);
+          setSelectedSkill(null);
+          toast.success(t("skills.uninstallAllSuccess", { count }), {
+            closeButton: true,
+          });
+        } catch (error) {
+          toast.error(t("common.error"), {
+            description: String(error),
+          });
+        }
+      },
+    });
+  };
+
   const handleInstall = async (skill: DiscoverableSkill) => {
     setInstallingKey(skill.key);
     try {
@@ -509,6 +536,18 @@ export const SkillsPageNew = forwardRef<
           </div>
 
           <div className="flex items-center gap-2">
+            {viewMode === "list" && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleUninstallAll}
+                disabled={filteredSkills.length === 0 || uninstallBatchMutation.isPending}
+                className="text-destructive hover:text-destructive"
+              >
+                <Trash2 size={16} />
+                <span className="ml-2">{t("skills.uninstallAll")}</span>
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"

@@ -14,21 +14,23 @@ use std::time::Duration;
 
 /// GitHub Tree 响应结构
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)] // 部分字段仅用于反序列化
 pub struct GitHubTreeResponse {
-    pub sha: String,
+    sha: String,
     pub tree: Vec<GitHubTreeEntry>,
-    pub truncated: bool,
+    truncated: bool,
 }
 
 /// GitHub Tree 条目
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)] // size 字段仅用于反序列化
 pub struct GitHubTreeEntry {
     pub path: String,
     #[serde(rename = "type")]
     pub entry_type: String, // "blob" or "tree"
     pub sha: String,
     #[serde(default)]
-    pub size: Option<u64>,
+    size: Option<u64>,
 }
 
 /// GitHub 仓库信息（用于获取默认分支）
@@ -153,11 +155,6 @@ impl GitHubApiService {
     /// 使用 Token 创建实例
     pub fn with_token(token: String) -> Self {
         Self::new(Some(token))
-    }
-
-    /// 设置/更新 Token
-    pub fn set_token(&mut self, token: Option<String>) {
-        self.token = token;
     }
 
     /// 构建带认证的请求
@@ -491,25 +488,6 @@ impl GitHubApiService {
                 "获取 commit 失败: HTTP {}",
                 response.status()
             )));
-        }
-
-        #[derive(Deserialize)]
-        struct CommitInfo {
-            message: String,
-        }
-        #[derive(Deserialize)]
-        struct Committer {
-            date: String,
-        }
-        #[derive(Deserialize)]
-        struct CommitDetail {
-            committer: Committer,
-        }
-        #[derive(Deserialize)]
-        struct CommitResponse {
-            commit: CommitDetail,
-            #[serde(flatten)]
-            info: CommitInfo,
         }
 
         let commits: Vec<serde_json::Value> = response

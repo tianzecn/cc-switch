@@ -101,6 +101,11 @@ export const skillsApi = {
     return await invoke("uninstall_skill_unified", { id });
   },
 
+  /** 批量卸载 Skills */
+  async uninstallBatch(ids: string[]): Promise<number> {
+    return await invoke("uninstall_skills_batch", { ids });
+  },
+
   /** 切换 Skill 的应用启用状态 */
   async toggleApp(
     id: string,

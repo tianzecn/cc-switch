@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Terminal, Download, RefreshCw, FileUp, Search } from "lucide-react";
+import { Terminal, Download, RefreshCw, FileUp, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -9,11 +9,18 @@ import {
   useRefreshFromSsot,
   useToggleCommandApp,
   useUninstallCommand,
+  useUninstallCommandsBatch,
   useOpenCommandInEditor,
   useAppCommandsSupport,
   type InstalledCommand,
   type AppType,
 } from "@/hooks/useCommands";
+import {
+  useCheckCommandsUpdates,
+  useUpdateCommandsBatch,
+  useUpdatableResourceIds,
+} from "@/hooks/useResourceUpdates";
+import { CheckUpdatesButton, UpdateNotificationBar } from "@/components/updates";
 import { CommandNamespaceTree } from "./CommandNamespaceTree";
 import { GroupedCommandsList } from "./GroupedCommandsList";
 import { CommandDetailPanel } from "./CommandDetailPanel";
@@ -53,12 +60,24 @@ export const CommandsPage: React.FC = () => {
   const refreshMutation = useRefreshFromSsot();
   const toggleAppMutation = useToggleCommandApp();
   const uninstallMutation = useUninstallCommand();
+  const uninstallBatchMutation = useUninstallCommandsBatch();
   const openEditorMutation = useOpenCommandInEditor();
 
   // 检查各应用的 Commands 支持状态
   const { data: claudeSupported = true } = useAppCommandsSupport("claude");
   const { data: codexSupported = false } = useAppCommandsSupport("codex");
   const { data: geminiSupported = false } = useAppCommandsSupport("gemini");
+
+  // 更新检测
+  const {
+    data: updateCheckResult,
+    isLoading: isCheckingUpdates,
+    isFetching: isFetchingUpdates,
+    refetch: checkUpdates,
+  } = useCheckCommandsUpdates();
+  const [updatesDismissed, setUpdatesDismissed] = useState(false);
+  const updateBatchMutation = useUpdateCommandsBatch();
+  const updatableIds = useUpdatableResourceIds(updateCheckResult);
 
   const appSupport = useMemo(
     () => ({
@@ -155,6 +174,39 @@ export const CommandsPage: React.FC = () => {
     }
   };
 
+  const handleCheckUpdates = useCallback(async () => {
+    setUpdatesDismissed(false);
+    try {
+      const result = await checkUpdates();
+      if (result.data?.updateCount === 0) {
+        toast.success(t("updates.noUpdates"));
+      }
+    } catch (error) {
+      toast.error(t("updates.error.checkFailed"), {
+        description: String(error),
+      });
+    }
+  }, [checkUpdates, t]);
+
+  const handleUpdateAll = useCallback(async () => {
+    if (updatableIds.length === 0) return;
+
+    try {
+      const result = await updateBatchMutation.mutateAsync(updatableIds);
+      if (result.successCount > 0) {
+        toast.success(t("updates.updateSuccess", { count: result.successCount }));
+        setUpdatesDismissed(true);
+      }
+      if (result.failedCount > 0) {
+        toast.error(t("updates.updatePartialFailed", { count: result.failedCount }));
+      }
+    } catch (error) {
+      toast.error(t("updates.error.updateFailed"), {
+        description: String(error),
+      });
+    }
+  }, [updatableIds, updateBatchMutation, t]);
+
   const handleToggleApp = async (id: string, app: AppType, enabled: boolean) => {
     try {
       await toggleAppMutation.mutateAsync({ id, app, enabled });
@@ -202,6 +254,31 @@ export const CommandsPage: React.FC = () => {
     }
   };
 
+  const handleUninstallAll = () => {
+    if (filteredCommands.length === 0) return;
+
+    setConfirmDialog({
+      isOpen: true,
+      title: t("commands.uninstallAll"),
+      message: t("commands.uninstallAllConfirm", { count: filteredCommands.length }),
+      onConfirm: async () => {
+        try {
+          const ids = filteredCommands.map((c) => c.id);
+          const count = await uninstallBatchMutation.mutateAsync(ids);
+          setConfirmDialog(null);
+          setSelectedCommand(null);
+          toast.success(t("commands.uninstallAllSuccess", { count }), {
+            closeButton: true,
+          });
+        } catch (error) {
+          toast.error(t("common.error"), {
+            description: String(error),
+          });
+        }
+      },
+    });
+  };
+
   if (viewMode === "discovery") {
     return <CommandDiscovery onBack={() => setViewMode("list")} />;
   }
@@ -247,6 +324,16 @@ export const CommandsPage: React.FC = () => {
           <Button
             variant="outline"
             size="sm"
+            onClick={handleUninstallAll}
+            disabled={filteredCommands.length === 0 || uninstallBatchMutation.isPending}
+            className="text-destructive hover:text-destructive"
+          >
+            <Trash2 size={16} />
+            <span className="ml-2">{t("commands.uninstallAll")}</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             onClick={handleRefresh}
             disabled={refreshMutation.isPending}
           >
@@ -256,6 +343,12 @@ export const CommandsPage: React.FC = () => {
             />
             <span className="ml-2">{t("commands.refresh")}</span>
           </Button>
+          <CheckUpdatesButton
+            isChecking={isCheckingUpdates || isFetchingUpdates}
+            onCheck={handleCheckUpdates}
+            result={updateCheckResult}
+            disabled={isLoading}
+          />
           <Button
             variant="outline"
             size="sm"
@@ -288,6 +381,19 @@ export const CommandsPage: React.FC = () => {
       {/* Conflict Detection Panel */}
       <ConflictDetectionPanel className="flex-shrink-0 mb-4" />
 
+      {/* Update Notification Bar */}
+      {updateCheckResult && !updatesDismissed && (updateCheckResult.updateCount > 0 || updateCheckResult.deletedCount > 0) && (
+        <div className="flex-shrink-0 mb-4">
+          <UpdateNotificationBar
+            result={updateCheckResult}
+            resourceLabel={t("commands.title")}
+            onDismiss={() => setUpdatesDismissed(true)}
+            onUpdateAll={handleUpdateAll}
+            isUpdating={updateBatchMutation.isPending}
+          />
+        </div>
+      )}
+
       {/* Main Content - Three Column Layout */}
       <div className="flex-1 flex gap-4 overflow-hidden pb-8">
         {/* Left Sidebar - Namespace Tree */}
@@ -313,6 +419,7 @@ export const CommandsPage: React.FC = () => {
             appSupport={appSupport}
             isLoading={isLoading}
             emptyStateType={emptyStateType}
+            updateCheckResult={updateCheckResult}
           />
         </div>
 

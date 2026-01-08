@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { InstalledCommand, AppType } from "@/hooks/useCommands";
+import type { UpdateCheckResult } from "@/hooks/useResourceUpdates";
+import { UpdateBadge } from "@/components/updates";
 import { settingsApi } from "@/lib/api";
 
 interface CommandListItemProps {
@@ -25,6 +27,8 @@ interface CommandListItemProps {
     codex: boolean;
     gemini: boolean;
   };
+  /** 更新状态 */
+  updateStatus?: UpdateCheckResult;
 }
 
 /**
@@ -38,6 +42,7 @@ export const CommandListItem: React.FC<CommandListItemProps> = ({
   onUninstall,
   onOpenEditor,
   appSupport,
+  updateStatus,
 }) => {
   const { t } = useTranslation();
   const isLocal = !command.repoOwner;
@@ -68,13 +73,15 @@ export const CommandListItem: React.FC<CommandListItemProps> = ({
     >
       {/* 左侧：名称、描述和操作按钮 */}
       <div className="flex-1 min-w-0">
-        {/* 第一行：名称 + Badge + 操作按钮 */}
+        {/* 第一行：名称 + Badge + 更新徽章 + 操作按钮 */}
         <div className="flex items-center gap-2">
           <h4 className="font-medium text-sm truncate">{command.id}</h4>
           <Badge variant="outline" className="text-xs flex items-center gap-1 flex-shrink-0">
             <SourceIcon size={10} />
             <span className="truncate max-w-[100px]">{sourceName}</span>
           </Badge>
+          {/* 更新状态徽章 */}
+          <UpdateBadge status={updateStatus} />
           {/* 操作按钮 */}
           <div className="flex items-center gap-0.5 ml-auto mr-4 opacity-0 group-hover:opacity-100 transition-opacity">
             {command.readmeUrl && (

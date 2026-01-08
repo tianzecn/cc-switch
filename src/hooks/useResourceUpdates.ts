@@ -6,6 +6,8 @@ import {
   type RateLimitInfo,
   type ResourceType,
   type SkillUpdateResult,
+  type CommandUpdateResult,
+  type AgentUpdateResult,
   type UpdateCheckResult,
 } from "@/lib/api/update";
 
@@ -190,6 +192,106 @@ export function useFixSkillsHash() {
   });
 }
 
+// ========== Commands 更新执行 Hooks ==========
+
+/**
+ * 更新单个 Command
+ * 成功后自动刷新 Commands 列表和清除更新检测结果
+ */
+export function useUpdateCommand() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (commandId: string) => updateApi.updateCommand(commandId),
+    onSuccess: () => {
+      // 刷新 Commands 列表
+      queryClient.invalidateQueries({ queryKey: ["commands"] });
+      // 清除更新检测结果
+      queryClient.removeQueries({ queryKey: ["updates", "commands"] });
+    },
+  });
+}
+
+/**
+ * 批量更新 Commands
+ * 成功后自动刷新 Commands 列表和清除更新检测结果
+ */
+export function useUpdateCommandsBatch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (commandIds: string[]) => updateApi.updateCommandsBatch(commandIds),
+    onSuccess: () => {
+      // 刷新 Commands 列表
+      queryClient.invalidateQueries({ queryKey: ["commands"] });
+      // 清除更新检测结果
+      queryClient.removeQueries({ queryKey: ["updates", "commands"] });
+    },
+  });
+}
+
+/**
+ * 修复缺少 file_hash 的 Commands
+ */
+export function useFixCommandsHash() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => updateApi.fixCommandsHash(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["commands"] });
+      queryClient.invalidateQueries({ queryKey: ["updates", "commands"] });
+    },
+  });
+}
+
+// ========== Agents 更新执行 Hooks ==========
+
+/**
+ * 更新单个 Agent
+ * 成功后自动刷新 Agents 列表和清除更新检测结果
+ */
+export function useUpdateAgent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (agentId: string) => updateApi.updateAgent(agentId),
+    onSuccess: () => {
+      // 刷新 Agents 列表
+      queryClient.invalidateQueries({ queryKey: ["agents"] });
+      // 清除更新检测结果
+      queryClient.removeQueries({ queryKey: ["updates", "agents"] });
+    },
+  });
+}
+
+/**
+ * 批量更新 Agents
+ * 成功后自动刷新 Agents 列表和清除更新检测结果
+ */
+export function useUpdateAgentsBatch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (agentIds: string[]) => updateApi.updateAgentsBatch(agentIds),
+    onSuccess: () => {
+      // 刷新 Agents 列表
+      queryClient.invalidateQueries({ queryKey: ["agents"] });
+      // 清除更新检测结果
+      queryClient.removeQueries({ queryKey: ["updates", "agents"] });
+    },
+  });
+}
+
+/**
+ * 修复缺少 file_hash 的 Agents
+ */
+export function useFixAgentsHash() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => updateApi.fixAgentsHash(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["agents"] });
+      queryClient.invalidateQueries({ queryKey: ["updates", "agents"] });
+    },
+  });
+}
+
 // ========== 辅助 Hooks ==========
 
 /**
@@ -236,5 +338,7 @@ export type {
   RateLimitInfo,
   ResourceType,
   SkillUpdateResult,
+  CommandUpdateResult,
+  AgentUpdateResult,
   UpdateCheckResult,
 };

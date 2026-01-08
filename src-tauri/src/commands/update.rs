@@ -2,9 +2,11 @@
 //!
 //! 提供 Skills/Commands/Hooks/Agents 的更新检测和执行功能的 Tauri 命令。
 
-use crate::app_config::AppType;
+use crate::app_config::{AppType, DiscoverableCommand, DiscoverableAgent};
 use crate::database::Database;
 use crate::error::AppError;
+use crate::services::agent::AgentService;
+use crate::services::command::CommandService;
 use crate::services::github_api::{GitHubApiService, RateLimitInfo, UpdateCheckResult};
 use crate::services::skill::{DiscoverableSkill, SkillService};
 use crate::services::update::{BatchCheckResult, BatchUpdateResult, ResourceType, UpdateExecuteResult, UpdateService};
@@ -94,20 +96,14 @@ pub async fn check_commands_updates(
     let mut results: Vec<UpdateCheckResult> = Vec::new();
 
     for command in commands.values() {
-        // Commands 使用 namespace + filename 构建源路径
-        let source_path = if command.namespace.is_empty() {
-            format!("commands/{}.md", command.filename)
-        } else {
-            format!("commands/{}/{}.md", command.namespace, command.filename)
-        };
-
+        // 使用数据库中保存的 source_path
         let result = service
             .check_file_resource_update(
                 &command.id,
                 command.repo_owner.as_deref(),
                 command.repo_name.as_deref(),
                 command.repo_branch.as_deref(),
-                Some(&source_path),
+                command.source_path.as_deref(),
                 command.file_hash.as_deref(),
             )
             .await;
@@ -519,6 +515,552 @@ pub async fn fix_skills_hash(
                 failed_count += 1;
                 results.push(UpdateExecuteResult {
                     id: skill.id.clone(),
+                    success: false,
+                    error: Some(e.to_string()),
+                });
+            }
+        }
+    }
+
+    Ok(BatchUpdateResult {
+        success_count,
+        failed_count,
+        results,
+    })
+}
+
+// ========== Commands 更新命令 ==========
+
+/// 单个 Command 更新结果
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandUpdateResult {
+    pub id: String,
+    pub success: bool,
+    pub new_hash: Option<String>,
+    pub error: Option<String>,
+}
+
+/// 内部函数：更新单个 Command
+///
+/// 流程：
+/// 1. 获取已安装的 Command 信息
+/// 2. 获取最新的 file_hash
+/// 3. 重新下载并安装（覆盖现有文件）
+/// 4. 更新数据库记录
+async fn update_command_internal(
+    db: &Arc<Database>,
+    command_id: String,
+) -> Result<CommandUpdateResult, AppError> {
+    // 获取已安装的 Command
+    let installed = db
+        .get_installed_command(&command_id)?
+        .ok_or_else(|| AppError::Message(format!("Command 不存在: {command_id}")))?;
+
+    // 检查是否有仓库信息（本地导入的无法更新）
+    let repo_owner = installed.repo_owner.clone().ok_or_else(|| {
+        AppError::Message("本地导入的 Command 不支持更新".to_string())
+    })?;
+    let repo_name = installed.repo_name.clone().unwrap_or_default();
+    let repo_branch = installed.repo_branch.clone().unwrap_or_else(|| "main".to_string());
+
+    // 获取 GitHub Token
+    let github_token = db.get_setting("github_pat")?;
+    let update_service = UpdateService::new(github_token.clone());
+
+    // 使用数据库中保存的 source_path
+    let source_path = installed.source_path.clone().ok_or_else(|| {
+        AppError::Message("Command 缺少 source_path，无法更新".to_string())
+    })?;
+
+    // 检查更新并获取新的 hash
+    let check_result = update_service
+        .check_file_resource_update(
+            &command_id,
+            Some(&repo_owner),
+            Some(&repo_name),
+            Some(&repo_branch),
+            Some(&source_path),
+            installed.file_hash.as_deref(),
+        )
+        .await;
+
+    if !check_result.has_update {
+        return Ok(CommandUpdateResult {
+            id: command_id,
+            success: true,
+            new_hash: installed.file_hash,
+            error: Some("已是最新版本".to_string()),
+        });
+    }
+
+    let _new_hash = check_result.new_hash.clone();
+
+    // 构造 DiscoverableCommand 用于重新安装
+    let discoverable = DiscoverableCommand {
+        key: installed.id.clone(),
+        name: installed.name.clone(),
+        description: installed.description.clone().unwrap_or_default(),
+        namespace: installed.namespace.clone(),
+        filename: installed.filename.clone(),
+        category: installed.category.clone(),
+        readme_url: installed.readme_url.clone(),
+        repo_owner: repo_owner.clone(),
+        repo_name: repo_name.clone(),
+        repo_branch: repo_branch.clone(),
+        source_path: Some(source_path.clone()),
+    };
+
+    // 删除 SSOT 中的旧文件，强制重新下载
+    let ssot_dir = CommandService::get_ssot_dir()
+        .map_err(|e| AppError::Message(e.to_string()))?;
+    let old_path = ssot_dir.join(CommandService::id_to_relative_path(&installed.id));
+    if old_path.exists() {
+        log::info!("删除 SSOT 中的旧版本: {}", old_path.display());
+        let _ = std::fs::remove_file(&old_path);
+    }
+
+    // 确定当前启用的应用（用于安装时的同步）
+    let current_app = if installed.apps.claude {
+        AppType::Claude
+    } else if installed.apps.codex {
+        AppType::Codex
+    } else {
+        AppType::Gemini
+    };
+
+    // 重新安装（会覆盖现有文件）
+    let command_service = CommandService::new();
+
+    match command_service.install(db, &discoverable, &current_app).await {
+        Ok(updated_command) => {
+            // 恢复原有的应用启用状态（install 只启用 current_app）
+            db.update_command_apps(&command_id, &installed.apps)?;
+
+            // 同步到其他启用的应用
+            if installed.apps.claude && current_app != AppType::Claude {
+                let _ = CommandService::copy_to_app(&installed.id, &AppType::Claude);
+            }
+            if installed.apps.codex && current_app != AppType::Codex {
+                let _ = CommandService::copy_to_app(&installed.id, &AppType::Codex);
+            }
+            if installed.apps.gemini && current_app != AppType::Gemini {
+                let _ = CommandService::copy_to_app(&installed.id, &AppType::Gemini);
+            }
+
+            log::info!("Command {} 更新成功", command_id);
+            Ok(CommandUpdateResult {
+                id: command_id,
+                success: true,
+                new_hash: updated_command.file_hash,
+                error: None,
+            })
+        }
+        Err(e) => {
+            log::error!("Command {} 更新失败: {}", command_id, e);
+            Ok(CommandUpdateResult {
+                id: command_id,
+                success: false,
+                new_hash: None,
+                error: Some(e.to_string()),
+            })
+        }
+    }
+}
+
+/// 更新单个 Command（Tauri 命令）
+#[tauri::command]
+pub async fn update_command(
+    app_state: State<'_, AppState>,
+    command_id: String,
+) -> Result<CommandUpdateResult, AppError> {
+    update_command_internal(&app_state.db, command_id).await
+}
+
+/// 批量更新 Commands
+#[tauri::command]
+pub async fn update_commands_batch(
+    app_state: State<'_, AppState>,
+    command_ids: Vec<String>,
+) -> Result<BatchUpdateResult, AppError> {
+    let db = &app_state.db;
+    let mut results = Vec::new();
+    let mut success_count = 0u32;
+    let mut failed_count = 0u32;
+
+    for command_id in command_ids {
+        match update_command_internal(db, command_id.clone()).await {
+            Ok(result) => {
+                if result.success && result.error.is_none() {
+                    success_count += 1;
+                } else if result.error.as_deref() != Some("已是最新版本") {
+                    failed_count += 1;
+                }
+                results.push(UpdateExecuteResult {
+                    id: result.id,
+                    success: result.success,
+                    error: result.error,
+                });
+            }
+            Err(e) => {
+                failed_count += 1;
+                results.push(UpdateExecuteResult {
+                    id: command_id,
+                    success: false,
+                    error: Some(e.to_string()),
+                });
+            }
+        }
+    }
+
+    Ok(BatchUpdateResult {
+        success_count,
+        failed_count,
+        results,
+    })
+}
+
+/// 修复缺少 file_hash 的 Commands
+///
+/// 遍历所有已安装的 Commands，为没有 file_hash 的项目从 GitHub 获取并更新
+#[tauri::command]
+pub async fn fix_commands_hash(
+    app_state: State<'_, AppState>,
+) -> Result<BatchUpdateResult, AppError> {
+    let db = &app_state.db;
+    let commands = db.get_all_installed_commands()?;
+    let github_token = db.get_setting("github_pat")?;
+    let github_api = GitHubApiService::new(github_token);
+
+    let mut results = Vec::new();
+    let mut success_count = 0u32;
+    let mut failed_count = 0u32;
+
+    for command in commands.values() {
+        // 跳过本地导入的 Command
+        if command.repo_owner.is_none() {
+            continue;
+        }
+
+        // 跳过已有 hash 的 Command
+        if command.file_hash.is_some() {
+            continue;
+        }
+
+        let owner = command.repo_owner.as_ref().unwrap();
+        let repo = command.repo_name.as_ref().unwrap();
+        let branch = command.repo_branch.as_ref().unwrap();
+
+        // 使用数据库中保存的 source_path
+        let source_path = match &command.source_path {
+            Some(p) => p.clone(),
+            None => {
+                log::warn!("Command {} 没有 source_path，跳过", command.name);
+                continue;
+            }
+        };
+
+        // 从 GitHub 获取文件 hash (返回 (sha, size) 元组)
+        match github_api
+            .get_file_blob_sha(owner, repo, branch, &source_path)
+            .await
+        {
+            Ok((hash, _size)) => {
+                // 更新数据库
+                if let Err(e) = db.update_command_hash(&command.id, &hash) {
+                    log::error!("更新 Command {} hash 失败: {}", command.id, e);
+                    failed_count += 1;
+                    results.push(UpdateExecuteResult {
+                        id: command.id.clone(),
+                        success: false,
+                        error: Some(e.to_string()),
+                    });
+                } else {
+                    log::info!("已修复 Command {} 的 file_hash: {}", command.name, hash);
+                    success_count += 1;
+                    results.push(UpdateExecuteResult {
+                        id: command.id.clone(),
+                        success: true,
+                        error: None,
+                    });
+                }
+            }
+            Err(e) => {
+                log::warn!("获取 Command {} hash 失败: {}", command.name, e);
+                failed_count += 1;
+                results.push(UpdateExecuteResult {
+                    id: command.id.clone(),
+                    success: false,
+                    error: Some(e.to_string()),
+                });
+            }
+        }
+    }
+
+    Ok(BatchUpdateResult {
+        success_count,
+        failed_count,
+        results,
+    })
+}
+
+// ========== Agents 更新命令 ==========
+
+/// 单个 Agent 更新结果
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentUpdateResult {
+    pub id: String,
+    pub success: bool,
+    pub new_hash: Option<String>,
+    pub error: Option<String>,
+}
+
+/// 内部函数：更新单个 Agent
+///
+/// 流程：
+/// 1. 获取已安装的 Agent 信息
+/// 2. 获取最新的 file_hash
+/// 3. 重新下载并安装（覆盖现有文件）
+/// 4. 更新数据库记录
+async fn update_agent_internal(
+    db: &Arc<Database>,
+    agent_id: String,
+) -> Result<AgentUpdateResult, AppError> {
+    // 获取已安装的 Agent
+    let installed = db
+        .get_installed_agent(&agent_id)?
+        .ok_or_else(|| AppError::Message(format!("Agent 不存在: {agent_id}")))?;
+
+    // 检查是否有仓库信息（本地导入的无法更新）
+    let repo_owner = installed.repo_owner.clone().ok_or_else(|| {
+        AppError::Message("本地导入的 Agent 不支持更新".to_string())
+    })?;
+    let repo_name = installed.repo_name.clone().unwrap_or_default();
+    let repo_branch = installed.repo_branch.clone().unwrap_or_else(|| "main".to_string());
+
+    // 获取 GitHub Token
+    let github_token = db.get_setting("github_pat")?;
+    let update_service = UpdateService::new(github_token.clone());
+
+    // 检查更新并获取新的 hash
+    let check_result = update_service
+        .check_file_resource_update(
+            &agent_id,
+            Some(&repo_owner),
+            Some(&repo_name),
+            Some(&repo_branch),
+            installed.source_path.as_deref(),
+            installed.file_hash.as_deref(),
+        )
+        .await;
+
+    if !check_result.has_update {
+        return Ok(AgentUpdateResult {
+            id: agent_id,
+            success: true,
+            new_hash: installed.file_hash,
+            error: Some("已是最新版本".to_string()),
+        });
+    }
+
+    let _new_hash = check_result.new_hash.clone();
+
+    // 构造 DiscoverableAgent 用于重新安装
+    let discoverable = DiscoverableAgent {
+        key: installed.id.clone(),
+        name: installed.name.clone(),
+        description: installed.description.clone().unwrap_or_default(),
+        namespace: installed.namespace.clone(),
+        filename: installed.filename.clone(),
+        model: installed.model.clone(),
+        tools: installed.tools.clone(),
+        readme_url: installed.readme_url.clone(),
+        repo_owner: repo_owner.clone(),
+        repo_name: repo_name.clone(),
+        repo_branch: repo_branch.clone(),
+        source_path: installed.source_path.clone(),
+    };
+
+    // 删除 SSOT 中的旧文件，强制重新下载
+    let ssot_dir = AgentService::get_ssot_dir()
+        .map_err(|e| AppError::Message(e.to_string()))?;
+    let old_path = ssot_dir.join(AgentService::id_to_relative_path(&installed.id));
+    if old_path.exists() {
+        log::info!("删除 SSOT 中的旧版本: {}", old_path.display());
+        let _ = std::fs::remove_file(&old_path);
+    }
+
+    // 确定当前启用的应用（用于安装时的同步）
+    let current_app = if installed.apps.claude {
+        AppType::Claude
+    } else if installed.apps.codex {
+        AppType::Codex
+    } else {
+        AppType::Gemini
+    };
+
+    // 重新安装（会覆盖现有文件）
+    let agent_service = AgentService::new();
+
+    match agent_service.install(db, &discoverable, &current_app).await {
+        Ok(updated_agent) => {
+            // 恢复原有的应用启用状态（install 只启用 current_app）
+            db.update_agent_apps(&agent_id, &installed.apps)?;
+
+            // 同步到其他启用的应用
+            if installed.apps.claude && current_app != AppType::Claude {
+                let _ = AgentService::copy_to_app(&installed.id, &AppType::Claude);
+            }
+            if installed.apps.codex && current_app != AppType::Codex {
+                let _ = AgentService::copy_to_app(&installed.id, &AppType::Codex);
+            }
+            if installed.apps.gemini && current_app != AppType::Gemini {
+                let _ = AgentService::copy_to_app(&installed.id, &AppType::Gemini);
+            }
+
+            log::info!("Agent {} 更新成功", agent_id);
+            Ok(AgentUpdateResult {
+                id: agent_id,
+                success: true,
+                new_hash: updated_agent.file_hash,
+                error: None,
+            })
+        }
+        Err(e) => {
+            log::error!("Agent {} 更新失败: {}", agent_id, e);
+            Ok(AgentUpdateResult {
+                id: agent_id,
+                success: false,
+                new_hash: None,
+                error: Some(e.to_string()),
+            })
+        }
+    }
+}
+
+/// 更新单个 Agent（Tauri 命令）
+#[tauri::command]
+pub async fn update_agent(
+    app_state: State<'_, AppState>,
+    agent_id: String,
+) -> Result<AgentUpdateResult, AppError> {
+    update_agent_internal(&app_state.db, agent_id).await
+}
+
+/// 批量更新 Agents
+#[tauri::command]
+pub async fn update_agents_batch(
+    app_state: State<'_, AppState>,
+    agent_ids: Vec<String>,
+) -> Result<BatchUpdateResult, AppError> {
+    let db = &app_state.db;
+    let mut results = Vec::new();
+    let mut success_count = 0u32;
+    let mut failed_count = 0u32;
+
+    for agent_id in agent_ids {
+        match update_agent_internal(db, agent_id.clone()).await {
+            Ok(result) => {
+                if result.success && result.error.is_none() {
+                    success_count += 1;
+                } else if result.error.as_deref() != Some("已是最新版本") {
+                    failed_count += 1;
+                }
+                results.push(UpdateExecuteResult {
+                    id: result.id,
+                    success: result.success,
+                    error: result.error,
+                });
+            }
+            Err(e) => {
+                failed_count += 1;
+                results.push(UpdateExecuteResult {
+                    id: agent_id,
+                    success: false,
+                    error: Some(e.to_string()),
+                });
+            }
+        }
+    }
+
+    Ok(BatchUpdateResult {
+        success_count,
+        failed_count,
+        results,
+    })
+}
+
+/// 修复缺少 file_hash 的 Agents
+///
+/// 遍历所有已安装的 Agents，为没有 file_hash 的项目从 GitHub 获取并更新
+#[tauri::command]
+pub async fn fix_agents_hash(
+    app_state: State<'_, AppState>,
+) -> Result<BatchUpdateResult, AppError> {
+    let db = &app_state.db;
+    let agents = db.get_all_installed_agents()?;
+    let github_token = db.get_setting("github_pat")?;
+    let github_api = GitHubApiService::new(github_token);
+
+    let mut results = Vec::new();
+    let mut success_count = 0u32;
+    let mut failed_count = 0u32;
+
+    for agent in agents.values() {
+        // 跳过本地导入的 Agent
+        if agent.repo_owner.is_none() {
+            continue;
+        }
+
+        // 跳过已有 hash 的 Agent
+        if agent.file_hash.is_some() {
+            continue;
+        }
+
+        let owner = agent.repo_owner.as_ref().unwrap();
+        let repo = agent.repo_name.as_ref().unwrap();
+        let branch = agent.repo_branch.as_ref().unwrap();
+
+        // 使用 source_path 作为文件路径
+        let source_path = match &agent.source_path {
+            Some(p) => p.clone(),
+            None => {
+                log::warn!("Agent {} 没有 source_path，跳过", agent.name);
+                continue;
+            }
+        };
+
+        // 从 GitHub 获取文件 hash (返回 (sha, size) 元组)
+        match github_api
+            .get_file_blob_sha(owner, repo, branch, &source_path)
+            .await
+        {
+            Ok((hash, _size)) => {
+                // 更新数据库
+                if let Err(e) = db.update_agent_hash(&agent.id, &hash) {
+                    log::error!("更新 Agent {} hash 失败: {}", agent.id, e);
+                    failed_count += 1;
+                    results.push(UpdateExecuteResult {
+                        id: agent.id.clone(),
+                        success: false,
+                        error: Some(e.to_string()),
+                    });
+                } else {
+                    log::info!("已修复 Agent {} 的 file_hash: {}", agent.name, hash);
+                    success_count += 1;
+                    results.push(UpdateExecuteResult {
+                        id: agent.id.clone(),
+                        success: true,
+                        error: None,
+                    });
+                }
+            }
+            Err(e) => {
+                log::warn!("获取 Agent {} hash 失败: {}", agent.name, e);
+                failed_count += 1;
+                results.push(UpdateExecuteResult {
+                    id: agent.id.clone(),
                     success: false,
                     error: Some(e.to_string()),
                 });

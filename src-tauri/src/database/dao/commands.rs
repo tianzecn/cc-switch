@@ -34,7 +34,7 @@ impl Database {
                 r#"
                 SELECT id, name, description, namespace, filename, category,
                        allowed_tools, mcp_servers, personas, extra_metadata,
-                       repo_owner, repo_name, repo_branch, readme_url,
+                       repo_owner, repo_name, repo_branch, readme_url, source_path,
                        enabled_claude, enabled_codex, enabled_gemini,
                        file_hash, installed_at
                 FROM commands
@@ -68,13 +68,14 @@ impl Database {
                     repo_name: row.get(11)?,
                     repo_branch: row.get(12)?,
                     readme_url: row.get(13)?,
+                    source_path: row.get(14)?,
                     apps: CommandApps {
-                        claude: row.get::<_, i32>(14)? != 0,
-                        codex: row.get::<_, i32>(15)? != 0,
-                        gemini: row.get::<_, i32>(16)? != 0,
+                        claude: row.get::<_, i32>(15)? != 0,
+                        codex: row.get::<_, i32>(16)? != 0,
+                        gemini: row.get::<_, i32>(17)? != 0,
                     },
-                    file_hash: row.get(17)?,
-                    installed_at: row.get(18)?,
+                    file_hash: row.get(18)?,
+                    installed_at: row.get(19)?,
                 })
             })
             .map_err(|e| AppError::Database(e.to_string()))?;
@@ -96,7 +97,7 @@ impl Database {
                 r#"
                 SELECT id, name, description, namespace, filename, category,
                        allowed_tools, mcp_servers, personas, extra_metadata,
-                       repo_owner, repo_name, repo_branch, readme_url,
+                       repo_owner, repo_name, repo_branch, readme_url, source_path,
                        enabled_claude, enabled_codex, enabled_gemini,
                        file_hash, installed_at
                 FROM commands
@@ -130,13 +131,14 @@ impl Database {
                     repo_name: row.get(11)?,
                     repo_branch: row.get(12)?,
                     readme_url: row.get(13)?,
+                    source_path: row.get(14)?,
                     apps: CommandApps {
-                        claude: row.get::<_, i32>(14)? != 0,
-                        codex: row.get::<_, i32>(15)? != 0,
-                        gemini: row.get::<_, i32>(16)? != 0,
+                        claude: row.get::<_, i32>(15)? != 0,
+                        codex: row.get::<_, i32>(16)? != 0,
+                        gemini: row.get::<_, i32>(17)? != 0,
                     },
-                    file_hash: row.get(17)?,
-                    installed_at: row.get(18)?,
+                    file_hash: row.get(18)?,
+                    installed_at: row.get(19)?,
                 })
             })
             .optional()
@@ -153,10 +155,10 @@ impl Database {
             INSERT OR REPLACE INTO commands (
                 id, name, description, namespace, filename, category,
                 allowed_tools, mcp_servers, personas, extra_metadata,
-                repo_owner, repo_name, repo_branch, readme_url,
+                repo_owner, repo_name, repo_branch, readme_url, source_path,
                 enabled_claude, enabled_codex, enabled_gemini,
                 file_hash, installed_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)
             "#,
             params![
                 command.id,
@@ -173,6 +175,7 @@ impl Database {
                 command.repo_name,
                 command.repo_branch,
                 command.readme_url,
+                command.source_path,
                 command.apps.claude as i32,
                 command.apps.codex as i32,
                 command.apps.gemini as i32,
@@ -241,7 +244,7 @@ impl Database {
                 r#"
                 SELECT id, name, description, namespace, filename, category,
                        allowed_tools, mcp_servers, personas, extra_metadata,
-                       repo_owner, repo_name, repo_branch, readme_url,
+                       repo_owner, repo_name, repo_branch, readme_url, source_path,
                        enabled_claude, enabled_codex, enabled_gemini,
                        file_hash, installed_at
                 FROM commands
@@ -276,13 +279,14 @@ impl Database {
                     repo_name: row.get(11)?,
                     repo_branch: row.get(12)?,
                     readme_url: row.get(13)?,
+                    source_path: row.get(14)?,
                     apps: CommandApps {
-                        claude: row.get::<_, i32>(14)? != 0,
-                        codex: row.get::<_, i32>(15)? != 0,
-                        gemini: row.get::<_, i32>(16)? != 0,
+                        claude: row.get::<_, i32>(15)? != 0,
+                        codex: row.get::<_, i32>(16)? != 0,
+                        gemini: row.get::<_, i32>(17)? != 0,
                     },
-                    file_hash: row.get(17)?,
-                    installed_at: row.get(18)?,
+                    file_hash: row.get(18)?,
+                    installed_at: row.get(19)?,
                 })
             })
             .map_err(|e| AppError::Database(e.to_string()))?;
@@ -592,6 +596,7 @@ mod tests {
             repo_name: Some("test-repo".to_string()),
             repo_branch: Some("main".to_string()),
             readme_url: None,
+            source_path: Some(format!("commands/{}/{}.md", namespace, filename)),
             apps: CommandApps {
                 claude: true,
                 codex: false,

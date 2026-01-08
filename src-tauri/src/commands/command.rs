@@ -76,6 +76,24 @@ pub fn uninstall_command_unified(
     Ok(true)
 }
 
+/// 批量卸载 Commands
+///
+/// 返回成功卸载的数量
+#[tauri::command]
+pub fn uninstall_commands_batch(
+    ids: Vec<String>,
+    app_state: State<'_, AppState>,
+) -> Result<usize, String> {
+    let mut success_count = 0;
+    for id in &ids {
+        match CommandService::uninstall(&app_state.db, id) {
+            Ok(_) => success_count += 1,
+            Err(e) => log::warn!("卸载 Command {} 失败: {}", id, e),
+        }
+    }
+    Ok(success_count)
+}
+
 /// 切换 Command 的应用启用状态
 #[tauri::command]
 pub fn toggle_command_app(

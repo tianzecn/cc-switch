@@ -40,6 +40,7 @@ use crate::app_config::{
 };
 use crate::config::get_app_config_dir;
 use crate::database::Database;
+use crate::services::github_api::GitHubApiService;
 use anyhow::{anyhow, Result};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -316,7 +317,37 @@ impl HookService {
 
         // 解析元数据
         let metadata = Self::parse_hook_metadata(&content)?;
-        let file_hash = Self::compute_hash(&content);
+
+        // 从 GitHub 获取 blob SHA（与更新检测使用相同的 hash 算法）
+        let file_hash = if let Some(ref source_path) = hook.source_path {
+            let github_token = db.get_setting("github_pat").ok().flatten();
+            let github_api = GitHubApiService::new(github_token);
+            match github_api
+                .get_file_blob_sha(
+                    &hook.repo_owner,
+                    &hook.repo_name,
+                    &hook.repo_branch,
+                    source_path,
+                )
+                .await
+            {
+                Ok((sha, _size)) => {
+                    log::debug!("Hook {} 获取 GitHub blob SHA: {}", hook.name, sha);
+                    sha
+                }
+                Err(e) => {
+                    log::warn!(
+                        "Hook {} 获取 GitHub blob SHA 失败，回退到本地计算: {}",
+                        hook.name,
+                        e
+                    );
+                    Self::compute_hash(&content)
+                }
+            }
+        } else {
+            Self::compute_hash(&content)
+        };
+
         let (namespace, filename) = Self::parse_id(&hook.key);
 
         // 创建 InstalledHook 记录

@@ -173,6 +173,21 @@ export function useUninstallAgent() {
 }
 
 /**
+ * 批量卸载 Agents
+ */
+export function useUninstallAgentsBatch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => agentsApi.uninstallBatch(ids),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: agentKeys.installed() });
+      queryClient.invalidateQueries({ queryKey: agentKeys.namespaces() });
+      queryClient.invalidateQueries({ queryKey: agentKeys.discoverable() });
+    },
+  });
+}
+
+/**
  * 切换 Agent 在特定应用的启用状态
  */
 export function useToggleAgentApp() {

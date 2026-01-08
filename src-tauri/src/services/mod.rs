@@ -16,8 +16,6 @@ pub mod update;
 pub mod usage_stats;
 
 pub use agent::{AgentMetadata, AgentService};
-pub use github_api::{GitHubApiError, GitHubApiService, RateLimitInfo};
-pub use update::{BatchCheckResult, ResourceType, UpdateExecuteResult, UpdateService};
 pub use hook::HookService;
 pub use command::{CommandMetadata, CommandService};
 pub use config::ConfigService;

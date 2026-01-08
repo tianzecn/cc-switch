@@ -63,6 +63,19 @@ export function useUninstallSkill() {
 }
 
 /**
+ * 批量卸载 Skills
+ */
+export function useUninstallSkillsBatch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => skillsApi.uninstallBatch(ids),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["skills", "installed"] });
+    },
+  });
+}
+
+/**
  * 切换 Skill 在特定应用的启用状态
  */
 export function useToggleSkillApp() {
