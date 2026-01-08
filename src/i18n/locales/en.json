@@ -36,7 +36,12 @@
     "search": "Search",
     "reset": "Reset",
     "actions": "Actions",
-    "deleting": "Deleting..."
+    "deleting": "Deleting...",
+    "installed": "Installed",
+    "discover": "Discover",
+    "install": "Install",
+    "loadMore": "Load more",
+    "repoManager": "Repository"
   },
   "apiKeyInput": {
     "placeholder": "Enter API Key",
@@ -858,7 +863,9 @@
     "emptyDescription": "Add skill repositories to discover available skills",
     "addRepo": "Add Skill Repository",
     "loading": "Loading...",
-    "installed": "Installed",
+    "installed": "{{count}} Installed",
+    "installedCount": "{{count}} Installed",
+    "available": "{{count}} Available",
     "install": "Install",
     "installing": "Installing...",
     "uninstall": "Uninstall",
@@ -1252,6 +1259,14 @@
     "allManagedDescription": "No unmanaged agent files found",
     "searchPlaceholder": "Search agents...",
     "loadingDiscoverable": "Loading available agents...",
+    "selectRepoOrNamespace": "Select a repository or namespace to view agents",
+    "agentsInSelection": "{{count}} agent(s) in selection",
+    "viewDocs": "View Documentation",
+    "import": "Import",
+    "comingSoon": {
+      "title": "Coming Soon",
+      "description": "Agent management feature is under development, stay tuned."
+    },
     "repo": {
       "manage": "Manage Repos",
       "addSuccess": "Repository added successfully",

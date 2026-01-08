@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Search, RefreshCw, Download, Compass, Sparkles, Loader2, Settings, Trash2 } from "lucide-react";
 import { CheckUpdatesButton, UpdateNotificationBar, UpdateBadge } from "@/components/updates";
 import { toast } from "sonner";
@@ -569,60 +570,75 @@ export const SkillsPageNew = forwardRef<
           </div>
 
           <div className="flex items-center gap-2">
-            {viewMode === "list" && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleUninstallAll}
-                disabled={filteredSkills.length === 0 || uninstallBatchMutation.isPending}
-                className="text-destructive hover:text-destructive"
-              >
-                <Trash2 size={16} />
-                <span className="ml-2">{t("skills.uninstallAll")}</span>
-              </Button>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRefresh}
-              disabled={loading}
+            {/* 模式切换 Tabs */}
+            <Tabs
+              value={viewMode === "discovery" ? "discovery" : "list"}
+              onValueChange={(val) => setViewMode(val as ViewMode)}
             >
-              <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
-            </Button>
-            <CheckUpdatesButton
-              isChecking={isCheckingUpdates || isFetchingUpdates || checkSkillsUpdatesByIdsMutation.isPending || fixSkillsHashMutation.isPending}
-              onCheck={handleCheckUpdates}
-              result={updateCheckResult}
-              disabled={loading}
-            />
-            <Button
-              variant={viewMode === "discovery" ? "default" : "outline"}
-              size="sm"
-              onClick={() =>
-                setViewMode(viewMode === "discovery" ? "list" : "discovery")
-              }
-            >
-              <Compass size={16} className="mr-1" />
-              {t("skills.discover", "Discover")}
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleOpenImport}>
-              <Download size={16} className="mr-1" />
-              {t("skills.import", "Import")}
-            </Button>
+              <TabsList className="h-8">
+                <TabsTrigger value="list" className="text-xs px-3 min-w-[80px]">
+                  {t("common.installed")}
+                </TabsTrigger>
+                <TabsTrigger value="discovery" className="text-xs px-3 min-w-[80px]">
+                  {t("common.discover")}
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+
+            {/* 仓库管理 */}
             <Button
               variant="outline"
               size="sm"
               onClick={() => setRepoManagerOpen(true)}
             >
               <Settings size={16} className="mr-1" />
-              {t("skills.repoManager", "Repository")}
+              {t("common.repoManager")}
             </Button>
+
+            {/* 已安装模式：导入 + 检查更新 + 批量卸载 */}
+            {viewMode === "list" && (
+              <>
+                <Button variant="outline" size="sm" onClick={handleOpenImport}>
+                  <Download size={16} className="mr-1" />
+                  {t("skills.import", "Import")}
+                </Button>
+                <CheckUpdatesButton
+                  isChecking={isCheckingUpdates || isFetchingUpdates || checkSkillsUpdatesByIdsMutation.isPending || fixSkillsHashMutation.isPending}
+                  onCheck={handleCheckUpdates}
+                  result={updateCheckResult}
+                  disabled={loading || filteredSkills.length === 0}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleUninstallAll}
+                  disabled={filteredSkills.length === 0 || uninstallBatchMutation.isPending}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <Trash2 size={16} />
+                  <span className="ml-2">{t("skills.uninstallAll")}</span>
+                </Button>
+              </>
+            )}
+
+            {/* 发现模式：刷新 */}
+            {viewMode === "discovery" && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={loading}
+              >
+                <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+                <span className="ml-2">{t("common.refresh")}</span>
+              </Button>
+            )}
           </div>
         </div>
 
         {/* Search & Stats Bar */}
-        <div className="flex items-center gap-3">
-          <div className="relative w-64">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder={t("skills.searchPlaceholder", "Search skills...")}
@@ -657,11 +673,28 @@ export const SkillsPageNew = forwardRef<
           )}
 
           {/* Stats */}
-          <div className="text-sm text-muted-foreground">
-            {t("skills.installed", { count: stats.total })} ·{" "}
-            {t("skills.apps.claude")}: {stats.claude} · {t("skills.apps.codex")}:{" "}
-            {stats.codex} · {t("skills.apps.gemini")}: {stats.gemini}
+          <div className="text-sm text-muted-foreground whitespace-nowrap">
+            {viewMode === "list" ? (
+              <>
+                {t("skills.installed", { count: stats.total })}
+              </>
+            ) : (
+              <>
+                {t("skills.available", { count: discoverySkills.length })} · {t("skills.installedCount", { count: stats.total })}
+              </>
+            )}
           </div>
+
+          {/* 发现模式：Install All */}
+          {viewMode === "discovery" && batchInstallState && (
+            <BatchInstallButton
+              uninstalledCount={filteredDiscoverySkills.filter((s) => !s.installed).length}
+              state={batchInstallState}
+              onStartInstall={handleBatchInstall}
+              onCancelInstall={cancelBatchInstall}
+              disabled={batchInstallState.isInstalling}
+            />
+          )}
         </div>
       </div>
 
@@ -740,8 +773,6 @@ export const SkillsPageNew = forwardRef<
               isLoading={loading}
               installingKey={installingKey}
               batchState={batchInstallState}
-              onBatchInstall={handleBatchInstall}
-              onCancelBatch={cancelBatchInstall}
             />
           ) : null}
         </div>
@@ -799,10 +830,8 @@ interface DiscoveryListProps {
   onInstall: (skill: DiscoverableSkill) => void;
   isLoading: boolean;
   installingKey: string | null;
-  /** 批量安装相关 */
+  /** 批量安装状态（用于显示安装进度） */
   batchState?: import("@/hooks/useBatchInstall").BatchInstallState;
-  onBatchInstall?: () => void;
-  onCancelBatch?: () => void;
 }
 
 const DiscoveryList: React.FC<DiscoveryListProps> = ({
@@ -811,13 +840,8 @@ const DiscoveryList: React.FC<DiscoveryListProps> = ({
   isLoading,
   installingKey,
   batchState,
-  onBatchInstall,
-  onCancelBatch,
 }) => {
   const { t } = useTranslation();
-
-  // 计算未安装数量
-  const uninstalledCount = skills.filter((s) => !s.installed).length;
 
   if (isLoading) {
     return (
@@ -843,17 +867,6 @@ const DiscoveryList: React.FC<DiscoveryListProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* 批量安装按钮/进度 */}
-      {batchState && onBatchInstall && onCancelBatch && (
-        <BatchInstallButton
-          uninstalledCount={uninstalledCount}
-          state={batchState}
-          onStartInstall={onBatchInstall}
-          onCancelInstall={onCancelBatch}
-          disabled={batchState.isInstalling}
-        />
-      )}
-
       {/* Skills 列表 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {skills.map((skill) => (

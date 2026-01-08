@@ -36,7 +36,12 @@
     "search": "查询",
     "reset": "重置",
     "actions": "操作",
-    "deleting": "删除中..."
+    "deleting": "删除中...",
+    "installed": "已安装",
+    "discover": "发现",
+    "install": "安装",
+    "loadMore": "加载更多",
+    "repoManager": "仓库管理"
   },
   "apiKeyInput": {
     "placeholder": "请输入API Key",
@@ -858,7 +863,9 @@
     "emptyDescription": "添加技能仓库以发现可用的技能",
     "addRepo": "添加技能仓库",
     "loading": "加载中...",
-    "installed": "已安装",
+    "installed": "已安装 {{count}} 个",
+    "installedCount": "已安装 {{count}} 个",
+    "available": "可用 {{count}} 个",
     "install": "安装",
     "installing": "安装中...",
     "uninstall": "卸载",
@@ -1245,6 +1252,14 @@
     "allManagedDescription": "未发现需要导入的智能体文件",
     "searchPlaceholder": "搜索智能体...",
     "loadingDiscoverable": "加载可用智能体...",
+    "selectRepoOrNamespace": "选择一个仓库或命名空间以查看智能体",
+    "agentsInSelection": "已选择 {{count}} 个智能体",
+    "viewDocs": "查看文档",
+    "import": "导入",
+    "comingSoon": {
+      "title": "即将推出",
+      "description": "智能体管理功能正在开发中，敬请期待。"
+    },
     "repo": {
       "manage": "管理仓库",
       "addSuccess": "仓库添加成功",

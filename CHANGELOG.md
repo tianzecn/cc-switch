@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **范围更新检测** - Commands/Agents 页面支持按仓库/命名空间范围检查更新，与 Skills 页面保持一致
 
+### Changed
+
+- **统一模块 Header 布局** - Skills/Commands/Hooks/Agents 四个模块 Header 统一为 Tabs 模式切换 + 右侧按钮组
+- **统一搜索行布局** - 合并搜索框和统计信息到一行，支持响应式 flex-wrap
+- **Discovery 模式集成** - Commands/Hooks/Agents 的发现模式内容集成到主页面，不再单独跳转
+- **新增仓库管理入口** - 四个模块统一添加仓库管理按钮
+
+### Fixed
+
+- **Agents 国际化** - 修复 AgentsPanel 和 AgentsPage 中的硬编码文本，添加完整的 i18n 支持
+
 ## [3.9.0-3] - 2025-12-29
 
 ### Beta Release
