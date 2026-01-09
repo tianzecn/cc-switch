@@ -147,6 +147,22 @@ jobs:
         if: runner.os == 'macOS'
         run: pnpm tauri build --target universal-apple-darwin
 
+      - name: Install WiX Toolset (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # 手动下载安装 WiX 3.14 避免 Tauri 自动下载失败
+          $wixDir = "$env:LOCALAPPDATA\tauri\WixTools314"
+          New-Item -ItemType Directory -Force -Path $wixDir | Out-Null
+          $wixUrl = "https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip"
+          $wixZip = "$env:RUNNER_TEMP\wix314.zip"
+          Write-Host "Downloading WiX Toolset..."
+          Invoke-WebRequest -Uri $wixUrl -OutFile $wixZip -UseBasicParsing
+          Write-Host "Extracting WiX Toolset..."
+          Expand-Archive -Path $wixZip -DestinationPath $wixDir -Force
+          Write-Host "WiX Toolset installed to: $wixDir"
+          Get-ChildItem $wixDir | Select-Object Name
+
       - name: Build Tauri App (Windows)
         if: runner.os == 'Windows'
         run: pnpm tauri build
