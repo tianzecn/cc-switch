@@ -321,7 +321,8 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: CC Switch ${{ github.ref_name }}
-          prerelease: true
+          # 版本号包含 "-alpha" 或 "-beta" 时标记为预发布，其他都是正式版本
+          prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') }}
           body: |
             ## CC Switch ${{ github.ref_name }}
 
