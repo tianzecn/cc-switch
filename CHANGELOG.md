@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **应用内自动升级** - 完整的应用内升级功能，让用户无需手动下载即可更新到最新版本
+  - CI/CD 完整配置：GitHub Actions 多平台构建工作流
+  - Windows 打包：从 WiX 切换到 NSIS 打包，解决 CI 环境兼容性问题
+  - 签名配置：minisign 密钥对生成 + GitHub Secrets 配置
+  - 发布产物：Windows Setup.exe、macOS DMG/tar.gz、Linux AppImage/deb
   - 启动时自动检测更新 + 每 6 小时定时检测
   - 更新对话框显示版本对比、更新日志、下载进度
   - 支持跳过版本功能，记住用户选择

@@ -20,6 +20,7 @@
   - Phase 4: 前端 UI - `UpdateDialog` 组件 + `useAppUpdater` Hook
   - Phase 5: i18n - 中/英/日三语言翻译
   - Phase 6: 集成 - `AppUpdaterContext` + main.tsx 集成
+  - **CI/CD 完善**: 签名密钥配置、从 WiX 切换到 NSIS 打包
   - 实现计划文档: `~/.claude/plans/crystalline-watching-alpaca.md`
 
 - [x] **统一模块 Header 布局** - ✅ OpenSpec 已归档: `2026-01-08-unify-module-header-searchbar`
