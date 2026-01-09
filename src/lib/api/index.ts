@@ -8,6 +8,8 @@ export { vscodeApi } from "./vscode";
 export { proxyApi } from "./proxy";
 export { commandsApi } from "./commands";
 export { updateApi } from "./update";
+export { appUpdaterApi } from "./appUpdater";
+export type { SkippedVersionInfo, UpdaterConfigInfo } from "./appUpdater";
 export * as configApi from "./config";
 export type { ProviderSwitchEvent } from "./providers";
 export type { Prompt } from "./prompts";

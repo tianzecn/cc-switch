@@ -890,6 +890,17 @@ pub fn run() {
             commands::upsert_universal_provider,
             commands::delete_universal_provider,
             commands::sync_universal_provider,
+            // App updater commands
+            commands::get_skipped_versions,
+            commands::skip_app_version,
+            commands::is_version_skipped,
+            commands::remove_skipped_version,
+            commands::clear_skipped_versions,
+            commands::get_updater_config,
+            commands::set_updater_proxy,
+            commands::update_last_check_time,
+            commands::should_auto_check_update,
+            commands::save_updater_config,
         ]);
 
     let app = builder

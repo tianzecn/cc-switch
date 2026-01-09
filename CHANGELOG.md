@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **应用内自动升级** - 完整的应用内升级功能，让用户无需手动下载即可更新到最新版本
+  - 启动时自动检测更新 + 每 6 小时定时检测
+  - 更新对话框显示版本对比、更新日志、下载进度
+  - 支持跳过版本功能，记住用户选择
+  - 支持强制更新标记（mandatory 字段）
+  - 下载失败自动重试机制（最多 3 次）
+  - 代理配置支持（系统代理 + 手动配置）
+  - 完整的 i18n 国际化支持（中/英/日）
+  - 后端服务：`AppUpdaterService` + SQLite 持久化
+  - 前端组件：`UpdateDialog` + `useAppUpdater` Hook + `AppUpdaterContext`
+
 - **内置仓库管理** - Skills 和 Commands 支持内置仓库配置，提供更好的开箱即用体验
   - 从 JSON 配置文件加载内置仓库列表（Skills 3 个，Commands 5 个）
   - 内置仓库显示「内置」徽章，支持多语言描述（中/英/日）

@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { UpdateProvider } from "./contexts/UpdateContext";
+import { AppUpdaterProvider } from "./contexts/AppUpdaterContext";
 import "./index.css";
 // 导入国际化配置
 import i18n from "./i18n";
@@ -93,8 +94,10 @@ async function bootstrap() {
         <ThemeProvider defaultTheme="system" storageKey="cc-switch-theme">
           <TooltipProvider>
             <UpdateProvider>
-              <App />
-              <Toaster />
+              <AppUpdaterProvider>
+                <App />
+                <Toaster />
+              </AppUpdaterProvider>
             </UpdateProvider>
           </TooltipProvider>
         </ThemeProvider>

@@ -401,6 +401,15 @@ impl Database {
         )
         .map_err(|e| AppError::Database(e.to_string()))?;
 
+        // 16. Skipped Versions 表 (应用更新跳过的版本)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS skipped_versions (
+            version TEXT PRIMARY KEY, skipped_at TEXT NOT NULL
+        )",
+            [],
+        )
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
         // 尝试添加 live_takeover_active 列到 proxy_config 表
         let _ = conn.execute(
             "ALTER TABLE proxy_config ADD COLUMN live_takeover_active INTEGER NOT NULL DEFAULT 0",

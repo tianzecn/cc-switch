@@ -162,8 +162,8 @@ jobs:
           set -euxo pipefail
           mkdir -p release-assets
           VERSION="${GITHUB_REF_NAME}"  # e.g., v3.5.0
-          echo "Looking for updater artifact (.tar.gz) and .app for zip..."
-          TAR_GZ=""; APP_PATH=""
+          echo "Looking for updater artifact (.tar.gz), .dmg and .app for zip..."
+          TAR_GZ=""; APP_PATH=""; DMG_PATH=""
           for path in \
             "src-tauri/target/universal-apple-darwin/release/bundle/macos" \
             "src-tauri/target/aarch64-apple-darwin/release/bundle/macos" \
@@ -172,6 +172,16 @@ jobs:
             if [ -d "$path" ]; then
               [ -z "$TAR_GZ" ] && TAR_GZ=$(find "$path" -maxdepth 1 -name "*.tar.gz" -type f | head -1 || true)
               [ -z "$APP_PATH" ] && APP_PATH=$(find "$path" -maxdepth 1 -name "*.app" -type d | head -1 || true)
+            fi
+          done
+          # 单独搜索 dmg（可能在 dmg 子目录下）
+          for path in \
+            "src-tauri/target/universal-apple-darwin/release/bundle/dmg" \
+            "src-tauri/target/aarch64-apple-darwin/release/bundle/dmg" \
+            "src-tauri/target/x86_64-apple-darwin/release/bundle/dmg" \
+            "src-tauri/target/release/bundle/dmg"; do
+            if [ -d "$path" ]; then
+              [ -z "$DMG_PATH" ] && DMG_PATH=$(find "$path" -maxdepth 1 -name "*.dmg" -type f | head -1 || true)
             fi
           done
           if [ -z "$TAR_GZ" ]; then
@@ -183,6 +193,28 @@ jobs:
           cp "$TAR_GZ" "release-assets/$NEW_TAR_GZ"
           [ -f "$TAR_GZ.sig" ] && cp "$TAR_GZ.sig" "release-assets/$NEW_TAR_GZ.sig" || echo ".sig for macOS not found yet"
           echo "macOS updater artifact copied: $NEW_TAR_GZ"
+          # 处理 .dmg 文件
+          if [ -n "$DMG_PATH" ]; then
+            NEW_DMG="CC-Switch-${VERSION}-macOS.dmg"
+            cp "$DMG_PATH" "release-assets/$NEW_DMG"
+            echo "macOS DMG copied: $NEW_DMG"
+          else
+            echo "No .dmg found, will create from .app if available"
+            # 如果没有 .dmg 但有 .app，使用 create-dmg 创建
+            if [ -n "$APP_PATH" ] && command -v create-dmg &> /dev/null; then
+              NEW_DMG="CC-Switch-${VERSION}-macOS.dmg"
+              create-dmg \
+                --volname "CC Switch" \
+                --window-pos 200 120 \
+                --window-size 600 400 \
+                --icon-size 100 \
+                --hide-extension "CC Switch.app" \
+                --app-drop-link 450 200 \
+                "release-assets/$NEW_DMG" \
+                "$APP_PATH" || echo "create-dmg failed, skipping dmg creation"
+            fi
+          fi
+          # 创建 zip（用于手动下载）
           if [ -n "$APP_PATH" ]; then
             APP_DIR=$(dirname "$APP_PATH"); APP_NAME=$(basename "$APP_PATH")
             NEW_ZIP="CC-Switch-${VERSION}-macOS.zip"
@@ -297,7 +329,7 @@ jobs:
 
             ### 下载
 
-            - **macOS**: `CC-Switch-${{ github.ref_name }}-macOS.zip`（解压即用）或 `CC-Switch-${{ github.ref_name }}-macOS.tar.gz`（Homebrew）
+            - **macOS**: `CC-Switch-${{ github.ref_name }}-macOS.dmg`（推荐，DMG 安装镜像）或 `CC-Switch-${{ github.ref_name }}-macOS.zip`（解压即用）
             - **Windows**: `CC-Switch-${{ github.ref_name }}-Windows.msi`（安装版）或 `CC-Switch-${{ github.ref_name }}-Windows-Portable.zip`（绿色版）
             - **Linux**: `CC-Switch-${{ github.ref_name }}-Linux.AppImage`（AppImage）或 `CC-Switch-${{ github.ref_name }}-Linux.deb`（Debian/Ubuntu）
 
@@ -339,11 +371,35 @@ jobs:
         env:
           REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           VERSION="${TAG#v}"
           PUB_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           base_url="https://github.com/$REPO/releases/download/$TAG"
+
+          # 从 GitHub Release 获取 release notes
+          echo "Fetching release notes from GitHub..."
+          RELEASE_BODY=$(gh release view "$TAG" --repo "$REPO" --json body -q '.body' 2>/dev/null || echo "")
+
+          # 如果 release body 为空，使用默认值
+          if [ -z "$RELEASE_BODY" ]; then
+            RELEASE_BODY="Release $TAG"
+          fi
+
+          # 检查是否为强制更新（在 release body 中包含 [MANDATORY] 或 [mandatory] 标记）
+          MANDATORY="false"
+          if echo "$RELEASE_BODY" | grep -qi '\[MANDATORY\]'; then
+            MANDATORY="true"
+            # 移除 [MANDATORY] 标记后再存储到 notes
+            RELEASE_BODY=$(echo "$RELEASE_BODY" | sed -E 's/\[MANDATORY\]//gi' | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')
+          fi
+
+          # 转义 JSON 字符串（处理换行、引号等）
+          NOTES_ESCAPED=$(echo "$RELEASE_BODY" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))')
+          # 移除外层引号，因为我们在 JSON 中会再次添加
+          NOTES_ESCAPED=${NOTES_ESCAPED:1:-1}
+
           # 初始化空平台映射
           mac_url=""; mac_sig=""
           win_url=""; win_sig=""
@@ -368,9 +424,10 @@ jobs:
           tmp_json=$(mktemp)
           {
             echo '{'
-            echo "  \"version\": \"$VERSION\",";
-            echo "  \"notes\": \"Release $TAG\",";
-            echo "  \"pub_date\": \"$PUB_DATE\",";
+            echo "  \"version\": \"$VERSION\","
+            echo "  \"notes\": \"$NOTES_ESCAPED\","
+            echo "  \"pub_date\": \"$PUB_DATE\","
+            echo "  \"mandatory\": $MANDATORY,"
             echo '  "platforms": {'
             first=1
             if [ -n "$mac_url" ] && [ -n "$mac_sig" ]; then
@@ -395,6 +452,8 @@ jobs:
             echo '}'
           } > "$tmp_json"
           echo "Generated latest.json:" && cat "$tmp_json"
+          # 验证 JSON 格式
+          python3 -c "import json; json.load(open('$tmp_json'))" || { echo "Invalid JSON generated!"; exit 1; }
           mv "$tmp_json" latest.json
       - name: Upload latest.json to release
         env:

@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod app_updater;
 pub mod builtin_repos;
 pub mod command;
 pub mod config;
@@ -17,6 +18,7 @@ pub mod update;
 pub mod usage_stats;
 
 pub use agent::{AgentMetadata, AgentService};
+pub use app_updater::{AppUpdaterService, SkippedVersion, UpdaterConfig};
 pub use hook::HookService;
 pub use command::{CommandMetadata, CommandService};
 pub use config::ConfigService;

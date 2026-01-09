@@ -13,6 +13,15 @@
 
 ### 2026-01-09
 
+- [x] **应用内自动升级功能** - ✅ 全部 6 个阶段已完成
+  - Phase 1: CI/CD 配置 - latest.json 生成逻辑
+  - Phase 2: 后端服务 - `AppUpdaterService` + Tauri Commands + SQLite 存储
+  - Phase 3: 前端 API - `appUpdater.ts` API 封装
+  - Phase 4: 前端 UI - `UpdateDialog` 组件 + `useAppUpdater` Hook
+  - Phase 5: i18n - 中/英/日三语言翻译
+  - Phase 6: 集成 - `AppUpdaterContext` + main.tsx 集成
+  - 实现计划文档: `~/.claude/plans/crystalline-watching-alpaca.md`
+
 - [x] **统一模块 Header 布局** - ✅ OpenSpec 已归档: `2026-01-08-unify-module-header-searchbar`
   - Skills/Commands/Hooks/Agents 四个模块 Header 统一为 Tabs 模式切换 + 右侧按钮组
   - 合并搜索框和统计信息到一行，支持响应式 flex-wrap
@@ -66,35 +75,39 @@
 
 | 任务 | 状态 | 备注 |
 |------|------|------|
-| 树形仓库选择 Phase 2 | ✅ 部分完成 | Commands/Agents 页面已集成更新功能 |
+| 应用内自动升级测试 | 📋 待测试 | 功能已完成，需要端到端测试 |
 
 ### 中优先级
 
 | 任务 | 状态 | 备注 |
 |------|------|------|
 | Hooks 更新功能 | 📋 待开发 | 将更新功能扩展到 Hooks 模块 |
-| 单元测试补充 | 📋 可选 | 为新组件编写测试 (tasks.md 7.1-7.4) |
+| 单元测试补充 | 📋 可选 | 为新组件编写测试 |
 
 ## 下次继续
 
 ### 建议的下一步
 
-1. **Hooks 更新功能**
+1. **应用内升级功能测试**
+   - 运行 `pnpm dev` 测试升级对话框 UI
+   - 设置测试用 latest.json 验证完整流程
+   - 测试跳过版本功能
+   - 测试代理配置功能
+
+2. **Hooks 更新功能**
    - 将更新检测和安装功能扩展到 Hooks 模块
    - 复用 Commands/Agents 的实现模式
 
-2. **测试补充（可选）**
-   - 为更新相关 Hooks 补充单元测试
-   - 为批量卸载功能补充测试
-
 3. **版本发布**
    - 考虑 v3.9.0 正式版发布准备
+   - 整合所有新功能的发布说明
 
 ### 上下文恢复清单
 
 - [ ] 检查 git status 了解未提交的更改
 - [ ] 运行 `pnpm dev` 启动开发环境测试功能
-- [ ] 查看归档的 spec: `openspec/changes/archive/2026-01-07-add-tree-repo-selection/`
+- [ ] 测试应用内升级对话框: 设置页 → 关于 → 检查更新
+- [ ] 查看升级功能实现计划: `~/.claude/plans/crystalline-watching-alpaca.md`
 
 ## 技术债务
 

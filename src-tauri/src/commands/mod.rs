@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 
 pub mod agent;
+mod app_updater;
 pub mod command;
 mod config;
 mod deeplink;
@@ -21,6 +22,7 @@ mod update;
 mod usage;
 
 pub use agent::*;
+pub use app_updater::*;
 pub use command::*;
 pub use hook::*;
 pub use config::*;
