@@ -922,7 +922,11 @@
       "addFailed": "Failed to add",
       "removeSuccess": "Repository {{owner}}/{{name}} removed",
       "removeFailed": "Failed to remove",
-      "skillCount": "{{count}} skills detected"
+      "skillCount": "{{count}} skills detected",
+      "builtin": "Built-in",
+      "restoreBuiltin": "Restore Built-in",
+      "restoreSuccess": "Restored {{count}} built-in repositories",
+      "noMissing": "All built-in repositories exist"
     },
     "search": "Search Skills",
     "searchPlaceholder": "Search skill name or description...",
@@ -1100,7 +1104,11 @@
       "invalidUrl": "Invalid repository URL format",
       "list": "Added Repositories",
       "empty": "No repositories added. Add a repository to discover available Commands",
-      "commandCount": "{{count}} Commands"
+      "commandCount": "{{count}} Commands",
+      "builtin": "Built-in",
+      "restoreBuiltin": "Restore Built-in",
+      "restoreSuccess": "Restored {{count}} built-in repositories",
+      "noMissing": "All built-in repositories exist"
     }
   },
   "deeplink": {

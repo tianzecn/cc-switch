@@ -36,6 +36,7 @@ import {
   useCommandRepos,
   useAddCommandRepo,
   useRemoveCommandRepo,
+  useRestoreBuiltinCommandRepos,
   useRefreshDiscoverableCommands,
   type InstalledCommand,
   type AppType,
@@ -115,6 +116,7 @@ export const CommandsPage: React.FC = () => {
   const installMutation = useInstallCommand();
   const addRepoMutation = useAddCommandRepo();
   const removeRepoMutation = useRemoveCommandRepo();
+  const restoreBuiltinMutation = useRestoreBuiltinCommandRepos();
   const refreshDiscoverableMutation = useRefreshDiscoverableCommands();
   const batchInstall = useBatchInstallCommands();
 
@@ -433,6 +435,25 @@ export const CommandsPage: React.FC = () => {
   const handleRemoveRepo = async (owner: string, name: string) => {
     await removeRepoMutation.mutateAsync({ owner, name });
     toast.success(t("commands.repo.removeSuccess"), { closeButton: true });
+  };
+
+  const handleRestoreBuiltinRepos = async () => {
+    try {
+      const count = await restoreBuiltinMutation.mutateAsync();
+      if (count > 0) {
+        toast.success(t("commands.repo.restoreSuccess", { count }), {
+          closeButton: true,
+        });
+      } else {
+        toast.info(t("commands.repo.noMissing"), {
+          closeButton: true,
+        });
+      }
+    } catch (error) {
+      toast.error(t("common.error"), {
+        description: String(error),
+      });
+    }
   };
 
   const handleToggleDiscoveryNode = (nodeId: string) => {
@@ -758,6 +779,7 @@ export const CommandsPage: React.FC = () => {
           commands={discoverableCommands || []}
           onAdd={handleAddRepo}
           onRemove={handleRemoveRepo}
+          onRestoreBuiltin={handleRestoreBuiltinRepos}
           onClose={() => setShowRepoManager(false)}
         />
       )}

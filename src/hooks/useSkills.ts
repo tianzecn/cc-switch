@@ -161,6 +161,20 @@ export function useRemoveSkillRepo() {
   });
 }
 
+/**
+ * 恢复内置仓库
+ */
+export function useRestoreBuiltinSkillRepos() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => skillsApi.restoreBuiltinRepos(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["skills", "repos"] });
+      queryClient.invalidateQueries({ queryKey: ["skills", "discoverable"] });
+    },
+  });
+}
+
 // ========== 命名空间管理 (v3.12.0+) ==========
 
 /**

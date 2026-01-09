@@ -68,6 +68,16 @@ export interface SkillRepo {
   name: string;
   branch: string;
   enabled: boolean;
+  /** 是否为内置仓库 */
+  builtin: boolean;
+  /** 中文描述 */
+  description_zh?: string;
+  /** 英文描述 */
+  description_en?: string;
+  /** 日文描述 */
+  description_ja?: string;
+  /** 添加时间戳（内置仓库为 0） */
+  added_at: number;
 }
 
 /** Skill 冲突信息 */
@@ -171,9 +181,19 @@ export const skillsApi = {
     return await invoke("add_skill_repo", { repo });
   },
 
-  /** 删除仓库 */
+  /** 删除仓库（不允许删除内置仓库） */
   async removeRepo(owner: string, name: string): Promise<boolean> {
     return await invoke("remove_skill_repo", { owner, name });
+  },
+
+  /** 恢复内置仓库（添加缺失的内置仓库，不删除用户添加的） */
+  async restoreBuiltinRepos(): Promise<number> {
+    return await invoke("restore_builtin_skill_repos");
+  },
+
+  /** 检查仓库是否为内置仓库 */
+  async isBuiltinRepo(owner: string, name: string): Promise<boolean> {
+    return await invoke("is_builtin_skill_repo", { owner, name });
   },
 
   // ========== 命名空间管理 (v3.12.0+) ==========

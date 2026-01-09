@@ -92,6 +92,21 @@ pub struct SkillRepo {
     pub branch: String,
     /// 是否启用
     pub enabled: bool,
+    /// 是否为内置仓库
+    #[serde(default)]
+    pub builtin: bool,
+    /// 中文描述
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description_zh: Option<String>,
+    /// 英文描述
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description_en: Option<String>,
+    /// 日文描述
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description_ja: Option<String>,
+    /// 添加时间戳（内置仓库为 0）
+    #[serde(default)]
+    pub added_at: i64,
 }
 
 /// 技能安装状态（旧版兼容）
@@ -115,28 +130,11 @@ pub struct SkillStore {
 
 impl Default for SkillStore {
     fn default() -> Self {
+        // 内置仓库现在从 builtin-repos.json 加载，不再硬编码
+        // init_builtin_repos() 方法会在启动时同步内置仓库
         SkillStore {
             skills: HashMap::new(),
-            repos: vec![
-                SkillRepo {
-                    owner: "anthropics".to_string(),
-                    name: "skills".to_string(),
-                    branch: "main".to_string(),
-                    enabled: true,
-                },
-                SkillRepo {
-                    owner: "ComposioHQ".to_string(),
-                    name: "awesome-claude-skills".to_string(),
-                    branch: "master".to_string(),
-                    enabled: true,
-                },
-                SkillRepo {
-                    owner: "cexll".to_string(),
-                    name: "myclaude".to_string(),
-                    branch: "master".to_string(),
-                    enabled: true,
-                },
-            ],
+            repos: vec![],
         }
     }
 }
@@ -252,6 +250,11 @@ impl SkillService {
                 name: skill.repo_name.clone(),
                 branch: skill.repo_branch.clone(),
                 enabled: true,
+                builtin: false,
+                description_zh: None,
+                description_en: None,
+                description_ja: None,
+                added_at: 0,
             };
 
             // 下载仓库

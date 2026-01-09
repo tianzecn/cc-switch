@@ -79,6 +79,8 @@ export function RepoManager({
         name: parsed.name,
         branch: branch || "main",
         enabled: true,
+        builtin: false,
+        added_at: Date.now(),
       });
 
       setRepoUrl("");

@@ -100,6 +100,16 @@ export interface CommandRepo {
   name: string;
   branch: string;
   enabled: boolean;
+  /** 是否为内置仓库 */
+  builtin: boolean;
+  /** 中文描述 */
+  description_zh?: string;
+  /** 英文描述 */
+  description_en?: string;
+  /** 日文描述 */
+  description_ja?: string;
+  /** 添加时间戳（内置仓库为 0） */
+  added_at: number;
 }
 
 // ========== API ==========

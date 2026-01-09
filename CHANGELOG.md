@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **内置仓库管理** - Skills 和 Commands 支持内置仓库配置，提供更好的开箱即用体验
+  - 从 JSON 配置文件加载内置仓库列表（Skills 3 个，Commands 5 个）
+  - 内置仓库显示「内置」徽章，支持多语言描述（中/英/日）
+  - 内置仓库可禁用但不可删除，防止误操作
+  - 提供「恢复内置仓库」按钮，一键恢复缺失的内置仓库
+  - 应用升级时自动添加新的内置仓库
+  - 数据库迁移：v8→v9 新增 `builtin`、`description_zh/en/ja`、`added_at` 字段
+
 - **范围更新检测** - Commands/Agents 页面支持按仓库/命名空间范围检查更新，与 Skills 页面保持一致
 
 ### Changed

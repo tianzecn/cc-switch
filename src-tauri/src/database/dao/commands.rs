@@ -339,15 +339,15 @@ impl Database {
 
     // ========== Command Repos CRUD ==========
 
-    /// 获取所有 Command 仓库
+    /// 获取所有 Command 仓库（按 added_at 排序，内置仓库优先）
     pub fn get_all_command_repos(&self) -> Result<Vec<CommandRepo>, AppError> {
         let conn = lock_conn!(self.conn);
         let mut stmt = conn
             .prepare(
                 r#"
-                SELECT owner, name, branch, enabled
+                SELECT owner, name, branch, enabled, builtin, description_zh, description_en, description_ja, added_at
                 FROM command_repos
-                ORDER BY owner, name
+                ORDER BY added_at ASC, owner ASC, name ASC
                 "#,
             )
             .map_err(|e| AppError::Database(e.to_string()))?;
@@ -359,6 +359,11 @@ impl Database {
                     name: row.get(1)?,
                     branch: row.get(2)?,
                     enabled: row.get::<_, i32>(3)? != 0,
+                    builtin: row.get::<_, i32>(4)? != 0,
+                    description_zh: row.get(5)?,
+                    description_en: row.get(6)?,
+                    description_ja: row.get(7)?,
+                    added_at: row.get(8)?,
                 })
             })
             .map_err(|e| AppError::Database(e.to_string()))?;
@@ -376,19 +381,43 @@ impl Database {
         let conn = lock_conn!(self.conn);
         conn.execute(
             r#"
-            INSERT OR REPLACE INTO command_repos (owner, name, branch, enabled)
-            VALUES (?1, ?2, ?3, ?4)
+            INSERT OR REPLACE INTO command_repos (owner, name, branch, enabled, builtin, description_zh, description_en, description_ja, added_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
             "#,
-            params![repo.owner, repo.name, repo.branch, repo.enabled as i32],
+            params![
+                repo.owner,
+                repo.name,
+                repo.branch,
+                repo.enabled as i32,
+                repo.builtin as i32,
+                repo.description_zh,
+                repo.description_en,
+                repo.description_ja,
+                repo.added_at
+            ],
         )
         .map_err(|e| AppError::Database(e.to_string()))?;
 
         Ok(())
     }
 
-    /// 删除 Command 仓库
+    /// 删除 Command 仓库（不允许删除内置仓库）
     pub fn remove_command_repo(&self, owner: &str, name: &str) -> Result<bool, AppError> {
         let conn = lock_conn!(self.conn);
+
+        // 检查是否为内置仓库
+        let is_builtin: bool = conn
+            .query_row(
+                "SELECT builtin FROM command_repos WHERE owner = ?1 AND name = ?2",
+                params![owner, name],
+                |row| row.get::<_, i32>(0).map(|v| v != 0),
+            )
+            .unwrap_or(false);
+
+        if is_builtin {
+            return Err(AppError::Config("无法删除内置仓库".to_string()));
+        }
+
         let affected = conn
             .execute(
                 "DELETE FROM command_repos WHERE owner = ?1 AND name = ?2",
@@ -415,6 +444,101 @@ impl Database {
             .map_err(|e| AppError::Database(e.to_string()))?;
 
         Ok(affected > 0)
+    }
+
+    /// 同步内置 Command 仓库
+    ///
+    /// - 添加缺失的内置仓库
+    /// - 更新已存在内置仓库的描述（但保留用户的 enabled 和 branch 设置）
+    /// - 不删除用户自己添加的仓库
+    pub fn sync_builtin_command_repos(&self) -> Result<(usize, usize), AppError> {
+        use crate::services::builtin_repos::get_builtin_command_repos;
+
+        let builtin_repos = get_builtin_command_repos()?;
+        let existing = self.get_all_command_repos()?;
+
+        // 构建现有仓库的 map
+        let existing_map: std::collections::HashMap<(String, String), CommandRepo> = existing
+            .into_iter()
+            .map(|r| ((r.owner.clone(), r.name.clone()), r))
+            .collect();
+
+        let mut added = 0;
+        let mut updated = 0;
+
+        let conn = lock_conn!(self.conn);
+
+        for builtin in builtin_repos {
+            let key = (builtin.owner.clone(), builtin.name.clone());
+
+            if let Some(existing_repo) = existing_map.get(&key) {
+                // 仓库已存在，更新描述但保留用户设置
+                conn.execute(
+                    "UPDATE command_repos SET builtin = 1, description_zh = ?1, description_en = ?2, description_ja = ?3
+                     WHERE owner = ?4 AND name = ?5",
+                    params![
+                        builtin.description.zh,
+                        builtin.description.en,
+                        builtin.description.ja,
+                        builtin.owner,
+                        builtin.name,
+                    ],
+                )
+                .map_err(|e| AppError::Database(e.to_string()))?;
+
+                // 只有当描述实际发生变化时才计入 updated
+                if existing_repo.description_zh.as_deref() != Some(&builtin.description.zh)
+                    || existing_repo.description_en.as_deref() != Some(&builtin.description.en)
+                    || existing_repo.description_ja.as_deref() != Some(&builtin.description.ja)
+                {
+                    updated += 1;
+                }
+            } else {
+                // 仓库不存在，添加新的内置仓库
+                conn.execute(
+                    "INSERT INTO command_repos (owner, name, branch, enabled, builtin, description_zh, description_en, description_ja, added_at)
+                     VALUES (?1, ?2, ?3, 1, 1, ?4, ?5, ?6, 0)",
+                    params![
+                        builtin.owner,
+                        builtin.name,
+                        builtin.branch,
+                        builtin.description.zh,
+                        builtin.description.en,
+                        builtin.description.ja,
+                    ],
+                )
+                .map_err(|e| AppError::Database(e.to_string()))?;
+                added += 1;
+            }
+        }
+
+        if added > 0 || updated > 0 {
+            log::info!("同步内置 Command 仓库完成：新增 {added} 个，更新 {updated} 个");
+        }
+
+        Ok((added, updated))
+    }
+
+    /// 恢复默认内置 Command 仓库（仅添加缺失的内置仓库，不删除用户添加的）
+    pub fn restore_builtin_command_repos(&self) -> Result<usize, AppError> {
+        let (added, _) = self.sync_builtin_command_repos()?;
+        Ok(added)
+    }
+
+    /// 检查仓库是否为内置仓库
+    pub fn is_builtin_command_repo(&self, owner: &str, name: &str) -> Result<bool, AppError> {
+        let conn = lock_conn!(self.conn);
+        let result: Result<bool, _> = conn.query_row(
+            "SELECT builtin FROM command_repos WHERE owner = ?1 AND name = ?2",
+            params![owner, name],
+            |row| row.get::<_, i32>(0).map(|v| v != 0),
+        );
+
+        match result {
+            Ok(builtin) => Ok(builtin),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false),
+            Err(e) => Err(AppError::Database(e.to_string())),
+        }
     }
 
     /// 检查 commands 表是否为空
@@ -686,6 +810,11 @@ mod tests {
             name: "claude-commands".to_string(),
             branch: "main".to_string(),
             enabled: true,
+            builtin: false,
+            description_zh: None,
+            description_en: None,
+            description_ja: None,
+            added_at: 1234567890,
         };
 
         // Test add
@@ -696,6 +825,7 @@ mod tests {
         assert_eq!(repos.len(), 1);
         assert_eq!(repos[0].owner, "anthropics");
         assert!(repos[0].enabled);
+        assert!(!repos[0].builtin);
 
         // Test update enabled
         db.update_command_repo_enabled("anthropics", "claude-commands", false)
@@ -703,10 +833,38 @@ mod tests {
         let repos = db.get_all_command_repos().unwrap();
         assert!(!repos[0].enabled);
 
-        // Test remove
+        // Test remove (should work for non-builtin repos)
         db.remove_command_repo("anthropics", "claude-commands")
             .unwrap();
         let repos = db.get_all_command_repos().unwrap();
         assert!(repos.is_empty());
+    }
+
+    #[test]
+    fn test_builtin_command_repo_cannot_be_deleted() {
+        let db = Database::memory().unwrap();
+
+        let builtin_repo = CommandRepo {
+            owner: "anthropic-ai".to_string(),
+            name: "claude-code".to_string(),
+            branch: "main".to_string(),
+            enabled: true,
+            builtin: true,
+            description_zh: Some("官方仓库".to_string()),
+            description_en: Some("Official repo".to_string()),
+            description_ja: Some("公式リポジトリ".to_string()),
+            added_at: 0,
+        };
+
+        db.add_command_repo(&builtin_repo).unwrap();
+
+        // Try to delete builtin repo - should fail
+        let result = db.remove_command_repo("anthropic-ai", "claude-code");
+        assert!(result.is_err());
+
+        // Verify repo still exists
+        let repos = db.get_all_command_repos().unwrap();
+        assert_eq!(repos.len(), 1);
+        assert!(repos[0].builtin);
     }
 }

@@ -39,6 +39,7 @@ import {
   useSkillRepos,
   useAddSkillRepo,
   useRemoveSkillRepo,
+  useRestoreBuiltinSkillRepos,
   type InstalledSkill,
   type AppType,
 } from "@/hooks/useSkills";
@@ -142,6 +143,7 @@ export const SkillsPageNew = forwardRef<
   const importMutation = useImportSkillsFromApps();
   const addRepoMutation = useAddSkillRepo();
   const removeRepoMutation = useRemoveSkillRepo();
+  const restoreBuiltinMutation = useRestoreBuiltinSkillRepos();
 
   // 批量安装 Hook
   const {
@@ -536,6 +538,25 @@ export const SkillsPageNew = forwardRef<
     }
   };
 
+  const handleRestoreBuiltinRepos = async () => {
+    try {
+      const count = await restoreBuiltinMutation.mutateAsync();
+      if (count > 0) {
+        toast.success(t("skills.repo.restoreSuccess", { count }), {
+          closeButton: true,
+        });
+      } else {
+        toast.info(t("skills.repo.noMissing"), {
+          closeButton: true,
+        });
+      }
+    } catch (error) {
+      toast.error(t("common.error"), {
+        description: String(error),
+      });
+    }
+  };
+
   // 批量安装处理函数
   const handleBatchInstall = useCallback(() => {
     // 获取当前显示的技能列表（去除已安装标记的原始数据）
@@ -813,6 +834,7 @@ export const SkillsPageNew = forwardRef<
           skills={discoverySkills}
           onAdd={handleAddRepo}
           onRemove={handleRemoveRepo}
+          onRestoreBuiltin={handleRestoreBuiltinRepos}
           onClose={() => setRepoManagerOpen(false)}
         />
       )}

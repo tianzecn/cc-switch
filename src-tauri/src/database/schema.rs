@@ -96,7 +96,11 @@ impl Database {
         conn.execute(
             "CREATE TABLE IF NOT EXISTS skill_repos (
             owner TEXT NOT NULL, name TEXT NOT NULL, branch TEXT NOT NULL DEFAULT 'main',
-            enabled BOOLEAN NOT NULL DEFAULT 1, PRIMARY KEY (owner, name)
+            enabled BOOLEAN NOT NULL DEFAULT 1,
+            builtin BOOLEAN NOT NULL DEFAULT 0,
+            description_zh TEXT, description_en TEXT, description_ja TEXT,
+            added_at INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (owner, name)
         )",
             [],
         )
@@ -146,7 +150,11 @@ impl Database {
         conn.execute(
             "CREATE TABLE IF NOT EXISTS command_repos (
             owner TEXT NOT NULL, name TEXT NOT NULL, branch TEXT NOT NULL DEFAULT 'main',
-            enabled BOOLEAN NOT NULL DEFAULT 1, PRIMARY KEY (owner, name)
+            enabled BOOLEAN NOT NULL DEFAULT 1,
+            builtin BOOLEAN NOT NULL DEFAULT 0,
+            description_zh TEXT, description_en TEXT, description_ja TEXT,
+            added_at INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (owner, name)
         )",
             [],
         )
@@ -526,6 +534,11 @@ impl Database {
                         log::info!("迁移数据库从 v7 到 v8（资源更新检测支持）");
                         Self::migrate_v7_to_v8(conn)?;
                         Self::set_user_version(conn, 8)?;
+                    }
+                    8 => {
+                        log::info!("迁移数据库从 v8 到 v9（内置仓库支持）");
+                        Self::migrate_v8_to_v9(conn)?;
+                        Self::set_user_version(conn, 9)?;
                     }
                     _ => {
                         return Err(AppError::Database(format!(
@@ -1290,6 +1303,67 @@ impl Database {
             "数据库已迁移到 v8 结构（资源更新检测支持）。\n\
              - skills 表新增 file_hash 列，用于存储安装时的文件 hash\n\
              - 与 commands/agents/hooks 表保持一致，支持更新检测功能"
+        );
+
+        Ok(())
+    }
+
+    /// v8 -> v9 迁移：内置仓库支持
+    ///
+    /// 为 skill_repos 和 command_repos 表添加内置仓库相关字段：
+    /// - builtin: 是否为内置仓库
+    /// - description_zh/en/ja: 多语言描述
+    /// - added_at: 添加时间戳（内置仓库为 0，用户添加的为实际时间）
+    fn migrate_v8_to_v9(conn: &Connection) -> Result<(), AppError> {
+        // 1. 为 skill_repos 表添加新列
+        Self::add_column_if_missing(conn, "skill_repos", "builtin", "BOOLEAN NOT NULL DEFAULT 0")?;
+        Self::add_column_if_missing(conn, "skill_repos", "description_zh", "TEXT")?;
+        Self::add_column_if_missing(conn, "skill_repos", "description_en", "TEXT")?;
+        Self::add_column_if_missing(conn, "skill_repos", "description_ja", "TEXT")?;
+        Self::add_column_if_missing(conn, "skill_repos", "added_at", "INTEGER NOT NULL DEFAULT 0")?;
+        log::info!("skill_repos 表已添加内置仓库相关列");
+
+        // 2. 为 command_repos 表添加新列
+        Self::add_column_if_missing(
+            conn,
+            "command_repos",
+            "builtin",
+            "BOOLEAN NOT NULL DEFAULT 0",
+        )?;
+        Self::add_column_if_missing(conn, "command_repos", "description_zh", "TEXT")?;
+        Self::add_column_if_missing(conn, "command_repos", "description_en", "TEXT")?;
+        Self::add_column_if_missing(conn, "command_repos", "description_ja", "TEXT")?;
+        Self::add_column_if_missing(
+            conn,
+            "command_repos",
+            "added_at",
+            "INTEGER NOT NULL DEFAULT 0",
+        )?;
+        log::info!("command_repos 表已添加内置仓库相关列");
+
+        // 3. 为现有仓库设置 added_at（使用当前时间戳）
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+
+        conn.execute(
+            "UPDATE skill_repos SET added_at = ?1 WHERE added_at = 0 AND builtin = 0",
+            [now],
+        )
+        .map_err(|e| AppError::Database(format!("更新 skill_repos added_at 失败: {e}")))?;
+
+        conn.execute(
+            "UPDATE command_repos SET added_at = ?1 WHERE added_at = 0 AND builtin = 0",
+            [now],
+        )
+        .map_err(|e| AppError::Database(format!("更新 command_repos added_at 失败: {e}")))?;
+
+        log::info!(
+            "数据库已迁移到 v9 结构（内置仓库支持）。\n\
+             - skill_repos 表新增 builtin, description_zh/en/ja, added_at 列\n\
+             - command_repos 表新增 builtin, description_zh/en/ja, added_at 列\n\
+             - 现有仓库 added_at 已设置为当前时间戳"
         );
 
         Ok(())

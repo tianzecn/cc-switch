@@ -316,13 +316,22 @@ pub fn run() {
             // 按表独立判断的导入逻辑（各类数据独立检查，互不影响）
             // ============================================================
 
-            // 1. 初始化默认 Skills 仓库（已有内置检查：表非空则跳过）
-            match app_state.db.init_default_skill_repos() {
-                Ok(count) if count > 0 => {
-                    log::info!("✓ Initialized {count} default skill repositories");
+            // 1. 同步内置 Skills 仓库（每次启动都会检查并添加缺失的内置仓库）
+            match app_state.db.sync_builtin_skill_repos() {
+                Ok((added, updated)) if added > 0 || updated > 0 => {
+                    log::info!("✓ Synced builtin skill repos: added {added}, updated {updated}");
                 }
-                Ok(_) => {} // 表非空，静默跳过
-                Err(e) => log::warn!("✗ Failed to initialize default skill repos: {e}"),
+                Ok(_) => {} // 无变化，静默跳过
+                Err(e) => log::warn!("✗ Failed to sync builtin skill repos: {e}"),
+            }
+
+            // 1.0.1. 同步内置 Commands 仓库（每次启动都会检查并添加缺失的内置仓库）
+            match app_state.db.sync_builtin_command_repos() {
+                Ok((added, updated)) if added > 0 || updated > 0 => {
+                    log::info!("✓ Synced builtin command repos: added {added}, updated {updated}");
+                }
+                Ok(_) => {} // 无变化，静默跳过
+                Err(e) => log::warn!("✗ Failed to sync builtin command repos: {e}"),
             }
 
             // 1.1. Skills 统一管理迁移：当数据库迁移到 v3 结构后，自动从各应用目录导入到 SSOT
@@ -728,6 +737,8 @@ pub fn run() {
             commands::get_skill_repos,
             commands::add_skill_repo,
             commands::remove_skill_repo,
+            commands::restore_builtin_skill_repos,
+            commands::is_builtin_skill_repo,
             // Skill namespace management (v3.12.0+)
             commands::get_skill_namespaces,
             commands::get_skills_by_namespace,
@@ -750,6 +761,8 @@ pub fn run() {
             commands::get_command_repos,
             commands::add_command_repo,
             commands::remove_command_repo,
+            commands::restore_builtin_command_repos,
+            commands::is_builtin_command_repo,
             commands::clear_command_cache,
             commands::detect_command_changes,
             commands::resolve_command_conflict,

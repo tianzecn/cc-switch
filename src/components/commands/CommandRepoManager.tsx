@@ -3,7 +3,8 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Trash2, ExternalLink, Plus } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Trash2, ExternalLink, Plus, RotateCcw } from "lucide-react";
 import { settingsApi } from "@/lib/api";
 import { FullScreenPanel } from "@/components/common/FullScreenPanel";
 import type { DiscoverableCommand, CommandRepo } from "@/hooks/useCommands";
@@ -13,6 +14,7 @@ interface CommandRepoManagerProps {
   commands: DiscoverableCommand[];
   onAdd: (repo: CommandRepo) => Promise<void>;
   onRemove: (owner: string, name: string) => Promise<void>;
+  onRestoreBuiltin?: () => Promise<void>;
   onClose: () => void;
 }
 
@@ -25,12 +27,25 @@ export function CommandRepoManager({
   commands,
   onAdd,
   onRemove,
+  onRestoreBuiltin,
   onClose,
 }: CommandRepoManagerProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [repoUrl, setRepoUrl] = useState("");
   const [branch, setBranch] = useState("");
   const [error, setError] = useState("");
+  const [isRestoring, setIsRestoring] = useState(false);
+
+  /** 根据当前语言获取仓库描述 */
+  const getRepoDescription = (repo: CommandRepo): string | undefined => {
+    const lang = i18n.language;
+    if (lang.startsWith("zh")) {
+      return repo.description_zh;
+    } else if (lang.startsWith("ja")) {
+      return repo.description_ja;
+    }
+    return repo.description_en;
+  };
 
   // 统计仓库中的 Commands 数量
   const getCommandCount = (repo: CommandRepo) =>
@@ -72,6 +87,8 @@ export function CommandRepoManager({
         name: parsed.name,
         branch: branch || "main",
         enabled: true,
+        builtin: false,
+        added_at: Date.now(),
       });
 
       setRepoUrl("");
@@ -141,9 +158,30 @@ export function CommandRepoManager({
 
       {/* 仓库列表 */}
       <div className="space-y-4">
-        <h3 className="text-base font-semibold text-foreground">
-          {t("commands.repo.list")}
-        </h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-semibold text-foreground">
+            {t("commands.repo.list")}
+          </h3>
+          {onRestoreBuiltin && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                setIsRestoring(true);
+                try {
+                  await onRestoreBuiltin();
+                } finally {
+                  setIsRestoring(false);
+                }
+              }}
+              disabled={isRestoring}
+              className="text-xs"
+            >
+              <RotateCcw className={`h-3.5 w-3.5 mr-1.5 ${isRestoring ? "animate-spin" : ""}`} />
+              {t("commands.repo.restoreBuiltin")}
+            </Button>
+          )}
+        </div>
         {repos.length === 0 ? (
           <div className="text-center py-12 glass-card rounded-xl">
             <p className="text-sm text-muted-foreground">
@@ -152,48 +190,65 @@ export function CommandRepoManager({
           </div>
         ) : (
           <div className="space-y-3">
-            {repos.map((repo) => (
-              <div
-                key={`${repo.owner}/${repo.name}`}
-                className="flex items-center justify-between glass-card rounded-xl px-4 py-3"
-              >
-                <div>
-                  <div className="text-sm font-medium text-foreground">
-                    {repo.owner}/{repo.name}
+            {repos.map((repo) => {
+              const description = getRepoDescription(repo);
+              return (
+                <div
+                  key={`${repo.owner}/${repo.name}`}
+                  className="flex items-center justify-between glass-card rounded-xl px-4 py-3"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-foreground truncate">
+                        {repo.owner}/{repo.name}
+                      </span>
+                      {repo.builtin && (
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">
+                          {t("commands.repo.builtin")}
+                        </Badge>
+                      )}
+                    </div>
+                    {description && (
+                      <div className="mt-0.5 text-xs text-muted-foreground truncate">
+                        {description}
+                      </div>
+                    )}
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {t("commands.repo.branch")}: {repo.branch || "main"}
+                      <span className="ml-3 inline-flex items-center rounded-full border border-border-default px-2 py-0.5 text-[11px]">
+                        {t("commands.repo.commandCount", {
+                          count: getCommandCount(repo),
+                        })}
+                      </span>
+                    </div>
                   </div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    {t("commands.repo.branch")}: {repo.branch || "main"}
-                    <span className="ml-3 inline-flex items-center rounded-full border border-border-default px-2 py-0.5 text-[11px]">
-                      {t("commands.repo.commandCount", {
-                        count: getCommandCount(repo),
-                      })}
-                    </span>
+                  <div className="flex gap-2 shrink-0 ml-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      type="button"
+                      onClick={() => handleOpenRepo(repo.owner, repo.name)}
+                      title={t("common.view")}
+                      className="hover:bg-black/5 dark:hover:bg-white/5"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </Button>
+                    {!repo.builtin && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        type="button"
+                        onClick={() => onRemove(repo.owner, repo.name)}
+                        title={t("common.delete")}
+                        className="hover:text-red-500 hover:bg-red-100 dark:hover:text-red-400 dark:hover:bg-red-500/10"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    type="button"
-                    onClick={() => handleOpenRepo(repo.owner, repo.name)}
-                    title={t("common.view")}
-                    className="hover:bg-black/5 dark:hover:bg-white/5"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    type="button"
-                    onClick={() => onRemove(repo.owner, repo.name)}
-                    title={t("common.delete")}
-                    className="hover:text-red-500 hover:bg-red-100 dark:hover:text-red-400 dark:hover:bg-red-500/10"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

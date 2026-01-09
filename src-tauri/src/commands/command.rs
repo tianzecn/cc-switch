@@ -201,7 +201,7 @@ pub fn add_command_repo(
     Ok(true)
 }
 
-/// 删除 Command 仓库
+/// 删除 Command 仓库（不允许删除内置仓库）
 #[tauri::command]
 pub fn remove_command_repo(
     owner: String,
@@ -212,6 +212,28 @@ pub fn remove_command_repo(
     // 同时删除该仓库的缓存
     let _ = app_state.db.delete_repo_cache(&owner, &name);
     Ok(true)
+}
+
+/// 恢复内置 Command 仓库（添加缺失的内置仓库，不删除用户添加的）
+#[tauri::command]
+pub fn restore_builtin_command_repos(app_state: State<'_, AppState>) -> Result<usize, String> {
+    app_state
+        .db
+        .restore_builtin_command_repos()
+        .map_err(|e| e.to_string())
+}
+
+/// 检查仓库是否为内置仓库
+#[tauri::command]
+pub fn is_builtin_command_repo(
+    owner: String,
+    name: String,
+    app_state: State<'_, AppState>,
+) -> Result<bool, String> {
+    app_state
+        .db
+        .is_builtin_command_repo(&owner, &name)
+        .map_err(|e| e.to_string())
 }
 
 /// 清除 Commands 发现缓存

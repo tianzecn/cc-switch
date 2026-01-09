@@ -922,7 +922,11 @@
       "addFailed": "添加失败",
       "removeSuccess": "仓库 {{owner}}/{{name}} 已删除",
       "removeFailed": "删除失败",
-      "skillCount": "识别到 {{count}} 个技能"
+      "skillCount": "识别到 {{count}} 个技能",
+      "builtin": "内置",
+      "restoreBuiltin": "恢复内置仓库",
+      "restoreSuccess": "已恢复 {{count}} 个内置仓库",
+      "noMissing": "所有内置仓库已存在"
     },
     "search": "搜索技能",
     "searchPlaceholder": "搜索技能名称或描述...",
@@ -1093,7 +1097,11 @@
       "invalidUrl": "无效的仓库地址格式",
       "list": "已添加的仓库",
       "empty": "暂无仓库，请添加仓库以发现可用的 Commands",
-      "commandCount": "{{count}} 个 Command"
+      "commandCount": "{{count}} 个 Command",
+      "builtin": "内置",
+      "restoreBuiltin": "恢复内置仓库",
+      "restoreSuccess": "已恢复 {{count}} 个内置仓库",
+      "noMissing": "所有内置仓库已存在"
     }
   },
   "deeplink": {

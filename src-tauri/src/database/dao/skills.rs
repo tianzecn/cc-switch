@@ -248,12 +248,13 @@ impl Database {
 
     // ========== SkillRepo CRUD（保持原有） ==========
 
-    /// 获取所有 Skill 仓库
+    /// 获取所有 Skill 仓库（按 added_at 排序，内置仓库优先）
     pub fn get_skill_repos(&self) -> Result<Vec<SkillRepo>, AppError> {
         let conn = lock_conn!(self.conn);
         let mut stmt = conn
             .prepare(
-                "SELECT owner, name, branch, enabled FROM skill_repos ORDER BY owner ASC, name ASC",
+                "SELECT owner, name, branch, enabled, builtin, description_zh, description_en, description_ja, added_at
+                 FROM skill_repos ORDER BY added_at ASC, owner ASC, name ASC",
             )
             .map_err(|e| AppError::Database(e.to_string()))?;
 
@@ -264,6 +265,11 @@ impl Database {
                     name: row.get(1)?,
                     branch: row.get(2)?,
                     enabled: row.get(3)?,
+                    builtin: row.get(4)?,
+                    description_zh: row.get(5)?,
+                    description_en: row.get(6)?,
+                    description_ja: row.get(7)?,
+                    added_at: row.get(8)?,
                 })
             })
             .map_err(|e| AppError::Database(e.to_string()))?;
@@ -279,42 +285,141 @@ impl Database {
     pub fn save_skill_repo(&self, repo: &SkillRepo) -> Result<(), AppError> {
         let conn = lock_conn!(self.conn);
         conn.execute(
-            "INSERT OR REPLACE INTO skill_repos (owner, name, branch, enabled) VALUES (?1, ?2, ?3, ?4)",
-            params![repo.owner, repo.name, repo.branch, repo.enabled],
+            "INSERT OR REPLACE INTO skill_repos (owner, name, branch, enabled, builtin, description_zh, description_en, description_ja, added_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![
+                repo.owner,
+                repo.name,
+                repo.branch,
+                repo.enabled,
+                repo.builtin,
+                repo.description_zh,
+                repo.description_en,
+                repo.description_ja,
+                repo.added_at,
+            ],
         )
         .map_err(|e| AppError::Database(e.to_string()))?;
         Ok(())
     }
 
-    /// 删除 Skill 仓库
-    pub fn delete_skill_repo(&self, owner: &str, name: &str) -> Result<(), AppError> {
+    /// 删除 Skill 仓库（不允许删除内置仓库）
+    pub fn delete_skill_repo(&self, owner: &str, name: &str) -> Result<bool, AppError> {
         let conn = lock_conn!(self.conn);
-        conn.execute(
-            "DELETE FROM skill_repos WHERE owner = ?1 AND name = ?2",
-            params![owner, name],
-        )
-        .map_err(|e| AppError::Database(e.to_string()))?;
-        Ok(())
+        // 检查是否为内置仓库
+        let is_builtin: bool = conn
+            .query_row(
+                "SELECT builtin FROM skill_repos WHERE owner = ?1 AND name = ?2",
+                params![owner, name],
+                |row| row.get(0),
+            )
+            .unwrap_or(false);
+
+        if is_builtin {
+            return Err(AppError::Config("无法删除内置仓库".to_string()));
+        }
+
+        let affected = conn
+            .execute(
+                "DELETE FROM skill_repos WHERE owner = ?1 AND name = ?2",
+                params![owner, name],
+            )
+            .map_err(|e| AppError::Database(e.to_string()))?;
+        Ok(affected > 0)
     }
 
-    /// 初始化默认的 Skill 仓库（首次启动时调用）
-    pub fn init_default_skill_repos(&self) -> Result<usize, AppError> {
-        // 检查是否已有仓库
+    /// 同步内置 Skill 仓库
+    ///
+    /// - 添加缺失的内置仓库
+    /// - 更新已存在内置仓库的描述（但保留用户的 enabled 和 branch 设置）
+    /// - 不删除用户自己添加的仓库
+    pub fn sync_builtin_skill_repos(&self) -> Result<(usize, usize), AppError> {
+        use crate::services::builtin_repos::get_builtin_skill_repos;
+
+        let builtin_repos = get_builtin_skill_repos()?;
         let existing = self.get_skill_repos()?;
-        if !existing.is_empty() {
-            return Ok(0);
+
+        // 构建现有仓库的 map
+        let existing_map: std::collections::HashMap<(String, String), SkillRepo> = existing
+            .into_iter()
+            .map(|r| ((r.owner.clone(), r.name.clone()), r))
+            .collect();
+
+        let mut added = 0;
+        let mut updated = 0;
+
+        let conn = lock_conn!(self.conn);
+
+        for builtin in builtin_repos {
+            let key = (builtin.owner.clone(), builtin.name.clone());
+
+            if let Some(existing_repo) = existing_map.get(&key) {
+                // 仓库已存在，更新描述但保留用户设置
+                conn.execute(
+                    "UPDATE skill_repos SET builtin = 1, description_zh = ?1, description_en = ?2, description_ja = ?3
+                     WHERE owner = ?4 AND name = ?5",
+                    params![
+                        builtin.description.zh,
+                        builtin.description.en,
+                        builtin.description.ja,
+                        builtin.owner,
+                        builtin.name,
+                    ],
+                )
+                .map_err(|e| AppError::Database(e.to_string()))?;
+
+                // 只有当描述实际发生变化时才计入 updated
+                if existing_repo.description_zh.as_deref() != Some(&builtin.description.zh)
+                    || existing_repo.description_en.as_deref() != Some(&builtin.description.en)
+                    || existing_repo.description_ja.as_deref() != Some(&builtin.description.ja)
+                {
+                    updated += 1;
+                }
+            } else {
+                // 仓库不存在，添加新的内置仓库
+                conn.execute(
+                    "INSERT INTO skill_repos (owner, name, branch, enabled, builtin, description_zh, description_en, description_ja, added_at)
+                     VALUES (?1, ?2, ?3, 1, 1, ?4, ?5, ?6, 0)",
+                    params![
+                        builtin.owner,
+                        builtin.name,
+                        builtin.branch,
+                        builtin.description.zh,
+                        builtin.description.en,
+                        builtin.description.ja,
+                    ],
+                )
+                .map_err(|e| AppError::Database(e.to_string()))?;
+                added += 1;
+            }
         }
 
-        // 获取默认仓库列表
-        let default_store = crate::services::skill::SkillStore::default();
-        let mut count = 0;
-
-        for repo in &default_store.repos {
-            self.save_skill_repo(repo)?;
-            count += 1;
+        if added > 0 || updated > 0 {
+            log::info!("同步内置 Skill 仓库完成：新增 {added} 个，更新 {updated} 个");
         }
 
-        log::info!("初始化默认 Skill 仓库完成，共 {count} 个");
-        Ok(count)
+        Ok((added, updated))
+    }
+
+    /// 恢复默认内置 Skill 仓库（仅添加缺失的内置仓库，不删除用户添加的）
+    pub fn restore_builtin_skill_repos(&self) -> Result<usize, AppError> {
+        let (added, _) = self.sync_builtin_skill_repos()?;
+        Ok(added)
+    }
+
+    /// 检查仓库是否为内置仓库
+    pub fn is_builtin_skill_repo(&self, owner: &str, name: &str) -> Result<bool, AppError> {
+        let conn = lock_conn!(self.conn);
+        let result: Result<bool, _> = conn.query_row(
+            "SELECT builtin FROM skill_repos WHERE owner = ?1 AND name = ?2",
+            params![owner, name],
+            |row| row.get(0),
+        );
+
+        match result {
+            Ok(builtin) => Ok(builtin),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false),
+            Err(e) => Err(AppError::Database(e.to_string())),
+        }
     }
 }

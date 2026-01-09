@@ -305,6 +305,21 @@ pub struct CommandRepo {
     /// 是否启用
     #[serde(default = "default_enabled")]
     pub enabled: bool,
+    /// 是否为内置仓库
+    #[serde(default)]
+    pub builtin: bool,
+    /// 中文描述
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description_zh: Option<String>,
+    /// 英文描述
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description_en: Option<String>,
+    /// 日文描述
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description_ja: Option<String>,
+    /// 添加时间戳（内置仓库为 0）
+    #[serde(default)]
+    pub added_at: i64,
 }
 
 fn default_branch() -> String {

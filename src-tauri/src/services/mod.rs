@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod builtin_repos;
 pub mod command;
 pub mod config;
 pub mod env_checker;

@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "skills": [
+    {
+      "owner": "anthropics",
+      "name": "skills",
+      "branch": "main",
+      "description": {
+        "zh": "Anthropic 官方 Skills 仓库",
+        "en": "Official Anthropic Skills repository",
+        "ja": "Anthropic 公式 Skills リポジトリ"
+      }
+    },
+    {
+      "owner": "anthropics",
+      "name": "claude-code",
+      "branch": "main",
+      "description": {
+        "zh": "Claude Code 官方仓库",
+        "en": "Official Claude Code repository",
+        "ja": "Claude Code 公式リポジトリ"
+      }
+    },
+    {
+      "owner": "nextlevelbuilder",
+      "name": "ui-ux-pro-max-skill",
+      "branch": "main",
+      "description": {
+        "zh": "UI/UX Pro Max 专业技能包",
+        "en": "UI/UX Pro Max professional skill pack",
+        "ja": "UI/UX Pro Max プロスキルパック"
+      }
+    }
+  ],
+  "commands": [
+    {
+      "owner": "anthropic-ai",
+      "name": "claude-code",
+      "branch": "main",
+      "description": {
+        "zh": "Anthropic AI Claude Code 仓库",
+        "en": "Anthropic AI Claude Code repository",
+        "ja": "Anthropic AI Claude Code リポジトリ"
+      }
+    },
+    {
+      "owner": "anthropics",
+      "name": "claude-plugins-official",
+      "branch": "main",
+      "description": {
+        "zh": "Anthropic 官方插件仓库",
+        "en": "Official Anthropic plugins repository",
+        "ja": "Anthropic 公式プラグインリポジトリ"
+      }
+    },
+    {
+      "owner": "anthropics",
+      "name": "claude-code",
+      "branch": "main",
+      "description": {
+        "zh": "Claude Code 官方仓库",
+        "en": "Official Claude Code repository",
+        "ja": "Claude Code 公式リポジトリ"
+      }
+    },
+    {
+      "owner": "tianzecn",
+      "name": "myclaudecode",
+      "branch": "main",
+      "description": {
+        "zh": "MyClaudeCode 社区仓库",
+        "en": "MyClaudeCode community repository",
+        "ja": "MyClaudeCode コミュニティリポジトリ"
+      }
+    },
+    {
+      "owner": "tianzecn",
+      "name": "SuperClaude",
+      "branch": "main",
+      "description": {
+        "zh": "SuperClaude 增强包",
+        "en": "SuperClaude enhancement pack",
+        "ja": "SuperClaude 拡張パック"
+      }
+    }
+  ]
+}

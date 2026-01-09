@@ -263,8 +263,29 @@ pub fn remove_skill_repo(
     app_state
         .db
         .delete_skill_repo(&owner, &name)
-        .map_err(|e| e.to_string())?;
-    Ok(true)
+        .map_err(|e| e.to_string())
+}
+
+/// 恢复内置技能仓库（添加缺失的内置仓库，不删除用户添加的）
+#[tauri::command]
+pub fn restore_builtin_skill_repos(app_state: State<'_, AppState>) -> Result<usize, String> {
+    app_state
+        .db
+        .restore_builtin_skill_repos()
+        .map_err(|e| e.to_string())
+}
+
+/// 检查仓库是否为内置仓库
+#[tauri::command]
+pub fn is_builtin_skill_repo(
+    owner: String,
+    name: String,
+    app_state: State<'_, AppState>,
+) -> Result<bool, String> {
+    app_state
+        .db
+        .is_builtin_skill_repo(&owner, &name)
+        .map_err(|e| e.to_string())
 }
 
 // ========== 命名空间管理命令 ==========

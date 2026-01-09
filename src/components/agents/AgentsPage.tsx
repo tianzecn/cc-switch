@@ -174,7 +174,7 @@ export const AgentsPage: React.FC = () => {
     }
 
     // 搜索过滤
-    if (searchQuery) {
+    if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       result = result.filter((agent) => {
         const matchesId = agent.id.toLowerCase().includes(query);
@@ -242,7 +242,7 @@ export const AgentsPage: React.FC = () => {
 
   // 确定空状态类型
   const emptyStateType = useMemo(() => {
-    if (searchQuery) return "search";
+    if (searchQuery.trim()) return "search";
     if (selection.type === "namespace") return "namespace";
     if (selection.type === "repo") return "repo";
     return "all";
@@ -253,7 +253,7 @@ export const AgentsPage: React.FC = () => {
     const value = e.target.value;
     setSearchQuery(value);
     // 有搜索内容时自动切换到 "全部" 视图
-    if (value && selection.type !== "all") {
+    if (value.trim() && selection.type !== "all") {
       setSelection(createAllSelection());
     }
   };

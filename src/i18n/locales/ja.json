@@ -922,7 +922,11 @@
       "addFailed": "追加に失敗しました",
       "removeSuccess": "リポジトリ {{owner}}/{{name}} を削除しました",
       "removeFailed": "削除に失敗しました",
-      "skillCount": "{{count}} 件のスキルを検出"
+      "skillCount": "{{count}} 件のスキルを検出",
+      "builtin": "内蔵",
+      "restoreBuiltin": "内蔵リポジトリを復元",
+      "restoreSuccess": "{{count}} 件の内蔵リポジトリを復元しました",
+      "noMissing": "すべての内蔵リポジトリが存在します"
     },
     "search": "スキルを検索",
     "searchPlaceholder": "スキル名または説明で検索...",
@@ -1100,7 +1104,11 @@
       "invalidUrl": "無効なリポジトリURL形式",
       "list": "追加済みリポジトリ",
       "empty": "リポジトリがありません。リポジトリを追加して利用可能なコマンドを発見してください",
-      "commandCount": "{{count}}件のコマンド"
+      "commandCount": "{{count}}件のコマンド",
+      "builtin": "内蔵",
+      "restoreBuiltin": "内蔵リポジトリを復元",
+      "restoreSuccess": "{{count}} 件の内蔵リポジトリを復元しました",
+      "noMissing": "すべての内蔵リポジトリが存在します"
     }
   },
   "deeplink": {

@@ -291,6 +291,20 @@ export function useRemoveCommandRepo() {
 }
 
 /**
+ * 恢复内置仓库
+ */
+export function useRestoreBuiltinCommandRepos() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => commandsApi.restoreBuiltinRepos(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: commandKeys.repos() });
+      queryClient.invalidateQueries({ queryKey: commandKeys.discoverable() });
+    },
+  });
+}
+
+/**
  * 解决 Command 冲突
  */
 export function useResolveConflict() {
