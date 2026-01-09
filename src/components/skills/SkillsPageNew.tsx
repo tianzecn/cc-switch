@@ -570,21 +570,6 @@ export const SkillsPageNew = forwardRef<
           </div>
 
           <div className="flex items-center gap-2">
-            {/* 模式切换 Tabs */}
-            <Tabs
-              value={viewMode === "discovery" ? "discovery" : "list"}
-              onValueChange={(val) => setViewMode(val as ViewMode)}
-            >
-              <TabsList className="h-8">
-                <TabsTrigger value="list" className="text-xs px-3 min-w-[80px]">
-                  {t("common.installed")}
-                </TabsTrigger>
-                <TabsTrigger value="discovery" className="text-xs px-3 min-w-[80px]">
-                  {t("common.discover")}
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-
             {/* 仓库管理 */}
             <Button
               variant="outline"
@@ -633,6 +618,21 @@ export const SkillsPageNew = forwardRef<
                 <span className="ml-2">{t("common.refresh")}</span>
               </Button>
             )}
+
+            {/* 模式切换 Tabs（放在最右侧） */}
+            <Tabs
+              value={viewMode === "discovery" ? "discovery" : "list"}
+              onValueChange={(val) => setViewMode(val as ViewMode)}
+            >
+              <TabsList className="h-8">
+                <TabsTrigger value="list" className="text-xs px-3 min-w-[80px]">
+                  {t("common.installed")}
+                </TabsTrigger>
+                <TabsTrigger value="discovery" className="text-xs px-3 min-w-[80px]">
+                  {t("common.discover")}
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
         </div>
 

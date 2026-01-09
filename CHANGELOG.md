@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **统一搜索行布局** - 合并搜索框和统计信息到一行，支持响应式 flex-wrap
 - **Discovery 模式集成** - Commands/Hooks/Agents 的发现模式内容集成到主页面，不再单独跳转
 - **新增仓库管理入口** - 四个模块统一添加仓库管理按钮
+- **Header 按钮顺序优化** - 统一按钮顺序为：仓库管理 → 功能按钮 → 模式切换（Tabs 放在最右侧）
 
 ### Fixed
 
