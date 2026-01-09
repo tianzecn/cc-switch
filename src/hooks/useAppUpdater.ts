@@ -275,10 +275,25 @@ export function useAppUpdater(): UseAppUpdaterResult {
                 }
               : prev
           );
-          setPhase("downloaded");
+          // downloadAndInstall 完成后，检查是否需要手动安装（macOS 特定问题）
+          // Tauri 的 downloadAndInstall 可能无法自动移动更新包到 /Applications
         }
       });
 
+      // 检查是否有待安装的 macOS 更新（Tauri downloadAndInstall 可能静默失败）
+      const pendingVersion = await appUpdaterApi.checkPendingMacOSUpdate();
+      if (pendingVersion) {
+        console.warn("[useAppUpdater] Detected pending macOS update, attempting manual install...");
+        const installResult = await appUpdaterApi.tryInstallMacOSUpdate();
+        if (!installResult.success) {
+          console.error("[useAppUpdater] macOS manual install failed:", installResult.error);
+          // 即使手动安装失败，也继续流程，让用户可以尝试重启
+        } else {
+          console.info("[useAppUpdater] macOS manual install successful:", installResult.installed_version);
+        }
+      }
+
+      setPhase("downloaded");
       retryCountRef.current = 0;
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));

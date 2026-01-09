@@ -901,6 +901,10 @@ pub fn run() {
             commands::update_last_check_time,
             commands::should_auto_check_update,
             commands::save_updater_config,
+            // macOS 更新安装命令
+            commands::try_install_macos_update,
+            commands::check_pending_macos_update,
+            commands::cleanup_macos_update,
         ]);
 
     let app = builder

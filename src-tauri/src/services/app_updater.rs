@@ -210,6 +210,171 @@ impl AppUpdaterService {
     }
 }
 
+/// macOS 更新安装结果
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MacOSUpdateInstallResult {
+    /// 是否安装成功
+    pub success: bool,
+    /// 错误信息（如果失败）
+    pub error: Option<String>,
+    /// 更新包版本
+    pub update_version: Option<String>,
+    /// 安装后的应用版本
+    pub installed_version: Option<String>,
+}
+
+/// 尝试在 macOS 上手动安装更新包
+///
+/// 当 Tauri 的 downloadAndInstall() 无法自动移动更新包到 /Applications 时，
+/// 调用此函数尝试手动完成安装。
+#[cfg(target_os = "macos")]
+pub async fn try_install_macos_update() -> MacOSUpdateInstallResult {
+    use std::fs;
+    use std::path::Path;
+    use std::process::Command;
+
+    let temp_app_path = "/tmp/CC Switch.app";
+    let app_path = "/Applications/CC Switch.app";
+
+    // 检查临时更新包是否存在
+    if !Path::new(temp_app_path).exists() {
+        return MacOSUpdateInstallResult {
+            success: false,
+            error: Some("没有找到待安装的更新包".to_string()),
+            update_version: None,
+            installed_version: None,
+        };
+    }
+
+    // 读取更新包的版本号
+    let update_version = read_app_version(temp_app_path);
+    log::info!("[macOS Updater] Found update package: {:?}", update_version);
+
+    // 读取当前安装的版本号
+    let current_version = read_app_version(app_path);
+    log::info!("[macOS Updater] Current installed version: {:?}", current_version);
+
+    // 尝试使用 rsync 复制更新包（比 mv 更可靠）
+    log::info!("[macOS Updater] Attempting to install update...");
+    let result = Command::new("rsync")
+        .args(["-av", "--delete", &format!("{}/", temp_app_path), &format!("{}/", app_path)])
+        .output();
+
+    match result {
+        Ok(output) => {
+            if output.status.success() {
+                // 安装成功，删除临时更新包
+                let _ = fs::remove_dir_all(temp_app_path);
+
+                // 验证安装后的版本
+                let installed_version = read_app_version(app_path);
+                log::info!("[macOS Updater] Installation successful! Version: {:?}", installed_version);
+
+                MacOSUpdateInstallResult {
+                    success: true,
+                    error: None,
+                    update_version,
+                    installed_version,
+                }
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                log::error!("[macOS Updater] rsync failed: {}", stderr);
+
+                MacOSUpdateInstallResult {
+                    success: false,
+                    error: Some(format!("安装失败: {}", stderr)),
+                    update_version,
+                    installed_version: current_version,
+                }
+            }
+        }
+        Err(e) => {
+            log::error!("[macOS Updater] Failed to execute rsync: {}", e);
+
+            MacOSUpdateInstallResult {
+                success: false,
+                error: Some(format!("执行安装命令失败: {}", e)),
+                update_version,
+                installed_version: current_version,
+            }
+        }
+    }
+}
+
+/// 读取 .app 包的版本号
+#[cfg(target_os = "macos")]
+fn read_app_version(app_path: &str) -> Option<String> {
+    use std::path::Path;
+    use std::process::Command;
+
+    let plist_path = format!("{}/Contents/Info.plist", app_path);
+    if !Path::new(&plist_path).exists() {
+        return None;
+    }
+
+    // 使用 defaults 命令读取 plist
+    let output = Command::new("defaults")
+        .args(["read", &plist_path, "CFBundleShortVersionString"])
+        .output()
+        .ok()?;
+
+    if output.status.success() {
+        Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    } else {
+        None
+    }
+}
+
+/// 检查是否有待安装的 macOS 更新
+#[cfg(target_os = "macos")]
+pub async fn check_pending_macos_update() -> Option<String> {
+    use std::path::Path;
+
+    let temp_app_path = "/tmp/CC Switch.app";
+    if Path::new(temp_app_path).exists() {
+        read_app_version(temp_app_path)
+    } else {
+        None
+    }
+}
+
+/// 清理 macOS 临时更新包
+#[cfg(target_os = "macos")]
+pub async fn cleanup_macos_update() -> Result<(), AppError> {
+    use std::fs;
+    use std::path::Path;
+
+    let temp_app_path = "/tmp/CC Switch.app";
+    if Path::new(temp_app_path).exists() {
+        fs::remove_dir_all(temp_app_path).map_err(|e| {
+            AppError::Message(format!("清理临时更新包失败: {}", e))
+        })?;
+        log::info!("[macOS Updater] Cleaned up temporary update package");
+    }
+    Ok(())
+}
+
+// 非 macOS 平台的空实现
+#[cfg(not(target_os = "macos"))]
+pub async fn try_install_macos_update() -> MacOSUpdateInstallResult {
+    MacOSUpdateInstallResult {
+        success: false,
+        error: Some("此功能仅支持 macOS".to_string()),
+        update_version: None,
+        installed_version: None,
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub async fn check_pending_macos_update() -> Option<String> {
+    None
+}
+
+#[cfg(not(target_os = "macos"))]
+pub async fn cleanup_macos_update() -> Result<(), AppError> {
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

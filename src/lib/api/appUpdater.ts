@@ -25,6 +25,16 @@ export interface UpdaterConfigInfo {
 }
 
 /**
+ * macOS 更新安装结果
+ */
+export interface MacOSUpdateInstallResult {
+  success: boolean;
+  error: string | null;
+  update_version: string | null;
+  installed_version: string | null;
+}
+
+/**
  * 应用更新 API
  */
 export const appUpdaterApi = {
@@ -108,5 +118,32 @@ export const appUpdaterApi = {
       autoCheckEnabled: config.autoCheckEnabled,
       checkIntervalHours: config.checkIntervalHours,
     });
+  },
+
+  // ==================== macOS 更新安装 API ====================
+
+  /**
+   * 尝试安装 macOS 上待处理的更新
+   *
+   * 当 Tauri 的 downloadAndInstall() 无法自动移动更新包到 /Applications 时，
+   * 调用此方法尝试手动完成安装。
+   */
+  async tryInstallMacOSUpdate(): Promise<MacOSUpdateInstallResult> {
+    return await invoke("try_install_macos_update");
+  },
+
+  /**
+   * 检查是否有待安装的 macOS 更新
+   * @returns 待安装的更新版本号，如果没有则返回 null
+   */
+  async checkPendingMacOSUpdate(): Promise<string | null> {
+    return await invoke("check_pending_macos_update");
+  },
+
+  /**
+   * 清理 macOS 临时更新包
+   */
+  async cleanupMacOSUpdate(): Promise<boolean> {
+    return await invoke("cleanup_macos_update");
   },
 };

@@ -175,3 +175,43 @@ pub async fn save_updater_config(
 
     Ok(true)
 }
+
+/// macOS 更新安装结果（前端返回格式）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MacOSUpdateInstallResultInfo {
+    pub success: bool,
+    pub error: Option<String>,
+    pub update_version: Option<String>,
+    pub installed_version: Option<String>,
+}
+
+/// 尝试安装 macOS 上待处理的更新
+///
+/// 当 Tauri 的 downloadAndInstall() 无法自动移动更新包到 /Applications 时，
+/// 调用此命令尝试手动完成安装。
+#[tauri::command]
+pub async fn try_install_macos_update() -> Result<MacOSUpdateInstallResultInfo, String> {
+    let result = crate::services::app_updater::try_install_macos_update().await;
+
+    Ok(MacOSUpdateInstallResultInfo {
+        success: result.success,
+        error: result.error,
+        update_version: result.update_version,
+        installed_version: result.installed_version,
+    })
+}
+
+/// 检查是否有待安装的 macOS 更新
+#[tauri::command]
+pub async fn check_pending_macos_update() -> Result<Option<String>, String> {
+    Ok(crate::services::app_updater::check_pending_macos_update().await)
+}
+
+/// 清理 macOS 临时更新包
+#[tauri::command]
+pub async fn cleanup_macos_update() -> Result<bool, String> {
+    crate::services::app_updater::cleanup_macos_update()
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(true)
+}
