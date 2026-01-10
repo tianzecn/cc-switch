@@ -45,6 +45,7 @@ import {
   type CommandRepo,
 } from "@/hooks/useCommands";
 import { useBatchInstallCommands } from "@/hooks/useBatchInstallCommands";
+import { ContentContainer } from "@/components/layout";
 import {
   useCheckCommandsUpdates,
   useCheckCommandsUpdatesByIds,
@@ -513,7 +514,7 @@ export const CommandsPage: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto max-w-[72rem] px-6 flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
+    <ContentContainer variant="wide" className="flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
       {/* ========== 统一 Header ========== */}
       <div className="flex-shrink-0 flex items-center justify-between py-4">
         {/* 左侧: 图标 + 标题 */}
@@ -819,7 +820,7 @@ export const CommandsPage: React.FC = () => {
           onCancel={() => setConfirmDialog(null)}
         />
       )}
-    </div>
+    </ContentContainer>
   );
 };
 

@@ -232,6 +232,12 @@
     "themeLight": "Light",
     "themeDark": "Dark",
     "themeSystem": "System",
+    "layout": {
+      "title": "Layout Mode",
+      "description": "Switch between fixed width and adaptive layout",
+      "fixed": "Fixed",
+      "adaptive": "Adaptive"
+    },
     "importExport": "SQL Import/Export",
     "importExportHint": "Import or export database SQL backups for migration or restore (import supports only backups exported by CC Switch).",
     "exportConfig": "Export SQL Backup",

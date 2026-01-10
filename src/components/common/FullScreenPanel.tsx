@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ContentContainer } from "@/components/layout";
 
 interface FullScreenPanelProps {
   isOpen: boolean;
@@ -66,7 +67,7 @@ export const FullScreenPanel: React.FC<FullScreenPanelProps> = ({
               height: HEADER_HEIGHT,
             }}
           >
-            <div className="mx-auto max-w-[56rem] px-6 w-full flex items-center gap-4">
+            <ContentContainer className="w-full flex items-center gap-4">
               <Button
                 type="button"
                 variant="outline"
@@ -77,14 +78,14 @@ export const FullScreenPanel: React.FC<FullScreenPanelProps> = ({
                 <ArrowLeft className="h-4 w-4" />
               </Button>
               <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-            </div>
+            </ContentContainer>
           </div>
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto scroll-overlay">
-            <div className="mx-auto max-w-[56rem] px-6 py-6 space-y-6 w-full">
+            <ContentContainer className="py-6 space-y-6 w-full">
               {children}
-            </div>
+            </ContentContainer>
           </div>
 
           {/* Footer */}
@@ -93,9 +94,9 @@ export const FullScreenPanel: React.FC<FullScreenPanelProps> = ({
               className="flex-shrink-0 py-4 border-t border-border-default"
               style={{ backgroundColor: "hsl(var(--background))" }}
             >
-              <div className="mx-auto max-w-[56rem] px-6 flex items-center justify-end gap-3">
+              <ContentContainer className="flex items-center justify-end gap-3">
                 {footer}
-              </div>
+              </ContentContainer>
             </div>
           )}
         </motion.div>

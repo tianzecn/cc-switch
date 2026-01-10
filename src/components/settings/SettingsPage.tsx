@@ -10,6 +10,7 @@ import {
   Server,
   ChevronDown,
   Github,
+  Maximize2,
 } from "lucide-react";
 import * as AccordionPrimitive from "@radix-ui/react-accordion";
 import { toast } from "sonner";
@@ -49,6 +50,8 @@ import type { SettingsFormState } from "@/hooks/useSettings";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { useProxyStatus } from "@/hooks/useProxyStatus";
+import { ContentContainer } from "@/components/layout";
+import { useLayoutMode } from "@/hooks/useLayoutMode";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -185,6 +188,9 @@ export function SettingsPage({
     isPending: isProxyPending,
   } = useProxyStatus();
 
+  // 布局模式状态
+  const { mode: layoutMode, setMode: setLayoutMode } = useLayoutMode();
+
   const handleToggleProxy = async (checked: boolean) => {
     try {
       if (!checked) {
@@ -198,7 +204,7 @@ export function SettingsPage({
   };
 
   return (
-    <div className="mx-auto max-w-[56rem] flex flex-col h-[calc(100vh-8rem)] overflow-hidden px-6">
+    <ContentContainer className="flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
       {isBusy ? (
         <div className="flex flex-1 items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -238,6 +244,35 @@ export function SettingsPage({
                     settings={settings}
                     onChange={handleAutoSave}
                   />
+
+                  {/* 布局模式设置 */}
+                  <div className="rounded-xl glass-card p-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Maximize2 className="h-5 w-5 text-primary" />
+                        <div>
+                          <h3 className="text-sm font-medium">
+                            {t("settings.layout.title", "布局模式")}
+                          </h3>
+                          <p className="text-xs text-muted-foreground">
+                            {t("settings.layout.description", "切换固定宽度或自适应布局")}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs ${layoutMode === "fixed" ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+                          {t("settings.layout.fixed", "固定")}
+                        </span>
+                        <Switch
+                          checked={layoutMode === "adaptive"}
+                          onCheckedChange={(checked) => setLayoutMode(checked ? "adaptive" : "fixed")}
+                        />
+                        <span className={`text-xs ${layoutMode === "adaptive" ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+                          {t("settings.layout.adaptive", "自适应")}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </motion.div>
               ) : null}
             </TabsContent>
@@ -614,6 +649,6 @@ export function SettingsPage({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </ContentContainer>
   );
 }

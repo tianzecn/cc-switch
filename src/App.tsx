@@ -38,6 +38,7 @@ import {
   type View,
   type PageActionRefs,
 } from "@/components/navbar/UnifiedNavbar";
+import { ContentContainer } from "@/components/layout";
 
 const DRAG_BAR_HEIGHT = 28; // px
 const NAVBAR_HEIGHT = 96; // px (3 rows * 32px)
@@ -420,13 +421,13 @@ function App() {
           return <HooksPage />;
         case "universal":
           return (
-            <div className="mx-auto max-w-[56rem] px-5 pt-4">
+            <ContentContainer className="pt-4">
               <UniversalProviderPanel />
-            </div>
+            </ContentContainer>
           );
         default:
           return (
-            <div className="mx-auto max-w-[56rem] px-5 flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
+            <ContentContainer className="flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
               {/* 独立滚动容器 - 解决 Linux/Ubuntu 下 DndContext 与滚轮事件冲突 */}
               <div className="flex-1 overflow-y-auto overflow-x-hidden pb-12 px-1">
                 <AnimatePresence mode="wait">
@@ -459,7 +460,7 @@ function App() {
                   </motion.div>
                 </AnimatePresence>
               </div>
-            </div>
+            </ContentContainer>
           );
       }
     })();

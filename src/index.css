@@ -37,6 +37,12 @@
     --ring: 210 100% 56%;
 
     --radius: 0.5rem;
+
+    /* 布局系统变量 */
+    --content-max-width-fixed: 56rem;
+    --content-max-width-fixed-wide: 72rem;
+    --content-max-width-adaptive: 1920px;
+    --content-width-percent: 95%;
   }
 
   .dark {

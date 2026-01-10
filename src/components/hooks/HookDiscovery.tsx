@@ -27,6 +27,7 @@ import {
   type HookEventType,
 } from "@/hooks/useHooks";
 import { toast } from "sonner";
+import { ContentContainer } from "@/components/layout";
 import { CommandRepoManager } from "@/components/commands/CommandRepoManager";
 import { HookDiscoveryTree } from "./HookDiscoveryTree";
 
@@ -153,7 +154,7 @@ export const HookDiscovery: React.FC<HookDiscoveryProps> = ({ onBack }) => {
   };
 
   return (
-    <div className="mx-auto max-w-[72rem] px-6 flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
+    <ContentContainer variant="wide" className="flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
       {/* Header */}
       <div className="flex-shrink-0 flex items-center gap-4 py-4">
         <Button variant="ghost" size="icon" onClick={onBack}>
@@ -292,7 +293,7 @@ export const HookDiscovery: React.FC<HookDiscoveryProps> = ({ onBack }) => {
           onClose={() => setShowRepoManager(false)}
         />
       )}
-    </div>
+    </ContentContainer>
   );
 };
 

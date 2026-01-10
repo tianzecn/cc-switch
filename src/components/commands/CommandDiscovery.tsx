@@ -39,6 +39,7 @@ import {
 } from "@/hooks/useResourceUpdates";
 import { UpdateBadge } from "@/components/updates";
 import { toast } from "sonner";
+import { ContentContainer } from "@/components/layout";
 import { CommandRepoManager } from "./CommandRepoManager";
 import {
   CommandDiscoveryTree,
@@ -217,7 +218,7 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
   };
 
   return (
-    <div className="mx-auto max-w-[72rem] px-6 flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
+    <ContentContainer variant="wide" className="flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
       {/* Header */}
       <div className="flex-shrink-0 flex items-center gap-4 py-4">
         <Button variant="ghost" size="icon" onClick={onBack}>
@@ -375,7 +376,7 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
           onClose={() => setShowRepoManager(false)}
         />
       )}
-    </div>
+    </ContentContainer>
   );
 };
 

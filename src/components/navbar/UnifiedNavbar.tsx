@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import type { AppId } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useLayoutMode } from "@/hooks/useLayoutMode";
 import { AppSwitcher } from "@/components/AppSwitcher";
 import { UpdateBadge } from "@/components/UpdateBadge";
 import { ProxyToggle } from "@/components/proxy/ProxyToggle";
@@ -148,8 +149,15 @@ export function UnifiedNavbar({
   onAddProvider,
 }: UnifiedNavbarProps) {
   const { t } = useTranslation();
+  const { mode } = useLayoutMode();
 
   const isHomePage = currentView === "providers";
+
+  // 根据布局模式计算内容区宽度
+  const contentWidthClass =
+    mode === "adaptive"
+      ? "w-[95%] max-w-[1920px]"
+      : "max-w-[56rem]";
   const addActionButtonClass =
     "bg-orange-500 hover:bg-orange-600 dark:bg-orange-500 dark:hover:bg-orange-600 text-white shadow-lg shadow-orange-500/30 dark:shadow-orange-500/40 rounded-full w-8 h-8";
 
@@ -174,10 +182,10 @@ export function UnifiedNavbar({
   // Render Row 1: Core controls
   const renderRow1 = () => (
     <div
-      className="flex items-center justify-center h-8 px-6"
+      className="flex items-center justify-center h-8"
       style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
     >
-      <div className="flex items-center justify-between w-full max-w-2xl">
+      <div className="flex items-center justify-between w-full">
         {/* Left side: Title area */}
         <div className="flex items-center gap-2">
           {isHomePage ? (
@@ -253,7 +261,7 @@ export function UnifiedNavbar({
   // Render Row 2: Feature navigation buttons
   const renderRow2 = () => (
     <div
-      className="flex items-center justify-center h-8 px-6"
+      className="flex items-center justify-center h-8"
       style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
     >
       <div className="flex items-center gap-1 p-1 bg-muted rounded-xl">
@@ -339,7 +347,7 @@ export function UnifiedNavbar({
 
     return (
       <div
-        className="flex items-center justify-center h-8 px-6"
+        className="flex items-center justify-center h-8"
         style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
       >
         <div className="flex items-center gap-2">{actionButtons}</div>
@@ -360,7 +368,12 @@ export function UnifiedNavbar({
       }
     >
       <div
-        className="mx-auto max-w-[56rem] h-full flex flex-col justify-center gap-1 py-2"
+        className={cn(
+          "mx-auto h-full flex flex-col justify-center gap-1 py-2",
+          "px-4 sm:px-6 lg:px-8",
+          "transition-[width,max-width,padding] duration-150 ease-out",
+          contentWidthClass
+        )}
         data-tauri-drag-region
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
       >

@@ -48,6 +48,7 @@ import {
 } from "@/hooks/useSkills";
 import type { DiscoverableSkill, SkillRepo } from "@/lib/api/skills";
 import { formatSkillError } from "@/lib/errors/skillErrorParser";
+import { ContentContainer } from "@/components/layout";
 import type { TreeSelection } from "@/types/tree";
 import { createAllSelection } from "@/types/tree";
 import { useBatchInstall } from "@/hooks/useBatchInstall";
@@ -597,7 +598,7 @@ export const SkillsPageNew = forwardRef<
     (viewMode === "discovery" && (loadingDiscoverable || fetchingDiscoverable));
 
   return (
-    <div className="mx-auto max-w-[72rem] h-[calc(100vh-8rem)] flex flex-col overflow-hidden px-6">
+    <ContentContainer variant="wide" className="h-[calc(100vh-8rem)] flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex-shrink-0 py-4">
         {/* Title & Actions */}
@@ -863,7 +864,7 @@ export const SkillsPageNew = forwardRef<
           onClose={() => setRepoManagerOpen(false)}
         />
       )}
-    </div>
+    </ContentContainer>
   );
 });
 

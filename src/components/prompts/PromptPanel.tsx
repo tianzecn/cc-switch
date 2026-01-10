@@ -6,6 +6,7 @@ import { usePromptActions } from "@/hooks/usePromptActions";
 import PromptListItem from "./PromptListItem";
 import PromptFormPanel from "./PromptFormPanel";
 import { ConfirmDialog } from "../ConfirmDialog";
+import { ContentContainer } from "@/components/layout";
 
 interface PromptPanelProps {
   open: boolean;
@@ -96,7 +97,7 @@ const PromptPanel = React.forwardRef<PromptPanelHandle, PromptPanelProps>(
     const enabledPrompt = promptEntries.find(([_, p]) => p.enabled);
 
     return (
-      <div className="mx-auto max-w-[56rem] flex flex-col h-[calc(100vh-8rem)] px-6">
+      <ContentContainer className="flex flex-col h-[calc(100vh-8rem)]">
         <div className="flex-shrink-0 py-4 glass rounded-xl border border-white/10 mb-4 px-6">
           <div className="text-sm text-muted-foreground">
             {t("prompts.count", { count: promptEntries.length })} ·{" "}
@@ -158,7 +159,7 @@ const PromptPanel = React.forwardRef<PromptPanelHandle, PromptPanelProps>(
             onCancel={() => setConfirmDialog(null)}
           />
         )}
-      </div>
+      </ContentContainer>
     );
   },
 );

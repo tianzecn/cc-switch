@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **响应式布局系统** - 全新的布局系统，支持固定宽度和自适应两种模式切换
+  - 新增 `useLayoutMode` Hook（Zustand 状态管理 + localStorage 持久化）
+  - 新增 `ContentContainer` 统一布局容器组件（standard/wide 变体）
+  - 设置页面新增布局模式切换 UI（Switch 组件）
+  - 自适应模式：95% 视口宽度，最大 1920px
+  - 固定模式：56rem（标准）/ 72rem（宽屏）
+  - 150ms CSS 过渡动画，平滑窗口缩放体验
+  - 最小窗口宽度 900px（Tauri 配置）
+  - 完整 i18n 支持（中/英/日）
+  - 迁移 17 个页面组件到新布局系统
+
 - **项目级安装范围** - 完整的项目级资源安装功能，支持将 Skills/Commands/Hooks/Agents 安装到指定项目目录
   - 安装范围选择：全局（global）或项目（project）+ 目标项目路径
   - 项目选择器组件：支持最近项目列表、手动输入路径、路径有效性验证

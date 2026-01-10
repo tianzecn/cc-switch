@@ -25,6 +25,7 @@ import {
   type CommandRepo,
 } from "@/hooks/useAgents";
 import { useBatchInstallAgents } from "@/hooks/useBatchInstallAgents";
+import { ContentContainer } from "@/components/layout";
 import {
   useCheckAgentsUpdates,
   getResourceUpdateStatus,
@@ -185,7 +186,7 @@ export const AgentDiscovery: React.FC<AgentDiscoveryProps> = ({ onBack }) => {
   };
 
   return (
-    <div className="mx-auto max-w-[72rem] px-6 flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
+    <ContentContainer variant="wide" className="flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
       {/* Header */}
       <div className="flex-shrink-0 flex items-center gap-4 py-4">
         <Button variant="ghost" size="icon" onClick={onBack}>
@@ -330,7 +331,7 @@ export const AgentDiscovery: React.FC<AgentDiscoveryProps> = ({ onBack }) => {
           onClose={() => setShowRepoManager(false)}
         />
       )}
-    </div>
+    </ContentContainer>
   );
 };
 

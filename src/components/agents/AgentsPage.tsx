@@ -36,6 +36,7 @@ import {
   type CommandRepo,
 } from "@/hooks/useAgents";
 import { useBatchInstallAgents } from "@/hooks/useBatchInstallAgents";
+import { ContentContainer } from "@/components/layout";
 import { InstallScopeDialog, type InstallScope } from "@/components/common/InstallScopeDialog";
 import {
   useCheckAgentsUpdates,
@@ -476,7 +477,7 @@ export const AgentsPage: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto max-w-[72rem] px-6 flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
+    <ContentContainer variant="wide" className="flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
       {/* ========== 统一 Header ========== */}
       <div className="flex-shrink-0 flex items-center justify-between py-4">
         {/* 左侧: 图标 + 标题 */}
@@ -742,7 +743,7 @@ export const AgentsPage: React.FC = () => {
           onClose={() => setShowRepoManager(false)}
         />
       )}
-    </div>
+    </ContentContainer>
   );
 };
 

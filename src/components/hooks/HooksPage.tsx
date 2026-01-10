@@ -43,6 +43,7 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ContentContainer } from "@/components/layout";
 
 type ViewMode = "list" | "discovery";
 
@@ -273,7 +274,7 @@ export const HooksPage: React.FC = () => {
   };
 
   return (
-    <div className="mx-auto max-w-[72rem] px-6 flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
+    <ContentContainer variant="wide" className="flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
       {/* ========== 统一 Header ========== */}
       <div className="flex-shrink-0 flex items-center justify-between py-4">
         {/* 左侧: 图标 + 标题 */}
@@ -523,7 +524,7 @@ export const HooksPage: React.FC = () => {
           onClose={() => setShowRepoManager(false)}
         />
       )}
-    </div>
+    </ContentContainer>
   );
 };
 

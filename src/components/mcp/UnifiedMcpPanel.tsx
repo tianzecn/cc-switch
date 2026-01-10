@@ -17,6 +17,7 @@ import { Edit3, Trash2 } from "lucide-react";
 import { settingsApi } from "@/lib/api";
 import { mcpPresets } from "@/config/mcpPresets";
 import { toast } from "sonner";
+import { ContentContainer } from "@/components/layout";
 
 interface UnifiedMcpPanelProps {
   onOpenChange: (open: boolean) => void;
@@ -141,7 +142,7 @@ const UnifiedMcpPanel = React.forwardRef<
   };
 
   return (
-    <div className="mx-auto max-w-[56rem] px-6 flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
+    <ContentContainer className="flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
       {/* Info Section */}
       <div className="flex-shrink-0 py-4 glass rounded-xl border border-white/10 mb-4 px-6">
         <div className="text-sm text-muted-foreground">
@@ -213,7 +214,7 @@ const UnifiedMcpPanel = React.forwardRef<
           onCancel={() => setConfirmDialog(null)}
         />
       )}
-    </div>
+    </ContentContainer>
   );
 });
 
