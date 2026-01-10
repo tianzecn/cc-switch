@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Trash2, ExternalLink, GitBranch, HardDrive } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,8 @@ import { cn } from "@/lib/utils";
 import type { InstalledSkill, AppType } from "@/hooks/useSkills";
 import { UpdateBadge } from "@/components/updates/UpdateBadge";
 import type { UpdateCheckResult } from "@/hooks/useResourceUpdates";
+import { ScopeBadge, createScopeFromDb, type InstallScope } from "@/components/common/ScopeBadge";
+import { ScopeModifyDialog } from "@/components/common/ScopeModifyDialog";
 
 interface SkillListItemProps {
   skill: InstalledSkill;
@@ -20,6 +22,8 @@ interface SkillListItemProps {
   onSelect: () => void;
   onToggleApp: (app: AppType, enabled: boolean) => void;
   onUninstall: () => void;
+  /** 范围变更回调 */
+  onScopeChange?: (newScope: InstallScope) => Promise<void>;
   /** 更新状态 */
   updateStatus?: UpdateCheckResult;
 }
@@ -33,16 +37,33 @@ export const SkillListItem: React.FC<SkillListItemProps> = ({
   onSelect,
   onToggleApp,
   onUninstall,
+  onScopeChange,
   updateStatus,
 }) => {
   const { t } = useTranslation();
+  const [scopeDialogOpen, setScopeDialogOpen] = useState(false);
+  const [isScopeChanging, setIsScopeChanging] = useState(false);
+
   const isLocal = !skill.repoOwner;
   const SourceIcon = isLocal ? HardDrive : GitBranch;
   const sourceName = isLocal
     ? t("skills.local", "Local")
     : `${skill.repoOwner}/${skill.repoName}`;
 
+  const currentScope = createScopeFromDb(skill.scope, skill.projectPath);
+
+  const handleScopeChange = async (newScope: InstallScope) => {
+    if (!onScopeChange) return;
+    setIsScopeChanging(true);
+    try {
+      await onScopeChange(newScope);
+    } finally {
+      setIsScopeChanging(false);
+    }
+  };
+
   return (
+    <>
     <div
       className={cn(
         "group flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all",
@@ -54,9 +75,18 @@ export const SkillListItem: React.FC<SkillListItemProps> = ({
     >
       {/* 左侧：名称、描述和操作按钮 */}
       <div className="flex-1 min-w-0">
-        {/* 第一行：名称 + 更新徽章 + Badge + 操作按钮 */}
+        {/* 第一行：名称 + 范围 + 更新徽章 + Badge + 操作按钮 */}
         <div className="flex items-center gap-2">
           <h4 className="font-medium text-sm truncate">{skill.name}</h4>
+          {/* 安装范围徽章 - 可点击修改 */}
+          <ScopeBadge
+            scope={currentScope}
+            size="sm"
+            onClick={onScopeChange ? (e) => {
+              e.stopPropagation();
+              setScopeDialogOpen(true);
+            } : undefined}
+          />
           {/* 更新徽章 */}
           <UpdateBadge status={updateStatus} size="sm" />
           <Badge variant="outline" className="text-xs flex items-center gap-1 flex-shrink-0">
@@ -139,6 +169,20 @@ export const SkillListItem: React.FC<SkillListItemProps> = ({
         />
       </div>
     </div>
+
+    {/* 范围修改对话框 */}
+    {onScopeChange && (
+      <ScopeModifyDialog
+        open={scopeDialogOpen}
+        onOpenChange={setScopeDialogOpen}
+        resourceType="skill"
+        resourceName={skill.name}
+        currentScope={currentScope}
+        onScopeChange={handleScopeChange}
+        isLoading={isScopeChanging}
+      />
+    )}
+    </>
   );
 };
 

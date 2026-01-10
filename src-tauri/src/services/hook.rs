@@ -36,7 +36,7 @@
 
 use crate::app_config::{
     AppType, CommandRepo, DiscoverableHook, HookApps, HookEventType, HookNamespace, HookRule,
-    HookType, InstalledHook, UnmanagedHook,
+    HookType, InstallScope, InstalledHook, UnmanagedHook,
 };
 use crate::config::get_app_config_dir;
 use crate::database::Database;
@@ -227,6 +227,98 @@ impl HookService {
         Ok(path)
     }
 
+    /// 获取项目级 Hooks 目录
+    ///
+    /// 项目级安装目录：`<project_path>/.claude/hooks/`
+    pub fn get_project_hooks_dir(project_path: &Path) -> Result<PathBuf> {
+        let hooks_dir = project_path.join(".claude").join("hooks");
+        Ok(hooks_dir)
+    }
+
+    /// 检查范围冲突
+    pub fn check_scope_conflict(
+        db: &Arc<Database>,
+        id: &str,
+        new_scope: &InstallScope,
+    ) -> Result<()> {
+        if let Some(existing) = db.get_installed_hook(id)? {
+            let current_scope =
+                InstallScope::from_db(&existing.scope, existing.project_path.as_deref());
+
+            if current_scope == *new_scope {
+                return Ok(());
+            }
+
+            let conflict_msg = match (&current_scope, new_scope) {
+                (InstallScope::Global, InstallScope::Project(_)) => {
+                    "该 Hook 已安装到全局，请先移除全局安装后再安装到项目"
+                }
+                (InstallScope::Project(_), InstallScope::Global) => {
+                    "该 Hook 已安装到项目，请先移除项目安装后再安装到全局"
+                }
+                (InstallScope::Project(old_path), InstallScope::Project(new_path)) => {
+                    return Err(anyhow!(
+                        "该 Hook 已安装到项目 {}，请先移除后再安装到项目 {}",
+                        old_path.display(),
+                        new_path.display()
+                    ));
+                }
+                _ => "安装范围冲突",
+            };
+
+            return Err(anyhow!(conflict_msg));
+        }
+
+        Ok(())
+    }
+
+    /// 复制 Hook 到项目目录
+    pub fn copy_to_project(id: &str, project_path: &Path) -> Result<()> {
+        let ssot_dir = Self::get_ssot_dir()?;
+        let relative_path = Self::id_to_relative_path(id);
+        let source = ssot_dir.join(&relative_path);
+
+        if !source.exists() {
+            return Err(anyhow!("Hook 不存在于 SSOT: {}", id));
+        }
+
+        let hooks_dir = Self::get_project_hooks_dir(project_path)?;
+
+        // 确保父目录存在（支持命名空间）
+        let dest = hooks_dir.join(&relative_path);
+        if let Some(parent) = dest.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        fs::copy(&source, &dest)?;
+
+        log::debug!(
+            "Hook {} 已复制到项目 {}",
+            id,
+            project_path.display()
+        );
+
+        Ok(())
+    }
+
+    /// 从项目目录删除 Hook
+    pub fn remove_from_project(id: &str, project_path: &Path) -> Result<()> {
+        let hooks_dir = Self::get_project_hooks_dir(project_path)?;
+        let relative_path = Self::id_to_relative_path(id);
+        let hook_path = hooks_dir.join(&relative_path);
+
+        if hook_path.exists() {
+            fs::remove_file(&hook_path)?;
+            log::debug!(
+                "Hook {} 已从项目 {} 删除",
+                id,
+                project_path.display()
+            );
+        }
+
+        Ok(())
+    }
+
     /// 将 ID 转换为相对路径
     ///
     /// - "pre-bash-check" → "pre-bash-check.json"
@@ -373,6 +465,8 @@ impl HookService {
             apps: HookApps::only(current_app),
             file_hash: Some(file_hash),
             installed_at: chrono::Utc::now().timestamp(),
+            scope: "global".to_string(),
+            project_path: None,
         };
 
         // 保存到数据库
@@ -465,6 +559,45 @@ impl HookService {
             hook.name,
             app,
             enabled
+        );
+
+        Ok(())
+    }
+
+    /// 修改安装范围
+    ///
+    /// 将资源从一个范围迁移到另一个范围
+    pub fn change_scope(
+        db: &Arc<Database>,
+        id: &str,
+        new_scope: &InstallScope,
+        _current_app: &AppType,
+    ) -> Result<()> {
+        // 获取当前 hook
+        let hook = db
+            .get_installed_hook(id)?
+            .ok_or_else(|| anyhow!("Hook not found: {}", id))?;
+
+        let current_scope =
+            InstallScope::from_db(&hook.scope, hook.project_path.as_deref());
+
+        // 如果范围相同，无需操作
+        if current_scope == *new_scope {
+            return Ok(());
+        }
+
+        // 更新数据库
+        let (scope_str, project_path) = new_scope.to_db();
+        db.update_hook_scope(id, scope_str, project_path.as_deref())?;
+
+        // Hook 使用 sync 机制，重新同步所有应用以应用新范围
+        Self::sync_all_to_apps(db)?;
+
+        log::info!(
+            "Hook {} 范围已从 {} 变更为 {}",
+            hook.name,
+            current_scope,
+            new_scope
         );
 
         Ok(())
@@ -1430,6 +1563,8 @@ impl HookService {
                     apps: existing.map(|e| e.apps).unwrap_or_default(),
                     file_hash: Some(file_hash),
                     installed_at: chrono::Utc::now().timestamp(),
+                    scope: "global".to_string(),
+                    project_path: None,
                 };
 
                 db.save_hook(&hook)

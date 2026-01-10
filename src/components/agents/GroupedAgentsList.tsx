@@ -7,6 +7,7 @@ import type { InstalledAgent, AppType } from "@/hooks/useAgents";
 import type { TreeSelection } from "@/types/tree";
 import type { BatchCheckResult } from "@/hooks/useResourceUpdates";
 import { getResourceUpdateStatus } from "@/hooks/useResourceUpdates";
+import type { InstallScope } from "@/components/common/ScopeBadge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -32,6 +33,8 @@ interface GroupedAgentsListProps {
   onUninstall: (agentId: string) => void;
   onOpenEditor: (agentId: string) => void;
   onOpenDocs?: (url: string) => void;
+  /** 范围变更回调 */
+  onScopeChange?: (agentId: string, newScope: InstallScope) => Promise<void>;
   appSupport?: {
     claude: boolean;
     codex: boolean;
@@ -62,6 +65,7 @@ export const GroupedAgentsList: React.FC<GroupedAgentsListProps> = ({
   onUninstall,
   onOpenEditor,
   onOpenDocs,
+  onScopeChange,
   appSupport = { claude: true, codex: false, gemini: false },
   isLoading = false,
   pageSize = 50,
@@ -281,6 +285,7 @@ export const GroupedAgentsList: React.FC<GroupedAgentsListProps> = ({
                         ? () => onOpenDocs(agent.readmeUrl!)
                         : undefined
                     }
+                    onScopeChange={onScopeChange ? (newScope) => onScopeChange(agent.id, newScope) : undefined}
                     appSupport={appSupport}
                     updateStatus={getResourceUpdateStatus(updateCheckResult, agent.id)}
                   />

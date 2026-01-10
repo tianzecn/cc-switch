@@ -25,6 +25,7 @@ import {
   useAddHookRepo,
   useRemoveHookRepo,
   useRefreshDiscoverableHooks,
+  useChangeHookScope,
   type HookEventType,
   type DiscoverableHook,
   type CommandRepo,
@@ -33,6 +34,8 @@ import { HookNamespaceTree } from "./HookNamespaceTree";
 import { HooksList } from "./HooksList";
 import { HookDiscoveryTree } from "./HookDiscoveryTree";
 import { CommandRepoManager } from "@/components/commands/CommandRepoManager";
+import { InstallScopeDialog } from "@/components/common/InstallScopeDialog";
+import type { InstallScope } from "@/components/common/ScopeBadge";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -83,6 +86,7 @@ export const HooksPage: React.FC = () => {
   const { data: hooks, isLoading } = useInstalledHooks();
   const { data: namespaces } = useHookNamespaces();
   const syncMutation = useSyncHooksToApps();
+  const changeScopeMutation = useChangeHookScope();
 
   // === Discovery 模式 Queries ===
   const { data: discoverableHooks, isLoading: isLoadingDiscoverable } = useDiscoverableHooks();
@@ -174,6 +178,24 @@ export const HooksPage: React.FC = () => {
     }
   };
 
+  const handleScopeChange = async (hookId: string, newScope: InstallScope) => {
+    try {
+      await changeScopeMutation.mutateAsync({
+        id: hookId,
+        scope: newScope.type,
+        projectPath: newScope.type === "project" ? newScope.path : undefined,
+        currentApp: "claude",
+      });
+      toast.success(t("scope.changeSuccess", "范围修改成功"), {
+        closeButton: true,
+      });
+    } catch (error) {
+      toast.error(t("common.error"), {
+        description: String(error),
+      });
+    }
+  };
+
   const toggleEventType = (eventType: HookEventType) => {
     setSelectedEventTypes((prev) => {
       const newSet = new Set(prev);
@@ -198,11 +220,13 @@ export const HooksPage: React.FC = () => {
     }
   };
 
-  const handleInstallHook = async (hook: DiscoverableHook) => {
+  const handleInstallHook = async (hook: DiscoverableHook, scope?: InstallScope) => {
     try {
       await installMutation.mutateAsync({
         hook,
         currentApp: "claude",
+        scope: scope?.type,
+        projectPath: scope?.type === "project" ? scope.path : undefined,
       });
       toast.success(t("hooks.installSuccess", { name: hook.name }), {
         closeButton: true,
@@ -414,6 +438,7 @@ export const HooksPage: React.FC = () => {
               hooks={filteredHooks}
               isLoading={isLoading}
               selectedNamespace={selectedNamespace}
+              onScopeChange={handleScopeChange}
             />
           </div>
         </div>
@@ -470,7 +495,7 @@ export const HooksPage: React.FC = () => {
                           installMutation.isPending &&
                           installMutation.variables?.hook.key === hook.key
                         }
-                        onInstall={() => handleInstallHook(hook)}
+                        onInstall={(scope) => handleInstallHook(hook, scope)}
                       />
                     ))}
                   </div>
@@ -509,7 +534,7 @@ interface HookListItemProps {
   hook: DiscoverableHook;
   isInstalled: boolean;
   isInstalling: boolean;
-  onInstall: () => void;
+  onInstall: (scope?: InstallScope) => void;
 }
 
 const HookListItem: React.FC<HookListItemProps> = ({
@@ -519,68 +544,92 @@ const HookListItem: React.FC<HookListItemProps> = ({
   onInstall,
 }) => {
   const { t } = useTranslation();
+  const [scopeDialogOpen, setScopeDialogOpen] = useState(false);
+
+  // 处理安装按钮点击 - 打开范围选择对话框
+  const handleInstallClick = () => {
+    setScopeDialogOpen(true);
+  };
+
+  // 处理范围选择确认
+  const handleScopeConfirm = async (scope: InstallScope) => {
+    await onInstall(scope);
+    setScopeDialogOpen(false);
+  };
 
   return (
-    <div className="rounded-lg border border-border bg-background/50 p-3">
-      <div className="flex items-start gap-3">
-        <Webhook
-          size={16}
-          className="text-muted-foreground flex-shrink-0 mt-0.5"
-        />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <span className="font-medium text-sm">{hook.name}</span>
-            <Badge
-              variant="secondary"
-              className={EVENT_TYPE_COLORS[hook.eventType]}
-            >
-              {hook.eventType}
-            </Badge>
-            <span className="text-xs text-muted-foreground">
-              #{hook.priority}
-            </span>
+    <>
+      <div className="rounded-lg border border-border bg-background/50 p-3">
+        <div className="flex items-start gap-3">
+          <Webhook
+            size={16}
+            className="text-muted-foreground flex-shrink-0 mt-0.5"
+          />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <span className="font-medium text-sm">{hook.name}</span>
+              <Badge
+                variant="secondary"
+                className={EVENT_TYPE_COLORS[hook.eventType]}
+              >
+                {hook.eventType}
+              </Badge>
+              <span className="text-xs text-muted-foreground">
+                #{hook.priority}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground mb-2">
+              {hook.description}
+            </p>
+            {hook.readmeUrl && (
+              <a
+                href={hook.readmeUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+              >
+                <ExternalLink size={12} />
+                {t("hooks.viewDocumentation")}
+              </a>
+            )}
           </div>
-          <p className="text-xs text-muted-foreground mb-2">
-            {hook.description}
-          </p>
-          {hook.readmeUrl && (
-            <a
-              href={hook.readmeUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-            >
-              <ExternalLink size={12} />
-              {t("hooks.viewDocumentation")}
-            </a>
-          )}
-        </div>
 
-        <div className="flex-shrink-0">
-          {isInstalled ? (
-            <span className="inline-flex items-center gap-1 text-xs text-green-600">
-              <Check size={12} />
-              {t("hooks.installed")}
-            </span>
-          ) : (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onInstall}
-              disabled={isInstalling}
-              className="h-7 text-xs gap-1"
-            >
-              {isInstalling ? (
-                <Loader2 size={12} className="animate-spin" />
-              ) : (
-                <Download size={12} />
-              )}
-              {t("hooks.install")}
-            </Button>
-          )}
+          <div className="flex-shrink-0">
+            {isInstalled ? (
+              <span className="inline-flex items-center gap-1 text-xs text-green-600">
+                <Check size={12} />
+                {t("hooks.installed")}
+              </span>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleInstallClick}
+                disabled={isInstalling}
+                className="h-7 text-xs gap-1"
+              >
+                {isInstalling ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <Download size={12} />
+                )}
+                {t("hooks.install")}
+              </Button>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* 安装范围选择对话框 */}
+      <InstallScopeDialog
+        open={scopeDialogOpen}
+        onOpenChange={setScopeDialogOpen}
+        resourceType="hook"
+        resourceName={hook.name}
+        onInstall={handleScopeConfirm}
+        isLoading={isInstalling}
+      />
+    </>
   );
 };
 

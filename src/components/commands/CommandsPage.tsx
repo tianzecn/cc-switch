@@ -29,6 +29,7 @@ import {
   useToggleCommandApp,
   useUninstallCommand,
   useUninstallCommandsBatch,
+  useChangeCommandScope,
   useOpenCommandInEditor,
   useAppCommandsSupport,
   useDiscoverableCommands,
@@ -58,6 +59,8 @@ import { CommandNamespaceTree } from "./CommandNamespaceTree";
 import { GroupedCommandsList } from "./GroupedCommandsList";
 import { CommandDetailPanel } from "./CommandDetailPanel";
 import { CommandImport } from "./CommandImport";
+import { InstallScopeDialog } from "@/components/common/InstallScopeDialog";
+import type { InstallScope } from "@/components/common/ScopeBadge";
 import { ConflictDetectionPanel } from "./ConflictDetectionPanel";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { toast } from "sonner";
@@ -109,6 +112,7 @@ export const CommandsPage: React.FC = () => {
   const uninstallMutation = useUninstallCommand();
   const uninstallBatchMutation = useUninstallCommandsBatch();
   const openEditorMutation = useOpenCommandInEditor();
+  const changeScopeMutation = useChangeCommandScope();
 
   // === Discovery 模式 Queries ===
   const { data: discoverableCommands, isLoading: isLoadingDiscoverable } = useDiscoverableCommands();
@@ -332,6 +336,24 @@ export const CommandsPage: React.FC = () => {
     }
   };
 
+  const handleScopeChange = async (commandId: string, newScope: InstallScope) => {
+    try {
+      await changeScopeMutation.mutateAsync({
+        id: commandId,
+        scope: newScope.type,
+        projectPath: newScope.type === "project" ? newScope.path : undefined,
+        currentApp: "claude",
+      });
+      toast.success(t("scope.changeSuccess", "范围修改成功"), {
+        closeButton: true,
+      });
+    } catch (error) {
+      toast.error(t("common.error"), {
+        description: String(error),
+      });
+    }
+  };
+
   const handleUninstall = (commandId: string) => {
     const command = commands.find((c) => c.id === commandId);
     if (!command) return;
@@ -406,11 +428,13 @@ export const CommandsPage: React.FC = () => {
     }
   };
 
-  const handleInstallCommand = async (command: DiscoverableCommand) => {
+  const handleInstallCommand = async (command: DiscoverableCommand, scope?: InstallScope) => {
     try {
       await installMutation.mutateAsync({
         command,
         currentApp: "claude",
+        scope: scope?.type,
+        projectPath: scope?.type === "project" ? scope.path : undefined,
       });
       toast.success(t("commands.installSuccess", { name: command.name }), {
         closeButton: true,
@@ -682,6 +706,7 @@ export const CommandsPage: React.FC = () => {
               onToggleApp={handleToggleApp}
               onUninstall={handleUninstall}
               onOpenEditor={handleOpenEditor}
+              onScopeChange={handleScopeChange}
               appSupport={appSupport}
               isLoading={isLoading}
               emptyStateType={emptyStateType}
@@ -756,7 +781,7 @@ export const CommandsPage: React.FC = () => {
                           installMutation.isPending &&
                           installMutation.variables?.command.key === cmd.key
                         }
-                        onInstall={() => handleInstallCommand(cmd)}
+                        onInstall={(scope) => handleInstallCommand(cmd, scope)}
                       />
                     ))}
                   </div>
@@ -806,7 +831,7 @@ interface CommandListItemProps {
   isInstalled: boolean;
   updateStatus?: UpdateCheckResult;
   isInstalling: boolean;
-  onInstall: () => void;
+  onInstall: (scope?: InstallScope) => void;
 }
 
 const CommandListItem: React.FC<CommandListItemProps> = ({
@@ -817,71 +842,95 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
   onInstall,
 }) => {
   const { t } = useTranslation();
+  const [scopeDialogOpen, setScopeDialogOpen] = useState(false);
+
+  // 处理安装按钮点击 - 打开范围选择对话框
+  const handleInstallClick = () => {
+    setScopeDialogOpen(true);
+  };
+
+  // 处理范围选择确认
+  const handleScopeConfirm = async (scope: InstallScope) => {
+    await onInstall(scope);
+    setScopeDialogOpen(false);
+  };
 
   return (
-    <div className="rounded-lg border border-border bg-background/50 p-3">
-      {/* 头部：命令名 + 分类 + 安装按钮 */}
-      <div className="flex items-start gap-3">
-        <FileText
-          size={16}
-          className="text-muted-foreground flex-shrink-0 mt-0.5"
-        />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="font-medium text-sm">{command.name}</span>
-            {isInstalled && updateStatus && (
-              <UpdateBadge status={updateStatus} size="sm" />
-            )}
-            {command.category && (
-              <span className="px-1.5 py-0.5 text-xs rounded bg-primary/10 text-primary flex-shrink-0">
-                {command.category}
-              </span>
+    <>
+      <div className="rounded-lg border border-border bg-background/50 p-3">
+        {/* 头部：命令名 + 分类 + 安装按钮 */}
+        <div className="flex items-start gap-3">
+          <FileText
+            size={16}
+            className="text-muted-foreground flex-shrink-0 mt-0.5"
+          />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="font-medium text-sm">{command.name}</span>
+              {isInstalled && updateStatus && (
+                <UpdateBadge status={updateStatus} size="sm" />
+              )}
+              {command.category && (
+                <span className="px-1.5 py-0.5 text-xs rounded bg-primary/10 text-primary flex-shrink-0">
+                  {command.category}
+                </span>
+              )}
+            </div>
+            {/* 描述 */}
+            <p className="text-xs text-muted-foreground mb-2">
+              {command.description}
+            </p>
+            {/* 文档链接 */}
+            {command.readmeUrl && (
+              <a
+                href={command.readmeUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+              >
+                <ExternalLink size={12} />
+                {t("commands.viewDocumentation")}
+              </a>
             )}
           </div>
-          {/* 描述 */}
-          <p className="text-xs text-muted-foreground mb-2">
-            {command.description}
-          </p>
-          {/* 文档链接 */}
-          {command.readmeUrl && (
-            <a
-              href={command.readmeUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-            >
-              <ExternalLink size={12} />
-              {t("commands.viewDocumentation")}
-            </a>
-          )}
-        </div>
 
-        {/* 安装按钮 */}
-        <div className="flex-shrink-0">
-          {isInstalled ? (
-            <span className="inline-flex items-center gap-1 text-xs text-green-600">
-              <Check size={12} />
-              {t("commands.installed")}
-            </span>
-          ) : (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onInstall}
-              disabled={isInstalling}
-              className="h-7 text-xs gap-1"
-            >
-              {isInstalling ? (
-                <Loader2 size={12} className="animate-spin" />
-              ) : (
-                <Download size={12} />
-              )}
-              {t("commands.install")}
-            </Button>
-          )}
+          {/* 安装按钮 */}
+          <div className="flex-shrink-0">
+            {isInstalled ? (
+              <span className="inline-flex items-center gap-1 text-xs text-green-600">
+                <Check size={12} />
+                {t("commands.installed")}
+              </span>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleInstallClick}
+                disabled={isInstalling}
+                className="h-7 text-xs gap-1"
+              >
+                {isInstalling ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <Download size={12} />
+                )}
+                {t("commands.install")}
+              </Button>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* 安装范围选择对话框 */}
+      <InstallScopeDialog
+        open={scopeDialogOpen}
+        onOpenChange={setScopeDialogOpen}
+        resourceType="command"
+        resourceName={command.name}
+        onInstall={handleScopeConfirm}
+        isLoading={isInstalling}
+      />
+    </>
   );
 };
 

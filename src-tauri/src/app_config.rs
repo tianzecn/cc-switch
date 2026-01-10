@@ -228,6 +228,12 @@ pub struct InstalledCommand {
     pub file_hash: Option<String>,
     /// 安装时间（Unix 时间戳）
     pub installed_at: i64,
+    /// 安装范围（"global" 或 "project"）
+    #[serde(default = "default_scope")]
+    pub scope: String,
+    /// 项目路径（当 scope="project" 时有效）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project_path: Option<String>,
 }
 
 /// 可发现的 Command（来自 GitHub 仓库）
@@ -434,6 +440,12 @@ pub struct InstalledAgent {
     pub file_hash: Option<String>,
     /// 安装时间（Unix 时间戳）
     pub installed_at: i64,
+    /// 安装范围（"global" 或 "project"）
+    #[serde(default = "default_scope")]
+    pub scope: String,
+    /// 项目路径（当 scope="project" 时有效）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project_path: Option<String>,
 }
 
 /// 可发现的 Agent（来自 GitHub 仓库）
@@ -542,6 +554,17 @@ pub struct InstalledSkill {
     pub file_hash: Option<String>,
     /// 安装时间（Unix 时间戳）
     pub installed_at: i64,
+    /// 安装范围（"global" 或 "project"）
+    #[serde(default = "default_scope")]
+    pub scope: String,
+    /// 项目路径（当 scope="project" 时有效）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project_path: Option<String>,
+}
+
+/// 默认安装范围
+fn default_scope() -> String {
+    "global".to_string()
 }
 
 /// 未管理的 Skill（在应用目录中发现但未被 CC Switch 管理）
@@ -707,6 +730,12 @@ pub struct InstalledHook {
     pub file_hash: Option<String>,
     /// 安装时间（Unix 时间戳）
     pub installed_at: i64,
+    /// 安装范围（"global" 或 "project"）
+    #[serde(default = "default_scope")]
+    pub scope: String,
+    /// 项目路径（当 scope="project" 时有效）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project_path: Option<String>,
 }
 
 /// 可发现的 Hook（来自仓库扫描）
@@ -891,6 +920,90 @@ impl FromStr for AppType {
                 format!("不支持的应用标识: '{other}'。可选值: claude, codex, gemini。"),
                 format!("Unsupported app id: '{other}'. Allowed: claude, codex, gemini."),
             )),
+        }
+    }
+}
+
+/// 安装范围
+///
+/// 资源可以安装到全局目录（~/.claude/<type>/）或项目目录（<project>/.claude/<type>/）
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "path")]
+pub enum InstallScope {
+    /// 全局安装（~/.claude/<type>/）
+    Global,
+    /// 项目安装（<project>/.claude/<type>/）
+    Project(std::path::PathBuf),
+}
+
+impl InstallScope {
+    /// 检查是否为全局安装
+    pub fn is_global(&self) -> bool {
+        matches!(self, InstallScope::Global)
+    }
+
+    /// 检查是否为项目安装
+    pub fn is_project(&self) -> bool {
+        matches!(self, InstallScope::Project(_))
+    }
+
+    /// 获取项目路径（如果是项目安装）
+    pub fn project_path(&self) -> Option<&std::path::Path> {
+        match self {
+            InstallScope::Global => None,
+            InstallScope::Project(path) => Some(path),
+        }
+    }
+
+    /// 从数据库字段值创建 InstallScope
+    ///
+    /// - scope: "global" 或 "project"
+    /// - project_path: 项目路径（仅当 scope="project" 时有效）
+    pub fn from_db(scope: &str, project_path: Option<&str>) -> Self {
+        match scope {
+            "project" => {
+                if let Some(path) = project_path {
+                    InstallScope::Project(std::path::PathBuf::from(path))
+                } else {
+                    // 数据不一致，回退到全局
+                    log::warn!("InstallScope::from_db: scope='project' but project_path is None, fallback to Global");
+                    InstallScope::Global
+                }
+            }
+            _ => InstallScope::Global,
+        }
+    }
+
+    /// 转换为数据库字段值
+    ///
+    /// 返回 (scope, project_path) 元组
+    pub fn to_db(&self) -> (&'static str, Option<String>) {
+        match self {
+            InstallScope::Global => ("global", None),
+            InstallScope::Project(path) => ("project", Some(path.to_string_lossy().to_string())),
+        }
+    }
+
+    /// 获取 scope 字符串值
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            InstallScope::Global => "global",
+            InstallScope::Project(_) => "project",
+        }
+    }
+}
+
+impl Default for InstallScope {
+    fn default() -> Self {
+        InstallScope::Global
+    }
+}
+
+impl std::fmt::Display for InstallScope {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            InstallScope::Global => write!(f, "global"),
+            InstallScope::Project(path) => write!(f, "project:{}", path.display()),
         }
     }
 }

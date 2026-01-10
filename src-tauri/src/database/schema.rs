@@ -86,7 +86,9 @@ impl Database {
             enabled_codex BOOLEAN NOT NULL DEFAULT 0,
             enabled_gemini BOOLEAN NOT NULL DEFAULT 0,
             file_hash TEXT,
-            installed_at INTEGER NOT NULL DEFAULT 0
+            installed_at INTEGER NOT NULL DEFAULT 0,
+            scope TEXT NOT NULL DEFAULT 'global',
+            project_path TEXT
         )",
             [],
         )
@@ -128,7 +130,9 @@ impl Database {
             enabled_codex INTEGER NOT NULL DEFAULT 0,
             enabled_gemini INTEGER NOT NULL DEFAULT 0,
             file_hash TEXT,
-            installed_at INTEGER NOT NULL DEFAULT 0
+            installed_at INTEGER NOT NULL DEFAULT 0,
+            scope TEXT NOT NULL DEFAULT 'global',
+            project_path TEXT
         )",
             [],
         )
@@ -180,7 +184,9 @@ impl Database {
             enabled_codex INTEGER NOT NULL DEFAULT 0,
             enabled_gemini INTEGER NOT NULL DEFAULT 0,
             file_hash TEXT,
-            installed_at INTEGER NOT NULL DEFAULT 0
+            installed_at INTEGER NOT NULL DEFAULT 0,
+            scope TEXT NOT NULL DEFAULT 'global',
+            project_path TEXT
         )",
             [],
         )
@@ -228,7 +234,9 @@ impl Database {
             enabled_codex INTEGER NOT NULL DEFAULT 0,
             enabled_gemini INTEGER NOT NULL DEFAULT 0,
             file_hash TEXT,
-            installed_at INTEGER NOT NULL DEFAULT 0
+            installed_at INTEGER NOT NULL DEFAULT 0,
+            scope TEXT NOT NULL DEFAULT 'global',
+            project_path TEXT
         )",
             [],
         )
@@ -548,6 +556,11 @@ impl Database {
                         log::info!("迁移数据库从 v8 到 v9（内置仓库支持）");
                         Self::migrate_v8_to_v9(conn)?;
                         Self::set_user_version(conn, 9)?;
+                    }
+                    9 => {
+                        log::info!("迁移数据库从 v9 到 v10（项目级安装范围支持）");
+                        Self::migrate_v9_to_v10(conn)?;
+                        Self::set_user_version(conn, 10)?;
                     }
                     _ => {
                         return Err(AppError::Database(format!(
@@ -1373,6 +1386,69 @@ impl Database {
              - skill_repos 表新增 builtin, description_zh/en/ja, added_at 列\n\
              - command_repos 表新增 builtin, description_zh/en/ja, added_at 列\n\
              - 现有仓库 added_at 已设置为当前时间戳"
+        );
+
+        Ok(())
+    }
+
+    /// v9 -> v10 迁移：项目级安装范围支持
+    ///
+    /// 为 skills、commands、agents、hooks 表添加 scope 和 project_path 字段：
+    /// - scope: 安装范围，'global' 或 'project'
+    /// - project_path: 当 scope='project' 时，存储项目的完整路径
+    fn migrate_v9_to_v10(conn: &Connection) -> Result<(), AppError> {
+        // 1. 为 skills 表添加 scope 和 project_path 列
+        Self::add_column_if_missing(conn, "skills", "scope", "TEXT NOT NULL DEFAULT 'global'")?;
+        Self::add_column_if_missing(conn, "skills", "project_path", "TEXT")?;
+        log::info!("skills 表已添加 scope 和 project_path 列");
+
+        // 2. 为 commands 表添加 scope 和 project_path 列
+        Self::add_column_if_missing(conn, "commands", "scope", "TEXT NOT NULL DEFAULT 'global'")?;
+        Self::add_column_if_missing(conn, "commands", "project_path", "TEXT")?;
+        log::info!("commands 表已添加 scope 和 project_path 列");
+
+        // 3. 为 agents 表添加 scope 和 project_path 列
+        Self::add_column_if_missing(conn, "agents", "scope", "TEXT NOT NULL DEFAULT 'global'")?;
+        Self::add_column_if_missing(conn, "agents", "project_path", "TEXT")?;
+        log::info!("agents 表已添加 scope 和 project_path 列");
+
+        // 4. 为 hooks 表添加 scope 和 project_path 列
+        Self::add_column_if_missing(conn, "hooks", "scope", "TEXT NOT NULL DEFAULT 'global'")?;
+        Self::add_column_if_missing(conn, "hooks", "project_path", "TEXT")?;
+        log::info!("hooks 表已添加 scope 和 project_path 列");
+
+        // 5. 为 scope 字段创建索引，便于按范围查询
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_skills_scope ON skills(scope)",
+            [],
+        )
+        .map_err(|e| AppError::Database(format!("创建 skills scope 索引失败: {e}")))?;
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_commands_scope ON commands(scope)",
+            [],
+        )
+        .map_err(|e| AppError::Database(format!("创建 commands scope 索引失败: {e}")))?;
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_agents_scope ON agents(scope)",
+            [],
+        )
+        .map_err(|e| AppError::Database(format!("创建 agents scope 索引失败: {e}")))?;
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_hooks_scope ON hooks(scope)",
+            [],
+        )
+        .map_err(|e| AppError::Database(format!("创建 hooks scope 索引失败: {e}")))?;
+
+        log::info!(
+            "数据库已迁移到 v10 结构（项目级安装范围支持）。\n\
+             - skills 表新增 scope, project_path 列\n\
+             - commands 表新增 scope, project_path 列\n\
+             - agents 表新增 scope, project_path 列\n\
+             - hooks 表新增 scope, project_path 列\n\
+             - 所有表已创建 scope 索引"
         );
 
         Ok(())

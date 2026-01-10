@@ -57,6 +57,11 @@ export interface InstalledHook {
   // 元数据
   fileHash?: string;
   installedAt: number;
+
+  /** 安装范围：global 或 project */
+  scope: "global" | "project";
+  /** 项目路径（当 scope="project" 时有效） */
+  projectPath?: string;
 }
 
 /** 可发现的 Hook（来自仓库） */
@@ -131,8 +136,15 @@ export const hooksApi = {
   async installUnified(
     hook: DiscoverableHook,
     currentApp: AppType,
+    scope?: "global" | "project",
+    projectPath?: string,
   ): Promise<InstalledHook> {
-    return await invoke("install_hook_unified", { hook, currentApp });
+    return await invoke("install_hook_unified", {
+      hook,
+      currentApp,
+      scope,
+      projectPath,
+    });
   },
 
   /** 卸载 Hook（统一卸载） */
@@ -152,6 +164,21 @@ export const hooksApi = {
     enabled: boolean,
   ): Promise<boolean> {
     return await invoke("toggle_hook_app", { id, app, enabled });
+  },
+
+  /** 修改 Hook 的安装范围 */
+  async changeScope(
+    id: string,
+    scope: "global" | "project",
+    projectPath: string | undefined,
+    currentApp: AppType,
+  ): Promise<boolean> {
+    return await invoke("change_hook_scope", {
+      id,
+      scope,
+      projectPath,
+      currentApp,
+    });
   },
 
   /** 更新 Hook 优先级 */

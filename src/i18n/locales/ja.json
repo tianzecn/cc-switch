@@ -1586,6 +1586,40 @@
     "proxyPlaceholder": "例: http://127.0.0.1:7890",
     "unsavedChanges": "保存されていない変更があります。再起動前に保存しますか？"
   },
+  "scope": {
+    "global": "グローバル",
+    "project": "プロジェクト",
+    "currentScope": "現在のスコープ",
+    "modifyTitle": "インストールスコープを変更",
+    "modifyDescription": "「{{name}}」のインストール場所を変更",
+    "moveToProject": "プロジェクトに移動",
+    "moveToProjectDesc": "グローバルから特定のプロジェクトディレクトリに移動",
+    "upgradeToGlobal": "グローバルにアップグレード",
+    "upgradeToGlobalDesc": "プロジェクトからグローバルディレクトリに移動し、すべてのプロジェクトで利用可能に",
+    "warningGlobalToProject": "移動後、このリソースは選択したプロジェクトでのみ利用可能になります",
+    "warningProjectToGlobal": "アップグレード後、このリソースは元のプロジェクトディレクトリから削除され、グローバルで利用可能になります",
+    "selectTargetProject": "移動先プロジェクトを選択",
+    "selectTargetProjectDesc": "リソースを移動するプロジェクトを選択"
+  },
+  "project": {
+    "selectTitle": "プロジェクトを選択",
+    "selectDescription": "リソースをインストールするプロジェクトを選択",
+    "searchPlaceholder": "プロジェクトを検索...",
+    "selectedCount": "{{count}} 件のプロジェクトを選択",
+    "noSearchResults": "一致するプロジェクトが見つかりません",
+    "noProjects": "利用可能なプロジェクトがありません",
+    "unknownTime": "不明な時間",
+    "justNow": "たった今",
+    "minutesAgo": "{{count}} 分前",
+    "hoursAgo": "{{count}} 時間前",
+    "daysAgo": "{{count}} 日前"
+  },
+  "resourceType": {
+    "skill": "スキル",
+    "command": "コマンド",
+    "hook": "フック",
+    "agent": "エージェント"
+  },
   "updates": {
     "check": "更新を確認",
     "checking": "更新を確認中...",

@@ -724,6 +724,7 @@ pub fn run() {
             commands::uninstall_skill_unified,
             commands::uninstall_skills_batch,
             commands::toggle_skill_app,
+            commands::change_skill_scope,
             commands::scan_unmanaged_skills,
             commands::import_skills_from_apps,
             commands::discover_available_skills,
@@ -750,6 +751,7 @@ pub fn run() {
             commands::uninstall_command_unified,
             commands::uninstall_commands_batch,
             commands::toggle_command_app,
+            commands::change_command_scope,
             commands::create_command_namespace,
             commands::delete_command_namespace,
             commands::scan_unmanaged_commands,
@@ -775,6 +777,7 @@ pub fn run() {
             commands::uninstall_agent_unified,
             commands::uninstall_agents_batch,
             commands::toggle_agent_app,
+            commands::change_agent_scope,
             commands::create_agent_namespace,
             commands::delete_agent_namespace,
             commands::scan_unmanaged_agents,
@@ -798,6 +801,7 @@ pub fn run() {
             commands::uninstall_hook_unified,
             commands::toggle_hook_enabled,
             commands::toggle_hook_app,
+            commands::change_hook_scope,
             commands::update_hook_priority,
             commands::reorder_hooks,
             commands::create_hook_namespace,
@@ -905,6 +909,8 @@ pub fn run() {
             commands::try_install_macos_update,
             commands::check_pending_macos_update,
             commands::cleanup_macos_update,
+            // Project management
+            commands::get_all_projects,
         ]);
 
     let app = builder

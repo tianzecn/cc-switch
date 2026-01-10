@@ -136,10 +136,14 @@ export function useInstallHook() {
     mutationFn: ({
       hook,
       currentApp,
+      scope,
+      projectPath,
     }: {
       hook: DiscoverableHook;
       currentApp: AppType;
-    }) => hooksApi.installUnified(hook, currentApp),
+      scope?: "global" | "project";
+      projectPath?: string;
+    }) => hooksApi.installUnified(hook, currentApp, scope, projectPath),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: hookKeys.installed() });
       queryClient.invalidateQueries({ queryKey: hookKeys.namespaces() });
@@ -192,6 +196,29 @@ export function useToggleHookApp() {
       app: AppType;
       enabled: boolean;
     }) => hooksApi.toggleApp(id, app, enabled),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: hookKeys.installed() });
+    },
+  });
+}
+
+/**
+ * 修改 Hook 安装范围
+ */
+export function useChangeHookScope() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      scope,
+      projectPath,
+      currentApp,
+    }: {
+      id: string;
+      scope: "global" | "project";
+      projectPath?: string;
+      currentApp: AppType;
+    }) => hooksApi.changeScope(id, scope, projectPath, currentApp),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: hookKeys.installed() });
     },

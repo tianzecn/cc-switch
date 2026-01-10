@@ -37,10 +37,14 @@ export function useInstallSkill() {
     mutationFn: ({
       skill,
       currentApp,
+      scope,
+      projectPath,
     }: {
       skill: DiscoverableSkill;
       currentApp: AppType;
-    }) => skillsApi.installUnified(skill, currentApp),
+      scope?: "global" | "project";
+      projectPath?: string;
+    }) => skillsApi.installUnified(skill, currentApp, scope, projectPath),
     onSuccess: () => {
       // 只刷新已安装列表，不刷新可发现列表（避免重新扫描仓库）
       queryClient.invalidateQueries({ queryKey: ["skills", "installed"] });
@@ -90,6 +94,29 @@ export function useToggleSkillApp() {
       app: AppType;
       enabled: boolean;
     }) => skillsApi.toggleApp(id, app, enabled),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["skills", "installed"] });
+    },
+  });
+}
+
+/**
+ * 修改 Skill 安装范围
+ */
+export function useChangeSkillScope() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      scope,
+      projectPath,
+      currentApp,
+    }: {
+      id: string;
+      scope: "global" | "project";
+      projectPath?: string;
+      currentApp: AppType;
+    }) => skillsApi.changeScope(id, scope, projectPath, currentApp),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["skills", "installed"] });
     },

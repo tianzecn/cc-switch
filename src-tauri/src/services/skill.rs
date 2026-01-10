@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::time::timeout;
 
-use crate::app_config::{AppType, InstalledSkill, SkillApps, UnmanagedSkill};
+use crate::app_config::{AppType, InstallScope, InstalledSkill, SkillApps, UnmanagedSkill};
 use crate::config::get_app_config_dir;
 use crate::database::Database;
 use crate::error::format_skill_error;
@@ -213,6 +213,117 @@ impl SkillService {
         })
     }
 
+    /// 获取项目级 Skills 目录
+    ///
+    /// 项目级安装目录：`<project_path>/.claude/skills/`
+    pub fn get_project_skills_dir(project_path: &Path) -> Result<PathBuf> {
+        let skills_dir = project_path.join(".claude").join("skills");
+        Ok(skills_dir)
+    }
+
+    /// 根据安装范围获取目标 Skills 目录
+    ///
+    /// - Global: 使用应用目录（~/.claude/skills/）
+    /// - Project: 使用项目目录（<project>/.claude/skills/）
+    pub fn get_install_dir(scope: &InstallScope, app: &AppType) -> Result<PathBuf> {
+        match scope {
+            InstallScope::Global => Self::get_app_skills_dir(app),
+            InstallScope::Project(project_path) => Self::get_project_skills_dir(project_path),
+        }
+    }
+
+    /// 检查范围冲突
+    ///
+    /// 规则：
+    /// - 如果资源已全局安装，不能安装到项目
+    /// - 如果资源已安装到某项目，不能再安装到其他项目或全局
+    ///
+    /// 返回 Ok(()) 表示无冲突，Err 包含冲突描述
+    pub fn check_scope_conflict(
+        db: &Arc<Database>,
+        id: &str,
+        new_scope: &InstallScope,
+    ) -> Result<()> {
+        if let Some(existing) = db.get_installed_skill(id)? {
+            let current_scope =
+                InstallScope::from_db(&existing.scope, existing.project_path.as_deref());
+
+            // 如果范围相同，允许（可能是重新安装或更新）
+            if current_scope == *new_scope {
+                return Ok(());
+            }
+
+            // 范围不同，报告冲突
+            let conflict_msg = match (&current_scope, new_scope) {
+                (InstallScope::Global, InstallScope::Project(_)) => {
+                    "该资源已安装到全局，请先移除全局安装后再安装到项目"
+                }
+                (InstallScope::Project(_), InstallScope::Global) => {
+                    "该资源已安装到项目，请先移除项目安装后再安装到全局"
+                }
+                (InstallScope::Project(old_path), InstallScope::Project(new_path)) => {
+                    return Err(anyhow!(
+                        "该资源已安装到项目 {}，请先移除后再安装到项目 {}",
+                        old_path.display(),
+                        new_path.display()
+                    ));
+                }
+                _ => "安装范围冲突",
+            };
+
+            return Err(anyhow!(conflict_msg));
+        }
+
+        Ok(())
+    }
+
+    /// 复制 Skill 到项目目录
+    pub fn copy_to_project(directory: &str, project_path: &Path) -> Result<()> {
+        let ssot_dir = Self::get_ssot_dir()?;
+        let source = ssot_dir.join(directory);
+
+        if !source.exists() {
+            return Err(anyhow!("Skill 不存在于 SSOT: {}", directory));
+        }
+
+        let skills_dir = Self::get_project_skills_dir(project_path)?;
+        fs::create_dir_all(&skills_dir)?;
+
+        let dest = skills_dir.join(directory);
+
+        // 如果已存在则先删除
+        if dest.exists() {
+            fs::remove_dir_all(&dest)?;
+        }
+
+        Self::copy_dir_recursive(&source, &dest)?;
+
+        log::debug!(
+            "Skill {} 已复制到项目 {}",
+            directory,
+            project_path.display()
+        );
+
+        Ok(())
+    }
+
+    /// 从项目目录删除 Skill
+    pub fn remove_from_project(directory: &str, project_path: &Path) -> Result<()> {
+        let skills_dir = Self::get_project_skills_dir(project_path)?;
+        let skill_path = skills_dir.join(directory);
+
+        if skill_path.exists() {
+            fs::remove_dir_all(&skill_path)?;
+            log::debug!(
+                "Skill {} 已从项目 {} 删除",
+                directory,
+                project_path.display()
+            );
+        }
+
+        Ok(())
+    }
+
     // ========== 统一管理方法 ==========
 
     /// 获取所有已安装的 Skills
@@ -339,6 +450,8 @@ impl SkillService {
             apps: SkillApps::only(current_app),
             file_hash, // 用于更新检测
             installed_at: chrono::Utc::now().timestamp(),
+            scope: "global".to_string(),
+            project_path: None,
         };
 
         // 保存到数据库
@@ -356,6 +469,220 @@ impl SkillService {
         Ok(installed_skill)
     }
 
+    /// 带范围安装 Skill
+    ///
+    /// 流程：
+    /// 1. 检查范围冲突
+    /// 2. 下载到 SSOT 目录
+    /// 3. 保存到数据库（带范围信息）
+    /// 4. 根据范围同步到目标目录
+    pub async fn install_with_scope(
+        &self,
+        db: &Arc<Database>,
+        skill: &DiscoverableSkill,
+        current_app: &AppType,
+        scope: &InstallScope,
+    ) -> Result<InstalledSkill> {
+        // 1. 检查范围冲突
+        Self::check_scope_conflict(db, &skill.key, scope)?;
+
+        let ssot_dir = Self::get_ssot_dir()?;
+
+        // 使用目录最后一段作为安装名
+        let install_name = Path::new(&skill.directory)
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| skill.directory.clone());
+
+        let dest = ssot_dir.join(&install_name);
+
+        // 如果已存在则跳过下载
+        if !dest.exists() {
+            let repo = SkillRepo {
+                owner: skill.repo_owner.clone(),
+                name: skill.repo_name.clone(),
+                branch: skill.repo_branch.clone(),
+                enabled: true,
+                builtin: false,
+                description_zh: None,
+                description_en: None,
+                description_ja: None,
+                added_at: 0,
+            };
+
+            // 下载仓库
+            let temp_dir = timeout(
+                std::time::Duration::from_secs(60),
+                self.download_repo(&repo),
+            )
+            .await
+            .map_err(|_| {
+                anyhow!(format_skill_error(
+                    "DOWNLOAD_TIMEOUT",
+                    &[
+                        ("owner", &repo.owner),
+                        ("name", &repo.name),
+                        ("timeout", "60")
+                    ],
+                    Some("checkNetwork"),
+                ))
+            })??;
+
+            // 复制到 SSOT
+            let source = temp_dir.join(&skill.directory);
+            if !source.exists() {
+                let _ = fs::remove_dir_all(&temp_dir);
+                return Err(anyhow!(format_skill_error(
+                    "SKILL_DIR_NOT_FOUND",
+                    &[("path", &source.display().to_string())],
+                    Some("checkRepoUrl"),
+                )));
+            }
+
+            Self::copy_dir_recursive(&source, &dest)?;
+            let _ = fs::remove_dir_all(&temp_dir);
+        }
+
+        // 使用 DiscoverableSkill 中已正确计算的 namespace
+        let namespace = skill.namespace.clone();
+
+        // 获取目录的 file_hash（用于更新检测）
+        let file_hash = if skill.file_hash.is_some() {
+            skill.file_hash.clone()
+        } else {
+            let github_api = GitHubApiService::new(db.get_setting("github_pat").ok().flatten());
+            match github_api
+                .get_directory_hash(
+                    &skill.repo_owner,
+                    &skill.repo_name,
+                    &skill.repo_branch,
+                    &skill.directory,
+                )
+                .await
+            {
+                Ok(hash) => {
+                    log::info!("获取到 Skill {} 的 file_hash: {}", skill.name, hash);
+                    Some(hash)
+                }
+                Err(e) => {
+                    log::warn!("无法获取 Skill {} 的 file_hash: {}", skill.name, e);
+                    None
+                }
+            }
+        };
+
+        // 转换范围到数据库格式
+        let (scope_str, project_path) = scope.to_db();
+
+        // 创建 InstalledSkill 记录
+        let installed_skill = InstalledSkill {
+            id: skill.key.clone(),
+            name: skill.name.clone(),
+            description: if skill.description.is_empty() {
+                None
+            } else {
+                Some(skill.description.clone())
+            },
+            directory: install_name.clone(),
+            namespace,
+            repo_owner: Some(skill.repo_owner.clone()),
+            repo_name: Some(skill.repo_name.clone()),
+            repo_branch: Some(skill.repo_branch.clone()),
+            readme_url: skill.readme_url.clone(),
+            apps: SkillApps::only(current_app),
+            file_hash,
+            installed_at: chrono::Utc::now().timestamp(),
+            scope: scope_str.to_string(),
+            project_path,
+        };
+
+        // 保存到数据库
+        db.save_skill(&installed_skill)?;
+
+        // 根据范围同步到目标目录
+        match scope {
+            InstallScope::Global => {
+                // 全局安装：同步到当前应用目录
+                Self::copy_to_app(&install_name, current_app)?;
+            }
+            InstallScope::Project(project_path) => {
+                // 项目安装：同步到项目目录
+                Self::copy_to_project(&install_name, project_path)?;
+            }
+        }
+
+        log::info!(
+            "Skill {} 安装成功（范围: {}），已启用 {:?}",
+            installed_skill.name,
+            scope,
+            current_app
+        );
+
+        Ok(installed_skill)
+    }
+
+    /// 修改安装范围
+    ///
+    /// 将资源从一个范围迁移到另一个范围
+    pub fn change_scope(
+        db: &Arc<Database>,
+        id: &str,
+        new_scope: &InstallScope,
+        current_app: &AppType,
+    ) -> Result<()> {
+        // 获取当前 skill
+        let skill = db
+            .get_installed_skill(id)?
+            .ok_or_else(|| anyhow!("Skill not found: {}", id))?;
+
+        let current_scope =
+            InstallScope::from_db(&skill.scope, skill.project_path.as_deref());
+
+        // 如果范围相同，无需操作
+        if current_scope == *new_scope {
+            return Ok(());
+        }
+
+        // 从旧位置删除
+        match &current_scope {
+            InstallScope::Global => {
+                // 从所有应用目录删除
+                for app in [AppType::Claude, AppType::Codex, AppType::Gemini] {
+                    let _ = Self::remove_from_app(&skill.directory, &app);
+                }
+            }
+            InstallScope::Project(project_path) => {
+                // 从项目目录删除
+                Self::remove_from_project(&skill.directory, project_path)?;
+            }
+        }
+
+        // 复制到新位置
+        match new_scope {
+            InstallScope::Global => {
+                // 复制到当前应用目录
+                Self::copy_to_app(&skill.directory, current_app)?;
+            }
+            InstallScope::Project(project_path) => {
+                // 复制到项目目录
+                Self::copy_to_project(&skill.directory, project_path)?;
+            }
+        }
+
+        // 更新数据库
+        let (scope_str, project_path) = new_scope.to_db();
+        db.update_skill_scope(id, scope_str, project_path.as_deref())?;
+
+        log::info!(
+            "Skill {} 范围已从 {} 变更为 {}",
+            skill.name,
+            current_scope,
+            new_scope
+        );
+
+        Ok(())
+    }
+
     /// 卸载 Skill
     ///
     /// 流程：
@@ -368,9 +695,19 @@ impl SkillService {
             .get_installed_skill(id)?
             .ok_or_else(|| anyhow!("Skill not found: {}", id))?;
 
-        // 从所有应用目录删除
-        for app in [AppType::Claude, AppType::Codex, AppType::Gemini] {
-            let _ = Self::remove_from_app(&skill.directory, &app);
+        // 根据范围删除文件
+        let scope = InstallScope::from_db(&skill.scope, skill.project_path.as_deref());
+        match scope {
+            InstallScope::Global => {
+                // 从所有应用目录删除
+                for app in [AppType::Claude, AppType::Codex, AppType::Gemini] {
+                    let _ = Self::remove_from_app(&skill.directory, &app);
+                }
+            }
+            InstallScope::Project(project_path) => {
+                // 从项目目录删除
+                let _ = Self::remove_from_project(&skill.directory, &project_path);
+            }
         }
 
         // 从 SSOT 删除
@@ -576,6 +913,8 @@ impl SkillService {
                 apps,
                 file_hash: None, // 本地导入的 Skill 没有远程 hash
                 installed_at: chrono::Utc::now().timestamp(),
+                scope: "global".to_string(),
+                project_path: None,
             };
 
             // 保存到数据库
@@ -1199,6 +1538,8 @@ pub fn migrate_skills_to_ssot(db: &Arc<Database>) -> Result<usize> {
             apps,
             file_hash: None, // 迁移的本地 Skill 没有远程 hash
             installed_at: chrono::Utc::now().timestamp(),
+            scope: "global".to_string(),
+            project_path: None,
         };
 
         db.save_skill(&skill)?;

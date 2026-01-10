@@ -29,12 +29,14 @@ import {
   useAddAgentRepo,
   useRemoveAgentRepo,
   useRefreshDiscoverableAgents,
+  useChangeAgentScope,
   type InstalledAgent,
   type AppType,
   type DiscoverableAgent,
   type CommandRepo,
 } from "@/hooks/useAgents";
 import { useBatchInstallAgents } from "@/hooks/useBatchInstallAgents";
+import { InstallScopeDialog, type InstallScope } from "@/components/common/InstallScopeDialog";
 import {
   useCheckAgentsUpdates,
   useCheckAgentsUpdatesByIds,
@@ -85,6 +87,7 @@ export const AgentsPage: React.FC = () => {
   const uninstallMutation = useUninstallAgent();
   const uninstallBatchMutation = useUninstallAgentsBatch();
   const openEditorMutation = useOpenAgentInEditor();
+  const changeScopeMutation = useChangeAgentScope();
 
   // === Discovery 模式 Queries ===
   const { data: discoverableAgents, isLoading: isLoadingDiscoverable } = useDiscoverableAgents();
@@ -320,6 +323,24 @@ export const AgentsPage: React.FC = () => {
     }
   };
 
+  const handleScopeChange = async (agentId: string, newScope: InstallScope) => {
+    try {
+      await changeScopeMutation.mutateAsync({
+        id: agentId,
+        scope: newScope.type,
+        projectPath: newScope.type === "project" ? newScope.path : undefined,
+        currentApp: "claude",
+      });
+      toast.success(t("scope.changeSuccess", "范围修改成功"), {
+        closeButton: true,
+      });
+    } catch (error) {
+      toast.error(t("common.error"), {
+        description: String(error),
+      });
+    }
+  };
+
   const handleUninstall = async (agentId: string) => {
     try {
       await uninstallMutation.mutateAsync(agentId);
@@ -389,11 +410,13 @@ export const AgentsPage: React.FC = () => {
     }
   };
 
-  const handleInstallAgent = async (agent: DiscoverableAgent) => {
+  const handleInstallAgent = async (agent: DiscoverableAgent, scope?: InstallScope) => {
     try {
       await installMutation.mutateAsync({
         agent,
         currentApp: "claude",
+        scope: scope?.type,
+        projectPath: scope?.type === "project" ? scope.path : undefined,
       });
       toast.success(t("agents.installSuccess", { name: agent.name }), {
         closeButton: true,
@@ -635,6 +658,7 @@ export const AgentsPage: React.FC = () => {
               onUninstall={handleUninstall}
               onOpenEditor={handleOpenEditor}
               onOpenDocs={handleOpenDocs}
+              onScopeChange={handleScopeChange}
               appSupport={appSupport}
               isLoading={isLoading}
               emptyStateType={emptyStateType}
@@ -695,7 +719,7 @@ export const AgentsPage: React.FC = () => {
                       isInstalled={isAgentInstalled(agent)}
                       isInstalling={installMutation.isPending}
                       updateStatus={getAgentUpdateStatus(agent)}
-                      onInstall={() => handleInstallAgent(agent)}
+                      onInstall={(scope) => handleInstallAgent(agent, scope)}
                       onOpenDocs={handleOpenDocs}
                     />
                   ))}
@@ -730,7 +754,7 @@ interface AgentListItemProps {
   isInstalled: boolean;
   isInstalling: boolean;
   updateStatus?: UpdateCheckResult;
-  onInstall: () => void;
+  onInstall: (scope?: InstallScope) => void;
   onOpenDocs: (url: string) => void;
 }
 
@@ -743,6 +767,16 @@ function AgentListItem({
   onOpenDocs,
 }: AgentListItemProps) {
   const { t } = useTranslation();
+  const [scopeDialogOpen, setScopeDialogOpen] = useState(false);
+
+  const handleInstallClick = () => {
+    setScopeDialogOpen(true);
+  };
+
+  const handleScopeConfirm = async (scope: InstallScope) => {
+    await onInstall(scope);
+    setScopeDialogOpen(false);
+  };
 
   return (
     <div className="flex items-center justify-between p-3 rounded-lg border border-border/50 hover:bg-muted/50 transition-colors">
@@ -782,7 +816,7 @@ function AgentListItem({
         <Button
           variant={isInstalled ? "outline" : "default"}
           size="sm"
-          onClick={onInstall}
+          onClick={handleInstallClick}
           disabled={isInstalled || isInstalling}
         >
           {isInstalling ? (
@@ -795,6 +829,16 @@ function AgentListItem({
           {isInstalled ? t("common.installed") : t("common.install")}
         </Button>
       </div>
+
+      {/* 安装范围选择对话框 */}
+      <InstallScopeDialog
+        open={scopeDialogOpen}
+        onOpenChange={setScopeDialogOpen}
+        resourceType="agent"
+        resourceName={agent.name}
+        onInstall={handleScopeConfirm}
+        isLoading={isInstalling}
+      />
     </div>
   );
 }

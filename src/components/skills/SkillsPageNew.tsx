@@ -26,11 +26,14 @@ import { SkillDetailPanel } from "./SkillDetailPanel";
 import { SkillConflictPanel } from "./SkillConflictPanel";
 import { RepoManagerPanel } from "./RepoManagerPanel";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { InstallScopeDialog } from "@/components/common/InstallScopeDialog";
+import type { InstallScope } from "@/components/common/ScopeBadge";
 import {
   useInstalledSkills,
   useToggleSkillApp,
   useUninstallSkill,
   useUninstallSkillsBatch,
+  useChangeSkillScope,
   useSkillConflicts,
   useScanUnmanagedSkills,
   useImportSkillsFromApps,
@@ -139,6 +142,7 @@ export const SkillsPageNew = forwardRef<
   const toggleAppMutation = useToggleSkillApp();
   const uninstallMutation = useUninstallSkill();
   const uninstallBatchMutation = useUninstallSkillsBatch();
+  const changeScopeMutation = useChangeSkillScope();
   const installMutation = useInstallSkill();
   const importMutation = useImportSkillsFromApps();
   const addRepoMutation = useAddSkillRepo();
@@ -402,6 +406,24 @@ export const SkillsPageNew = forwardRef<
     }
   };
 
+  const handleScopeChange = async (skillId: string, newScope: InstallScope) => {
+    try {
+      await changeScopeMutation.mutateAsync({
+        id: skillId,
+        scope: newScope.type,
+        projectPath: newScope.type === "project" ? newScope.path : undefined,
+        currentApp: initialApp,
+      });
+      toast.success(t("scope.changeSuccess", "范围修改成功"), {
+        closeButton: true,
+      });
+    } catch (error) {
+      toast.error(t("common.error"), {
+        description: String(error),
+      });
+    }
+  };
+
   const handleUninstall = (skillId: string) => {
     const skill = installedSkills.find((s) => s.id === skillId);
     if (!skill) return;
@@ -452,12 +474,14 @@ export const SkillsPageNew = forwardRef<
     });
   };
 
-  const handleInstall = async (skill: DiscoverableSkill) => {
+  const handleInstall = async (skill: DiscoverableSkill, scope?: InstallScope) => {
     setInstallingKey(skill.key);
     try {
       await installMutation.mutateAsync({
         skill,
         currentApp: initialApp,
+        scope: scope?.type,
+        projectPath: scope?.type === "project" ? scope.path : undefined,
       });
       toast.success(t("skills.installSuccess", { name: skill.name }), {
         closeButton: true,
@@ -783,6 +807,7 @@ export const SkillsPageNew = forwardRef<
               onSelectSkill={setSelectedSkill}
               onToggleApp={handleToggleApp}
               onUninstall={handleUninstall}
+              onScopeChange={handleScopeChange}
               isLoading={loadingInstalled}
               emptyStateType={emptyStateType}
               updateCheckResult={updateCheckResult}
@@ -849,7 +874,7 @@ SkillsPageNew.displayName = "SkillsPageNew";
  */
 interface DiscoveryListProps {
   skills: Array<DiscoverableSkill & { installed: boolean }>;
-  onInstall: (skill: DiscoverableSkill) => void;
+  onInstall: (skill: DiscoverableSkill, scope?: InstallScope) => void;
   isLoading: boolean;
   installingKey: string | null;
   /** 批量安装状态（用于显示安装进度） */
@@ -895,7 +920,7 @@ const DiscoveryList: React.FC<DiscoveryListProps> = ({
           <DiscoveryCard
             key={skill.key}
             skill={skill}
-            onInstall={() => onInstall(skill)}
+            onInstall={(scope) => onInstall(skill, scope)}
             isInstalling={installingKey === skill.key || Boolean(batchState?.isInstalling && batchState?.currentName === skill.name)}
           />
         ))}
@@ -909,7 +934,7 @@ const DiscoveryList: React.FC<DiscoveryListProps> = ({
  */
 interface DiscoveryCardProps {
   skill: DiscoverableSkill & { installed: boolean; updateStatus?: UpdateCheckResult };
-  onInstall: () => void;
+  onInstall: (scope?: InstallScope) => void;
   isInstalling: boolean;
 }
 
@@ -919,44 +944,68 @@ const DiscoveryCard: React.FC<DiscoveryCardProps> = ({
   isInstalling,
 }) => {
   const { t } = useTranslation();
+  const [scopeDialogOpen, setScopeDialogOpen] = useState(false);
+
+  // 处理安装按钮点击 - 打开范围选择对话框
+  const handleInstallClick = () => {
+    setScopeDialogOpen(true);
+  };
+
+  // 处理范围选择确认
+  const handleScopeConfirm = async (scope: InstallScope) => {
+    await onInstall(scope);
+    setScopeDialogOpen(false);
+  };
 
   return (
-    <div className="p-4 rounded-lg border border-border bg-card hover:shadow-sm transition-shadow">
-      <div className="flex items-start justify-between">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h4 className="font-medium truncate">{skill.name}</h4>
-            {skill.installed && skill.updateStatus && (
-              <UpdateBadge status={skill.updateStatus} size="sm" />
-            )}
+    <>
+      <div className="p-4 rounded-lg border border-border bg-card hover:shadow-sm transition-shadow">
+        <div className="flex items-start justify-between">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <h4 className="font-medium truncate">{skill.name}</h4>
+              {skill.installed && skill.updateStatus && (
+                <UpdateBadge status={skill.updateStatus} size="sm" />
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+              {skill.description}
+            </p>
+            <p className="text-xs text-muted-foreground/70 mt-2">
+              {skill.repoOwner}/{skill.repoName}
+            </p>
           </div>
-          <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
-            {skill.description}
-          </p>
-          <p className="text-xs text-muted-foreground/70 mt-2">
-            {skill.repoOwner}/{skill.repoName}
-          </p>
+          <Button
+            size="sm"
+            variant={skill.installed ? "secondary" : "default"}
+            disabled={skill.installed || isInstalling}
+            onClick={handleInstallClick}
+            className="ml-3 flex-shrink-0"
+          >
+            {isInstalling ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                {t("skills.installing", "Installing...")}
+              </>
+            ) : skill.installed ? (
+              t("skills.installed", "Installed")
+            ) : (
+              t("skills.install", "Install")
+            )}
+          </Button>
         </div>
-        <Button
-          size="sm"
-          variant={skill.installed ? "secondary" : "default"}
-          disabled={skill.installed || isInstalling}
-          onClick={onInstall}
-          className="ml-3 flex-shrink-0"
-        >
-          {isInstalling ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin mr-1" />
-              {t("skills.installing", "Installing...")}
-            </>
-          ) : skill.installed ? (
-            t("skills.installed", "Installed")
-          ) : (
-            t("skills.install", "Install")
-          )}
-        </Button>
       </div>
-    </div>
+
+      {/* 安装范围选择对话框 */}
+      <InstallScopeDialog
+        open={scopeDialogOpen}
+        onOpenChange={setScopeDialogOpen}
+        resourceType="skill"
+        resourceName={skill.name}
+        onInstall={handleScopeConfirm}
+        isLoading={isInstalling}
+      />
+    </>
   );
 };
 

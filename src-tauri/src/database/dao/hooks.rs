@@ -37,7 +37,7 @@ impl Database {
                        enabled, priority,
                        repo_owner, repo_name, repo_branch, readme_url, source_path,
                        enabled_claude, enabled_codex, enabled_gemini,
-                       file_hash, installed_at
+                       file_hash, installed_at, scope, project_path
                 FROM hooks
                 ORDER BY priority, namespace, filename
                 "#,
@@ -72,6 +72,8 @@ impl Database {
                     },
                     file_hash: row.get(17)?,
                     installed_at: row.get(18)?,
+                    scope: row.get::<_, Option<String>>(19)?.unwrap_or_else(|| "global".to_string()),
+                    project_path: row.get(20)?,
                 })
             })
             .map_err(|e| AppError::Database(e.to_string()))?;
@@ -96,7 +98,7 @@ impl Database {
                        enabled, priority,
                        repo_owner, repo_name, repo_branch, readme_url, source_path,
                        enabled_claude, enabled_codex, enabled_gemini,
-                       file_hash, installed_at
+                       file_hash, installed_at, scope, project_path
                 FROM hooks
                 WHERE id = ?1
                 "#,
@@ -131,6 +133,8 @@ impl Database {
                     },
                     file_hash: row.get(17)?,
                     installed_at: row.get(18)?,
+                    scope: row.get::<_, Option<String>>(19)?.unwrap_or_else(|| "global".to_string()),
+                    project_path: row.get(20)?,
                 })
             })
             .optional()
@@ -152,8 +156,8 @@ impl Database {
                 enabled, priority,
                 repo_owner, repo_name, repo_branch, readme_url, source_path,
                 enabled_claude, enabled_codex, enabled_gemini,
-                file_hash, installed_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
+                file_hash, installed_at, scope, project_path
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)
             "#,
             params![
                 hook.id,
@@ -175,6 +179,8 @@ impl Database {
                 hook.apps.gemini as i32,
                 hook.file_hash,
                 hook.installed_at,
+                hook.scope,
+                hook.project_path,
             ],
         )
         .map_err(|e| AppError::Database(e.to_string()))?;
@@ -224,6 +230,23 @@ impl Database {
             )
             .map_err(|e| AppError::Database(e.to_string()))?;
 
+        Ok(affected > 0)
+    }
+
+    /// 更新 Hook 的安装范围
+    pub fn update_hook_scope(
+        &self,
+        id: &str,
+        scope: &str,
+        project_path: Option<&str>,
+    ) -> Result<bool, AppError> {
+        let conn = lock_conn!(self.conn);
+        let affected = conn
+            .execute(
+                "UPDATE hooks SET scope = ?1, project_path = ?2 WHERE id = ?3",
+                params![scope, project_path, id],
+            )
+            .map_err(|e| AppError::Database(e.to_string()))?;
         Ok(affected > 0)
     }
 
@@ -283,7 +306,7 @@ impl Database {
                        enabled, priority,
                        repo_owner, repo_name, repo_branch, readme_url, source_path,
                        enabled_claude, enabled_codex, enabled_gemini,
-                       file_hash, installed_at
+                       file_hash, installed_at, scope, project_path
                 FROM hooks
                 WHERE namespace = ?1
                 ORDER BY priority, filename
@@ -319,6 +342,8 @@ impl Database {
                     },
                     file_hash: row.get(17)?,
                     installed_at: row.get(18)?,
+                    scope: row.get::<_, Option<String>>(19)?.unwrap_or_else(|| "global".to_string()),
+                    project_path: row.get(20)?,
                 })
             })
             .map_err(|e| AppError::Database(e.to_string()))?;
@@ -354,7 +379,7 @@ impl Database {
                    enabled, priority,
                    repo_owner, repo_name, repo_branch, readme_url, source_path,
                    enabled_claude, enabled_codex, enabled_gemini,
-                   file_hash, installed_at
+                   file_hash, installed_at, scope, project_path
             FROM hooks
             WHERE enabled = 1 AND {} = 1 AND event_type = ?1
             ORDER BY priority
@@ -394,6 +419,8 @@ impl Database {
                     },
                     file_hash: row.get(17)?,
                     installed_at: row.get(18)?,
+                    scope: row.get::<_, Option<String>>(19)?.unwrap_or_else(|| "global".to_string()),
+                    project_path: row.get(20)?,
                 })
             })
             .map_err(|e| AppError::Database(e.to_string()))?;

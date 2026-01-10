@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Trash2, ExternalLink, FileEdit, GitBranch, HardDrive } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,8 @@ import { cn } from "@/lib/utils";
 import type { InstalledAgent, AppType } from "@/hooks/useAgents";
 import type { UpdateCheckResult } from "@/hooks/useResourceUpdates";
 import { UpdateBadge } from "@/components/updates";
+import { ScopeBadge, createScopeFromDb, type InstallScope } from "@/components/common/ScopeBadge";
+import { ScopeModifyDialog } from "@/components/common/ScopeModifyDialog";
 
 interface AgentListItemProps {
   agent: InstalledAgent;
@@ -27,6 +29,8 @@ interface AgentListItemProps {
     codex: boolean;
     gemini: boolean;
   };
+  /** 范围变更回调 */
+  onScopeChange?: (newScope: InstallScope) => Promise<void>;
   /** 更新状态 */
   updateStatus?: UpdateCheckResult;
 }
@@ -44,16 +48,33 @@ export const AgentListItem: React.FC<AgentListItemProps> = ({
   onOpenEditor,
   onOpenDocs,
   appSupport = { claude: true, codex: false, gemini: false },
+  onScopeChange,
   updateStatus,
 }) => {
   const { t } = useTranslation();
+  const [scopeDialogOpen, setScopeDialogOpen] = useState(false);
+  const [isScopeChanging, setIsScopeChanging] = useState(false);
+
   const isLocal = !agent.repoOwner;
   const SourceIcon = isLocal ? HardDrive : GitBranch;
   const sourceName = isLocal
     ? t("agents.local", "Local")
     : `${agent.repoOwner}/${agent.repoName}`;
 
+  const currentScope = createScopeFromDb(agent.scope, agent.projectPath);
+
+  const handleScopeChange = async (newScope: InstallScope) => {
+    if (!onScopeChange) return;
+    setIsScopeChanging(true);
+    try {
+      await onScopeChange(newScope);
+    } finally {
+      setIsScopeChanging(false);
+    }
+  };
+
   return (
+    <>
     <div
       className={cn(
         "group flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all",
@@ -65,9 +86,18 @@ export const AgentListItem: React.FC<AgentListItemProps> = ({
     >
       {/* 左侧：名称、描述和操作按钮 */}
       <div className="flex-1 min-w-0">
-        {/* 第一行：名称 + Badge + 更新徽章 + 操作按钮 */}
+        {/* 第一行：名称 + 范围 + Badge + 更新徽章 + 操作按钮 */}
         <div className="flex items-center gap-2">
           <h4 className="font-medium text-sm truncate">{agent.id}</h4>
+          {/* 安装范围徽章 - 可点击修改 */}
+          <ScopeBadge
+            scope={currentScope}
+            size="sm"
+            onClick={onScopeChange ? (e) => {
+              e.stopPropagation();
+              setScopeDialogOpen(true);
+            } : undefined}
+          />
           <Badge variant="outline" className="text-xs flex items-center gap-1 flex-shrink-0">
             <SourceIcon size={10} />
             <span className="truncate max-w-[100px]">{sourceName}</span>
@@ -171,6 +201,20 @@ export const AgentListItem: React.FC<AgentListItemProps> = ({
         />
       </div>
     </div>
+
+    {/* 范围修改对话框 */}
+    {onScopeChange && (
+      <ScopeModifyDialog
+        open={scopeDialogOpen}
+        onOpenChange={setScopeDialogOpen}
+        resourceType="agent"
+        resourceName={agent.name}
+        currentScope={currentScope}
+        onScopeChange={handleScopeChange}
+        isLoading={isScopeChanging}
+      />
+    )}
+    </>
   );
 };
 

@@ -25,6 +25,10 @@ export interface InstalledSkill {
   readmeUrl?: string;
   apps: SkillApps;
   installedAt: number;
+  /** 安装范围：global 或 project */
+  scope: "global" | "project";
+  /** 项目路径（当 scope="project" 时有效） */
+  projectPath?: string;
 }
 
 /** 可发现的 Skill（来自仓库） */
@@ -102,8 +106,15 @@ export const skillsApi = {
   async installUnified(
     skill: DiscoverableSkill,
     currentApp: AppType,
+    scope?: "global" | "project",
+    projectPath?: string,
   ): Promise<InstalledSkill> {
-    return await invoke("install_skill_unified", { skill, currentApp });
+    return await invoke("install_skill_unified", {
+      skill,
+      currentApp,
+      scope,
+      projectPath,
+    });
   },
 
   /** 卸载 Skill（统一卸载） */
@@ -123,6 +134,21 @@ export const skillsApi = {
     enabled: boolean,
   ): Promise<boolean> {
     return await invoke("toggle_skill_app", { id, app, enabled });
+  },
+
+  /** 修改 Skill 的安装范围 */
+  async changeScope(
+    id: string,
+    scope: "global" | "project",
+    projectPath: string | undefined,
+    currentApp: AppType,
+  ): Promise<boolean> {
+    return await invoke("change_skill_scope", {
+      id,
+      scope,
+      projectPath,
+      currentApp,
+    });
   },
 
   /** 扫描未管理的 Skills */

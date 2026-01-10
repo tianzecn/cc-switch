@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **项目级安装范围** - 完整的项目级资源安装功能，支持将 Skills/Commands/Hooks/Agents 安装到指定项目目录
+  - 安装范围选择：全局（global）或项目（project）+ 目标项目路径
+  - 项目选择器组件：支持最近项目列表、手动输入路径、路径有效性验证
+  - 范围徽章显示：可视化展示资源的安装范围，点击可修改
+  - 范围修改对话框：已安装资源可直接切换安装范围
+  - 数据库 schema 升级：v9→v10 新增 `scope` 和 `project_path` 字段
+  - 后端服务完整支持：四种资源类型的 `change_scope` API
+  - 前端 hooks 完整支持：`useChangeXxxScope` mutations
+  - i18n 国际化支持（中/英/日）
+
 - **应用内自动升级** - 完整的应用内升级功能，让用户无需手动下载即可更新到最新版本
   - CI/CD 完整配置：GitHub Actions 多平台构建工作流
   - Windows 打包：从 WiX 切换到 NSIS 打包，解决 CI 环境兼容性问题

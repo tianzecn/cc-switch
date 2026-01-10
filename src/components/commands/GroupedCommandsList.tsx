@@ -7,6 +7,7 @@ import type { InstalledCommand, AppType } from "@/hooks/useCommands";
 import type { TreeSelection } from "@/types/tree";
 import type { BatchCheckResult } from "@/hooks/useResourceUpdates";
 import { getResourceUpdateStatus } from "@/hooks/useResourceUpdates";
+import type { InstallScope } from "@/components/common/ScopeBadge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 
@@ -30,6 +31,8 @@ interface GroupedCommandsListProps {
   onToggleApp: (commandId: string, app: AppType, enabled: boolean) => void;
   onUninstall: (commandId: string) => void;
   onOpenEditor: (commandId: string) => void;
+  /** 范围变更回调 */
+  onScopeChange?: (commandId: string, newScope: InstallScope) => Promise<void>;
   appSupport: {
     claude: boolean;
     codex: boolean;
@@ -59,6 +62,7 @@ export const GroupedCommandsList: React.FC<GroupedCommandsListProps> = ({
   onToggleApp,
   onUninstall,
   onOpenEditor,
+  onScopeChange,
   appSupport,
   isLoading = false,
   pageSize = 50,
@@ -252,6 +256,7 @@ export const GroupedCommandsList: React.FC<GroupedCommandsListProps> = ({
                     }
                     onUninstall={() => onUninstall(cmd.id)}
                     onOpenEditor={() => onOpenEditor(cmd.id)}
+                    onScopeChange={onScopeChange ? (newScope) => onScopeChange(cmd.id, newScope) : undefined}
                     appSupport={appSupport}
                     updateStatus={getResourceUpdateStatus(updateCheckResult, cmd.id)}
                   />

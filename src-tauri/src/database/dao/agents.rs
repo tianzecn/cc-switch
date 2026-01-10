@@ -34,7 +34,7 @@ impl Database {
                        model, tools, extra_metadata,
                        repo_owner, repo_name, repo_branch, readme_url, source_path,
                        enabled_claude, enabled_codex, enabled_gemini,
-                       file_hash, installed_at
+                       file_hash, installed_at, scope, project_path
                 FROM agents
                 ORDER BY namespace, filename
                 "#,
@@ -68,6 +68,8 @@ impl Database {
                     },
                     file_hash: row.get(16)?,
                     installed_at: row.get(17)?,
+                    scope: row.get::<_, Option<String>>(18)?.unwrap_or_else(|| "global".to_string()),
+                    project_path: row.get(19)?,
                 })
             })
             .map_err(|e| AppError::Database(e.to_string()))?;
@@ -91,7 +93,7 @@ impl Database {
                        model, tools, extra_metadata,
                        repo_owner, repo_name, repo_branch, readme_url, source_path,
                        enabled_claude, enabled_codex, enabled_gemini,
-                       file_hash, installed_at
+                       file_hash, installed_at, scope, project_path
                 FROM agents
                 WHERE id = ?1
                 "#,
@@ -125,6 +127,8 @@ impl Database {
                     },
                     file_hash: row.get(16)?,
                     installed_at: row.get(17)?,
+                    scope: row.get::<_, Option<String>>(18)?.unwrap_or_else(|| "global".to_string()),
+                    project_path: row.get(19)?,
                 })
             })
             .optional()
@@ -143,8 +147,8 @@ impl Database {
                 model, tools, extra_metadata,
                 repo_owner, repo_name, repo_branch, readme_url, source_path,
                 enabled_claude, enabled_codex, enabled_gemini,
-                file_hash, installed_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
+                file_hash, installed_at, scope, project_path
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)
             "#,
             params![
                 agent.id,
@@ -165,6 +169,8 @@ impl Database {
                 agent.apps.gemini as i32,
                 agent.file_hash,
                 agent.installed_at,
+                agent.scope,
+                agent.project_path,
             ],
         )
         .map_err(|e| AppError::Database(e.to_string()))?;
@@ -204,6 +210,23 @@ impl Database {
         Ok(affected > 0)
     }
 
+    /// 更新 Agent 的安装范围
+    pub fn update_agent_scope(
+        &self,
+        id: &str,
+        scope: &str,
+        project_path: Option<&str>,
+    ) -> Result<bool, AppError> {
+        let conn = lock_conn!(self.conn);
+        let affected = conn
+            .execute(
+                "UPDATE agents SET scope = ?1, project_path = ?2 WHERE id = ?3",
+                params![scope, project_path, id],
+            )
+            .map_err(|e| AppError::Database(e.to_string()))?;
+        Ok(affected > 0)
+    }
+
     /// 更新 Agent 的文件哈希
     pub fn update_agent_hash(&self, id: &str, file_hash: &str) -> Result<bool, AppError> {
         let conn = lock_conn!(self.conn);
@@ -230,7 +253,7 @@ impl Database {
                        model, tools, extra_metadata,
                        repo_owner, repo_name, repo_branch, readme_url, source_path,
                        enabled_claude, enabled_codex, enabled_gemini,
-                       file_hash, installed_at
+                       file_hash, installed_at, scope, project_path
                 FROM agents
                 WHERE namespace = ?1
                 ORDER BY filename
@@ -265,6 +288,8 @@ impl Database {
                     },
                     file_hash: row.get(16)?,
                     installed_at: row.get(17)?,
+                    scope: row.get::<_, Option<String>>(18)?.unwrap_or_else(|| "global".to_string()),
+                    project_path: row.get(19)?,
                 })
             })
             .map_err(|e| AppError::Database(e.to_string()))?;

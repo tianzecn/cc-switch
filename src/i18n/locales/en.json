@@ -1587,6 +1587,40 @@
     "proxyPlaceholder": "e.g., http://127.0.0.1:7890",
     "unsavedChanges": "Unsaved changes detected. Save before restarting?"
   },
+  "scope": {
+    "global": "Global",
+    "project": "Project",
+    "currentScope": "Current Scope",
+    "modifyTitle": "Modify Install Scope",
+    "modifyDescription": "Change the install location of \"{{name}}\"",
+    "moveToProject": "Move to Project",
+    "moveToProjectDesc": "Move from global to a specific project directory",
+    "upgradeToGlobal": "Upgrade to Global",
+    "upgradeToGlobalDesc": "Move from project to global directory, available to all projects",
+    "warningGlobalToProject": "After moving, this resource will only be available in the selected project",
+    "warningProjectToGlobal": "After upgrading, this resource will be removed from the original project directory and become globally available",
+    "selectTargetProject": "Select Target Project",
+    "selectTargetProjectDesc": "Select the project to move the resource to"
+  },
+  "project": {
+    "selectTitle": "Select Project",
+    "selectDescription": "Select target project for resource installation",
+    "searchPlaceholder": "Search projects...",
+    "selectedCount": "{{count}} project(s) selected",
+    "noSearchResults": "No matching projects found",
+    "noProjects": "No projects available",
+    "unknownTime": "Unknown time",
+    "justNow": "Just now",
+    "minutesAgo": "{{count}} minute(s) ago",
+    "hoursAgo": "{{count}} hour(s) ago",
+    "daysAgo": "{{count}} day(s) ago"
+  },
+  "resourceType": {
+    "skill": "Skill",
+    "command": "Command",
+    "hook": "Hook",
+    "agent": "Agent"
+  },
   "updates": {
     "check": "Check Updates",
     "checking": "Checking for updates...",

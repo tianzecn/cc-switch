@@ -22,7 +22,8 @@ impl Database {
         let mut stmt = conn
             .prepare(
                 "SELECT id, name, description, directory, namespace, repo_owner, repo_name, repo_branch,
-                        readme_url, enabled_claude, enabled_codex, enabled_gemini, file_hash, installed_at
+                        readme_url, enabled_claude, enabled_codex, enabled_gemini, file_hash, installed_at,
+                        scope, project_path
                  FROM skills ORDER BY namespace ASC, name ASC",
             )
             .map_err(|e| AppError::Database(e.to_string()))?;
@@ -46,6 +47,8 @@ impl Database {
                     },
                     file_hash: row.get(12)?,
                     installed_at: row.get(13)?,
+                    scope: row.get::<_, Option<String>>(14)?.unwrap_or_else(|| "global".to_string()),
+                    project_path: row.get(15)?,
                 })
             })
             .map_err(|e| AppError::Database(e.to_string()))?;
@@ -64,7 +67,8 @@ impl Database {
         let mut stmt = conn
             .prepare(
                 "SELECT id, name, description, directory, namespace, repo_owner, repo_name, repo_branch,
-                        readme_url, enabled_claude, enabled_codex, enabled_gemini, file_hash, installed_at
+                        readme_url, enabled_claude, enabled_codex, enabled_gemini, file_hash, installed_at,
+                        scope, project_path
                  FROM skills WHERE id = ?1",
             )
             .map_err(|e| AppError::Database(e.to_string()))?;
@@ -87,6 +91,8 @@ impl Database {
                 },
                 file_hash: row.get(12)?,
                 installed_at: row.get(13)?,
+                scope: row.get::<_, Option<String>>(14)?.unwrap_or_else(|| "global".to_string()),
+                project_path: row.get(15)?,
             })
         });
 
@@ -103,8 +109,9 @@ impl Database {
         conn.execute(
             "INSERT OR REPLACE INTO skills
              (id, name, description, directory, namespace, repo_owner, repo_name, repo_branch,
-              readme_url, enabled_claude, enabled_codex, enabled_gemini, file_hash, installed_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+              readme_url, enabled_claude, enabled_codex, enabled_gemini, file_hash, installed_at,
+              scope, project_path)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
             params![
                 skill.id,
                 skill.name,
@@ -120,6 +127,8 @@ impl Database {
                 skill.apps.gemini,
                 skill.file_hash,
                 skill.installed_at,
+                skill.scope,
+                skill.project_path,
             ],
         )
         .map_err(|e| AppError::Database(e.to_string()))?;
@@ -171,6 +180,23 @@ impl Database {
         Ok(affected > 0)
     }
 
+    /// 更新 Skill 的安装范围
+    pub fn update_skill_scope(
+        &self,
+        id: &str,
+        scope: &str,
+        project_path: Option<&str>,
+    ) -> Result<bool, AppError> {
+        let conn = lock_conn!(self.conn);
+        let affected = conn
+            .execute(
+                "UPDATE skills SET scope = ?1, project_path = ?2 WHERE id = ?3",
+                params![scope, project_path, id],
+            )
+            .map_err(|e| AppError::Database(e.to_string()))?;
+        Ok(affected > 0)
+    }
+
     /// 获取所有命名空间列表
     pub fn get_skill_namespaces(&self) -> Result<Vec<String>, AppError> {
         let conn = lock_conn!(self.conn);
@@ -198,7 +224,8 @@ impl Database {
         let mut stmt = conn
             .prepare(
                 "SELECT id, name, description, directory, namespace, repo_owner, repo_name, repo_branch,
-                        readme_url, enabled_claude, enabled_codex, enabled_gemini, file_hash, installed_at
+                        readme_url, enabled_claude, enabled_codex, enabled_gemini, file_hash, installed_at,
+                        scope, project_path
                  FROM skills WHERE namespace = ?1 ORDER BY name ASC",
             )
             .map_err(|e| AppError::Database(e.to_string()))?;
@@ -222,6 +249,8 @@ impl Database {
                     },
                     file_hash: row.get(12)?,
                     installed_at: row.get(13)?,
+                    scope: row.get::<_, Option<String>>(14)?.unwrap_or_else(|| "global".to_string()),
+                    project_path: row.get(15)?,
                 })
             })
             .map_err(|e| AppError::Database(e.to_string()))?;

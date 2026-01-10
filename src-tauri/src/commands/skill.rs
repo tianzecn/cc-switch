@@ -4,7 +4,7 @@
 //! - 支持三应用开关（Claude/Codex/Gemini）
 //! - SSOT 存储在 ~/.cc-switch/skills/
 
-use crate::app_config::{AppType, InstalledSkill, UnmanagedSkill};
+use crate::app_config::{AppType, InstallScope, InstalledSkill, UnmanagedSkill};
 use crate::error::format_skill_error;
 use crate::services::skill::{DiscoverableSkill, Skill, SkillRepo, SkillService};
 use crate::store::AppState;
@@ -37,18 +37,28 @@ pub fn get_installed_skills(app_state: State<'_, AppState>) -> Result<Vec<Instal
 /// 参数：
 /// - skill: 从发现列表获取的技能信息
 /// - current_app: 当前选中的应用，安装后默认启用该应用
+/// - scope: 安装范围 ("global" 或 "project")，不传则默认为 "global"
+/// - project_path: 项目路径（当 scope="project" 时必填）
 #[tauri::command]
 pub async fn install_skill_unified(
     skill: DiscoverableSkill,
     current_app: String,
+    scope: Option<String>,
+    project_path: Option<String>,
     service: State<'_, SkillServiceState>,
     app_state: State<'_, AppState>,
 ) -> Result<InstalledSkill, String> {
     let app_type = parse_app_type(&current_app)?;
 
+    // 解析安装范围，默认为全局
+    let install_scope = InstallScope::from_db(
+        scope.as_deref().unwrap_or("global"),
+        project_path.as_deref(),
+    );
+
     service
         .0
-        .install(&app_state.db, &skill, &app_type)
+        .install_with_scope(&app_state.db, &skill, &app_type, &install_scope)
         .await
         .map_err(|e| e.to_string())
 }
@@ -88,6 +98,28 @@ pub fn toggle_skill_app(
 ) -> Result<bool, String> {
     let app_type = parse_app_type(&app)?;
     SkillService::toggle_app(&app_state.db, &id, &app_type, enabled).map_err(|e| e.to_string())?;
+    Ok(true)
+}
+
+/// 修改 Skill 的安装范围
+///
+/// 参数：
+/// - id: Skill ID
+/// - scope: 新的范围（"global" 或 "project"）
+/// - project_path: 项目路径（当 scope="project" 时必填）
+/// - current_app: 当前应用类型
+#[tauri::command]
+pub fn change_skill_scope(
+    id: String,
+    scope: String,
+    project_path: Option<String>,
+    current_app: String,
+    app_state: State<'_, AppState>,
+) -> Result<bool, String> {
+    let app_type = parse_app_type(&current_app)?;
+    let new_scope = InstallScope::from_db(&scope, project_path.as_deref());
+    SkillService::change_scope(&app_state.db, &id, &new_scope, &app_type)
+        .map_err(|e| e.to_string())?;
     Ok(true)
 }
 

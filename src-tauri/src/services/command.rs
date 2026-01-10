@@ -18,8 +18,8 @@ use std::sync::Arc;
 use tokio::time::timeout;
 
 use crate::app_config::{
-    AppType, CommandApps, CommandNamespace, CommandRepo, DiscoverableCommand, InstalledCommand,
-    UnmanagedCommand,
+    AppType, CommandApps, CommandNamespace, CommandRepo, DiscoverableCommand, InstallScope,
+    InstalledCommand, UnmanagedCommand,
 };
 use crate::config::get_app_config_dir;
 use crate::database::Database;
@@ -117,6 +117,109 @@ impl CommandService {
             AppType::Codex => home.join(".codex").join("commands"),
             AppType::Gemini => home.join(".gemini").join("commands"),
         })
+    }
+
+    /// 获取项目级 Commands 目录
+    ///
+    /// 项目级安装目录：`<project_path>/.claude/commands/`
+    pub fn get_project_commands_dir(project_path: &Path) -> Result<PathBuf> {
+        let commands_dir = project_path.join(".claude").join("commands");
+        Ok(commands_dir)
+    }
+
+    /// 根据安装范围获取目标 Commands 目录
+    ///
+    /// - Global: 使用应用目录（~/.claude/commands/）
+    /// - Project: 使用项目目录（<project>/.claude/commands/）
+    pub fn get_install_dir(scope: &InstallScope, app: &AppType) -> Result<PathBuf> {
+        match scope {
+            InstallScope::Global => Self::get_app_commands_dir(app),
+            InstallScope::Project(project_path) => Self::get_project_commands_dir(project_path),
+        }
+    }
+
+    /// 检查范围冲突
+    pub fn check_scope_conflict(
+        db: &Arc<Database>,
+        id: &str,
+        new_scope: &InstallScope,
+    ) -> Result<()> {
+        if let Some(existing) = db.get_installed_command(id)? {
+            let current_scope =
+                InstallScope::from_db(&existing.scope, existing.project_path.as_deref());
+
+            if current_scope == *new_scope {
+                return Ok(());
+            }
+
+            let conflict_msg = match (&current_scope, new_scope) {
+                (InstallScope::Global, InstallScope::Project(_)) => {
+                    "该命令已安装到全局，请先移除全局安装后再安装到项目"
+                }
+                (InstallScope::Project(_), InstallScope::Global) => {
+                    "该命令已安装到项目，请先移除项目安装后再安装到全局"
+                }
+                (InstallScope::Project(old_path), InstallScope::Project(new_path)) => {
+                    return Err(anyhow!(
+                        "该命令已安装到项目 {}，请先移除后再安装到项目 {}",
+                        old_path.display(),
+                        new_path.display()
+                    ));
+                }
+                _ => "安装范围冲突",
+            };
+
+            return Err(anyhow!(conflict_msg));
+        }
+
+        Ok(())
+    }
+
+    /// 复制 Command 到项目目录
+    pub fn copy_to_project(id: &str, project_path: &Path) -> Result<()> {
+        let ssot_dir = Self::get_ssot_dir()?;
+        let relative_path = Self::id_to_relative_path(id);
+        let source = ssot_dir.join(&relative_path);
+
+        if !source.exists() {
+            return Err(anyhow!("Command 不存在于 SSOT: {}", id));
+        }
+
+        let commands_dir = Self::get_project_commands_dir(project_path)?;
+
+        // 确保父目录存在（支持命名空间）
+        let dest = commands_dir.join(&relative_path);
+        if let Some(parent) = dest.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        fs::copy(&source, &dest)?;
+
+        log::debug!(
+            "Command {} 已复制到项目 {}",
+            id,
+            project_path.display()
+        );
+
+        Ok(())
+    }
+
+    /// 从项目目录删除 Command
+    pub fn remove_from_project(id: &str, project_path: &Path) -> Result<()> {
+        let commands_dir = Self::get_project_commands_dir(project_path)?;
+        let relative_path = Self::id_to_relative_path(id);
+        let command_path = commands_dir.join(&relative_path);
+
+        if command_path.exists() {
+            fs::remove_file(&command_path)?;
+            log::debug!(
+                "Command {} 已从项目 {} 删除",
+                id,
+                project_path.display()
+            );
+        }
+
+        Ok(())
     }
 
     /// 从 ID 获取相对路径（包含命名空间）
@@ -262,6 +365,8 @@ impl CommandService {
             apps: CommandApps::only(current_app),
             file_hash: Some(file_hash),
             installed_at: chrono::Utc::now().timestamp(),
+            scope: "global".to_string(),
+            project_path: None,
         };
 
         // 保存到数据库
@@ -351,6 +456,68 @@ impl CommandService {
             command.name,
             app,
             enabled
+        );
+
+        Ok(())
+    }
+
+    /// 修改安装范围
+    ///
+    /// 将资源从一个范围迁移到另一个范围
+    pub fn change_scope(
+        db: &Arc<Database>,
+        id: &str,
+        new_scope: &InstallScope,
+        current_app: &AppType,
+    ) -> Result<()> {
+        // 获取当前 command
+        let command = db
+            .get_installed_command(id)?
+            .ok_or_else(|| anyhow!("Command not found: {}", id))?;
+
+        let current_scope =
+            InstallScope::from_db(&command.scope, command.project_path.as_deref());
+
+        // 如果范围相同，无需操作
+        if current_scope == *new_scope {
+            return Ok(());
+        }
+
+        // 从旧位置删除
+        match &current_scope {
+            InstallScope::Global => {
+                // 从所有应用目录删除
+                for app in [AppType::Claude, AppType::Codex, AppType::Gemini] {
+                    let _ = Self::remove_from_app(id, &app);
+                }
+            }
+            InstallScope::Project(project_path) => {
+                // 从项目目录删除
+                Self::remove_from_project(id, project_path)?;
+            }
+        }
+
+        // 复制到新位置
+        match new_scope {
+            InstallScope::Global => {
+                // 复制到当前应用目录
+                Self::copy_to_app(id, current_app)?;
+            }
+            InstallScope::Project(project_path) => {
+                // 复制到项目目录
+                Self::copy_to_project(id, project_path)?;
+            }
+        }
+
+        // 更新数据库
+        let (scope_str, project_path) = new_scope.to_db();
+        db.update_command_scope(id, scope_str, project_path.as_deref())?;
+
+        log::info!(
+            "Command {} 范围已从 {} 变更为 {}",
+            command.name,
+            current_scope,
+            new_scope
         );
 
         Ok(())
@@ -581,6 +748,8 @@ impl CommandService {
                 apps,
                 file_hash: Some(file_hash),
                 installed_at: chrono::Utc::now().timestamp(),
+                scope: "global".to_string(),
+                project_path: None,
             };
 
             // 保存到数据库

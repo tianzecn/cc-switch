@@ -146,10 +146,14 @@ export function useInstallCommand() {
     mutationFn: ({
       command,
       currentApp,
+      scope,
+      projectPath,
     }: {
       command: DiscoverableCommand;
       currentApp: AppType;
-    }) => commandsApi.installUnified(command, currentApp),
+      scope?: "global" | "project";
+      projectPath?: string;
+    }) => commandsApi.installUnified(command, currentApp, scope, projectPath),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: commandKeys.installed() });
       queryClient.invalidateQueries({ queryKey: commandKeys.namespaces() });
@@ -203,6 +207,29 @@ export function useToggleCommandApp() {
       app: AppType;
       enabled: boolean;
     }) => commandsApi.toggleApp(id, app, enabled),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: commandKeys.installed() });
+    },
+  });
+}
+
+/**
+ * 修改 Command 安装范围
+ */
+export function useChangeCommandScope() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      scope,
+      projectPath,
+      currentApp,
+    }: {
+      id: string;
+      scope: "global" | "project";
+      projectPath?: string;
+      currentApp: AppType;
+    }) => commandsApi.changeScope(id, scope, projectPath, currentApp),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: commandKeys.installed() });
     },

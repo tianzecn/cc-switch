@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Trash2, ExternalLink, FileEdit, GitBranch, HardDrive } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,8 @@ import type { InstalledCommand, AppType } from "@/hooks/useCommands";
 import type { UpdateCheckResult } from "@/hooks/useResourceUpdates";
 import { UpdateBadge } from "@/components/updates";
 import { settingsApi } from "@/lib/api";
+import { ScopeBadge, createScopeFromDb, type InstallScope } from "@/components/common/ScopeBadge";
+import { ScopeModifyDialog } from "@/components/common/ScopeModifyDialog";
 
 interface CommandListItemProps {
   command: InstalledCommand;
@@ -27,6 +29,8 @@ interface CommandListItemProps {
     codex: boolean;
     gemini: boolean;
   };
+  /** 范围变更回调 */
+  onScopeChange?: (newScope: InstallScope) => Promise<void>;
   /** 更新状态 */
   updateStatus?: UpdateCheckResult;
 }
@@ -42,14 +46,30 @@ export const CommandListItem: React.FC<CommandListItemProps> = ({
   onUninstall,
   onOpenEditor,
   appSupport,
+  onScopeChange,
   updateStatus,
 }) => {
   const { t } = useTranslation();
+  const [scopeDialogOpen, setScopeDialogOpen] = useState(false);
+  const [isScopeChanging, setIsScopeChanging] = useState(false);
+
   const isLocal = !command.repoOwner;
   const SourceIcon = isLocal ? HardDrive : GitBranch;
   const sourceName = isLocal
     ? t("commands.local", "Local")
     : `${command.repoOwner}/${command.repoName}`;
+
+  const currentScope = createScopeFromDb(command.scope, command.projectPath);
+
+  const handleScopeChange = async (newScope: InstallScope) => {
+    if (!onScopeChange) return;
+    setIsScopeChanging(true);
+    try {
+      await onScopeChange(newScope);
+    } finally {
+      setIsScopeChanging(false);
+    }
+  };
 
   const handleOpenDocs = async () => {
     if (command.readmeUrl) {
@@ -62,6 +82,7 @@ export const CommandListItem: React.FC<CommandListItemProps> = ({
   };
 
   return (
+    <>
     <div
       className={cn(
         "group flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all",
@@ -73,9 +94,18 @@ export const CommandListItem: React.FC<CommandListItemProps> = ({
     >
       {/* 左侧：名称、描述和操作按钮 */}
       <div className="flex-1 min-w-0">
-        {/* 第一行：名称 + Badge + 更新徽章 + 操作按钮 */}
+        {/* 第一行：名称 + 范围 + Badge + 更新徽章 + 操作按钮 */}
         <div className="flex items-center gap-2">
           <h4 className="font-medium text-sm truncate">{command.id}</h4>
+          {/* 安装范围徽章 - 可点击修改 */}
+          <ScopeBadge
+            scope={currentScope}
+            size="sm"
+            onClick={onScopeChange ? (e) => {
+              e.stopPropagation();
+              setScopeDialogOpen(true);
+            } : undefined}
+          />
           <Badge variant="outline" className="text-xs flex items-center gap-1 flex-shrink-0">
             <SourceIcon size={10} />
             <span className="truncate max-w-[100px]">{sourceName}</span>
@@ -179,6 +209,20 @@ export const CommandListItem: React.FC<CommandListItemProps> = ({
         />
       </div>
     </div>
+
+    {/* 范围修改对话框 */}
+    {onScopeChange && (
+      <ScopeModifyDialog
+        open={scopeDialogOpen}
+        onOpenChange={setScopeDialogOpen}
+        resourceType="command"
+        resourceName={command.name}
+        currentScope={currentScope}
+        onScopeChange={handleScopeChange}
+        isLoading={isScopeChanging}
+      />
+    )}
+    </>
   );
 };
 

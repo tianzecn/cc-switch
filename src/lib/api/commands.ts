@@ -31,6 +31,10 @@ export interface InstalledCommand {
   apps: CommandApps;
   fileHash?: string;
   installedAt: number;
+  /** 安装范围：global 或 project */
+  scope: "global" | "project";
+  /** 项目路径（当 scope="project" 时有效） */
+  projectPath?: string;
 }
 
 /** 可发现的 Command（来自仓库） */
@@ -119,8 +123,15 @@ export const commandsApi = {
   async installUnified(
     command: DiscoverableCommand,
     currentApp: AppType,
+    scope?: "global" | "project",
+    projectPath?: string,
   ): Promise<InstalledCommand> {
-    return await invoke("install_command_unified", { command, currentApp });
+    return await invoke("install_command_unified", {
+      command,
+      currentApp,
+      scope,
+      projectPath,
+    });
   },
 
   /** 卸载 Command（统一卸载） */
@@ -140,6 +151,21 @@ export const commandsApi = {
     enabled: boolean,
   ): Promise<boolean> {
     return await invoke("toggle_command_app", { id, app, enabled });
+  },
+
+  /** 修改 Command 的安装范围 */
+  async changeScope(
+    id: string,
+    scope: "global" | "project",
+    projectPath: string | undefined,
+    currentApp: AppType,
+  ): Promise<boolean> {
+    return await invoke("change_command_scope", {
+      id,
+      scope,
+      projectPath,
+      currentApp,
+    });
   },
 
   /** 创建命名空间 */

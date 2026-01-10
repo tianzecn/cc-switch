@@ -11,6 +11,7 @@ import {
   getResourceUpdateStatus,
   type BatchCheckResult,
 } from "@/hooks/useResourceUpdates";
+import type { InstallScope } from "@/components/common/ScopeBadge";
 
 /** 分组后的数据结构 */
 interface GroupedData {
@@ -31,6 +32,8 @@ interface GroupedSkillsListProps {
   onSelectSkill: (skill: InstalledSkill | null) => void;
   onToggleApp: (skillId: string, app: AppType, enabled: boolean) => void;
   onUninstall: (skillId: string) => void;
+  /** 范围变更回调 */
+  onScopeChange?: (skillId: string, newScope: InstallScope) => Promise<void>;
   isLoading?: boolean;
   /** 分页相关 */
   pageSize?: number;
@@ -54,6 +57,7 @@ export const GroupedSkillsList: React.FC<GroupedSkillsListProps> = ({
   onSelectSkill,
   onToggleApp,
   onUninstall,
+  onScopeChange,
   isLoading = false,
   pageSize = 50,
   emptyStateType = "all",
@@ -245,6 +249,7 @@ export const GroupedSkillsList: React.FC<GroupedSkillsListProps> = ({
                       onToggleApp(skill.id, app, enabled)
                     }
                     onUninstall={() => onUninstall(skill.id)}
+                    onScopeChange={onScopeChange ? (newScope) => onScopeChange(skill.id, newScope) : undefined}
                     updateStatus={getResourceUpdateStatus(updateCheckResult, skill.id)}
                   />
                 ))}

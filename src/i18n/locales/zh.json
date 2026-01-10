@@ -1580,6 +1580,40 @@
     "proxyPlaceholder": "例如: http://127.0.0.1:7890",
     "unsavedChanges": "检测到未保存的更改，是否保存后再重启？"
   },
+  "scope": {
+    "global": "全局",
+    "project": "项目",
+    "currentScope": "当前范围",
+    "modifyTitle": "修改安装范围",
+    "modifyDescription": "更改「{{name}}」的安装位置",
+    "moveToProject": "移动到项目",
+    "moveToProjectDesc": "从全局移动到指定项目目录",
+    "upgradeToGlobal": "升级到全局",
+    "upgradeToGlobalDesc": "从项目移动到全局目录，对所有项目可用",
+    "warningGlobalToProject": "移动后，该资源将仅在选择的项目中可用",
+    "warningProjectToGlobal": "升级后，该资源将从原项目目录移除，并在全局可用",
+    "selectTargetProject": "选择目标项目",
+    "selectTargetProjectDesc": "选择要将资源移动到的项目"
+  },
+  "project": {
+    "selectTitle": "选择项目",
+    "selectDescription": "选择要安装资源的目标项目",
+    "searchPlaceholder": "搜索项目...",
+    "selectedCount": "已选择 {{count}} 个项目",
+    "noSearchResults": "没有找到匹配的项目",
+    "noProjects": "没有可用的项目",
+    "unknownTime": "未知时间",
+    "justNow": "刚刚",
+    "minutesAgo": "{{count}} 分钟前",
+    "hoursAgo": "{{count}} 小时前",
+    "daysAgo": "{{count}} 天前"
+  },
+  "resourceType": {
+    "skill": "Skill",
+    "command": "Command",
+    "hook": "Hook",
+    "agent": "Agent"
+  },
   "updates": {
     "check": "检查更新",
     "checking": "正在检查更新...",

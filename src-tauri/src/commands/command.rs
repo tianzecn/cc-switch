@@ -6,7 +6,7 @@
 //! - 支持命名空间组织
 
 use crate::app_config::{
-    AppType, CommandNamespace, CommandRepo, DiscoverableCommand, InstalledCommand,
+    AppType, CommandNamespace, CommandRepo, DiscoverableCommand, InstallScope, InstalledCommand,
     UnmanagedCommand,
 };
 use crate::services::command::{ChangeEvent, CommandService, ConflictResolution};
@@ -50,20 +50,43 @@ pub fn get_command_namespaces(
 /// 参数：
 /// - command: 从发现列表获取的命令信息
 /// - current_app: 当前选中的应用，安装后默认启用该应用
+/// - scope: 安装范围 ("global" 或 "project")，不传则默认为 "global"
+/// - project_path: 项目路径（当 scope="project" 时必填）
 #[tauri::command]
 pub async fn install_command_unified(
     command: DiscoverableCommand,
     current_app: String,
+    scope: Option<String>,
+    project_path: Option<String>,
     service: State<'_, CommandServiceState>,
     app_state: State<'_, AppState>,
 ) -> Result<InstalledCommand, String> {
     let app_type = parse_app_type(&current_app)?;
 
-    service
+    // 先执行全局安装
+    let installed = service
         .0
         .install(&app_state.db, &command, &app_type)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+
+    // 如果指定了项目范围，则切换到项目范围
+    if let Some(scope_str) = scope {
+        if scope_str == "project" {
+            let install_scope = InstallScope::from_db(&scope_str, project_path.as_deref());
+            CommandService::change_scope(&app_state.db, &installed.id, &install_scope, &app_type)
+                .map_err(|e| e.to_string())?;
+
+            // 重新获取更新后的记录
+            return app_state
+                .db
+                .get_installed_command(&installed.id)
+                .map_err(|e| e.to_string())?
+                .ok_or_else(|| "Command not found after scope change".to_string());
+        }
+    }
+
+    Ok(installed)
 }
 
 /// 卸载 Command（统一卸载）
@@ -104,6 +127,28 @@ pub fn toggle_command_app(
 ) -> Result<bool, String> {
     let app_type = parse_app_type(&app)?;
     CommandService::toggle_app(&app_state.db, &id, &app_type, enabled).map_err(|e| e.to_string())?;
+    Ok(true)
+}
+
+/// 修改 Command 的安装范围
+///
+/// 参数：
+/// - id: Command ID
+/// - scope: 新的范围（"global" 或 "project"）
+/// - project_path: 项目路径（当 scope="project" 时必填）
+/// - current_app: 当前应用类型
+#[tauri::command]
+pub fn change_command_scope(
+    id: String,
+    scope: String,
+    project_path: Option<String>,
+    current_app: String,
+    app_state: State<'_, AppState>,
+) -> Result<bool, String> {
+    let app_type = parse_app_type(&current_app)?;
+    let new_scope = InstallScope::from_db(&scope, project_path.as_deref());
+    CommandService::change_scope(&app_state.db, &id, &new_scope, &app_type)
+        .map_err(|e| e.to_string())?;
     Ok(true)
 }
 

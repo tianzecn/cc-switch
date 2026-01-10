@@ -17,11 +17,15 @@ import {
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { settingsApi } from "@/lib/api";
 import { toast } from "sonner";
+import { ScopeBadge, createScopeFromDb, type InstallScope } from "@/components/common/ScopeBadge";
+import { ScopeModifyDialog } from "@/components/common/ScopeModifyDialog";
 
 interface HooksListProps {
   hooks: InstalledHook[];
   isLoading: boolean;
   selectedNamespace: string | null;
+  /** 范围变更回调 */
+  onScopeChange?: (hookId: string, newScope: InstallScope) => Promise<void>;
 }
 
 // 事件类型对应的颜色
@@ -40,6 +44,7 @@ export const HooksList: React.FC<HooksListProps> = ({
   hooks,
   isLoading,
   selectedNamespace,
+  onScopeChange,
 }) => {
   const { t } = useTranslation();
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -168,6 +173,7 @@ export const HooksList: React.FC<HooksListProps> = ({
               codex: codexSupported,
               gemini: geminiSupported,
             }}
+            onScopeChange={onScopeChange ? (newScope) => onScopeChange(hook.id, newScope) : undefined}
           />
         ))}
       </div>
@@ -201,6 +207,8 @@ interface HookListItemProps {
     codex: boolean;
     gemini: boolean;
   };
+  /** 范围变更回调 */
+  onScopeChange?: (newScope: InstallScope) => Promise<void>;
 }
 
 const HookListItem: React.FC<HookListItemProps> = ({
@@ -211,8 +219,23 @@ const HookListItem: React.FC<HookListItemProps> = ({
   onOpenEditor,
   onOpenDocs,
   appSupport,
+  onScopeChange,
 }) => {
   const { t } = useTranslation();
+  const [scopeDialogOpen, setScopeDialogOpen] = useState(false);
+  const [isScopeChanging, setIsScopeChanging] = useState(false);
+
+  const currentScope = createScopeFromDb(hook.scope, hook.projectPath);
+
+  const handleScopeChange = async (newScope: InstallScope) => {
+    if (!onScopeChange) return;
+    setIsScopeChanging(true);
+    try {
+      await onScopeChange(newScope);
+    } finally {
+      setIsScopeChanging(false);
+    }
+  };
 
   // 生成来源标签
   const sourceLabel = useMemo(() => {
@@ -232,6 +255,7 @@ const HookListItem: React.FC<HookListItemProps> = ({
   }, [hook.rules]);
 
   return (
+    <>
     <div
       className={`group relative flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all duration-300 ${
         hook.enabled
@@ -266,6 +290,16 @@ const HookListItem: React.FC<HookListItemProps> = ({
           >
             {hook.eventType}
           </Badge>
+
+          {/* 安装范围徽章 - 可点击修改 */}
+          <ScopeBadge
+            scope={currentScope}
+            size="sm"
+            onClick={onScopeChange ? (e) => {
+              e.stopPropagation();
+              setScopeDialogOpen(true);
+            } : undefined}
+          />
 
           {/* 优先级 */}
           <span className="text-xs text-muted-foreground">
@@ -425,6 +459,20 @@ const HookListItem: React.FC<HookListItemProps> = ({
         </Button>
       </div>
     </div>
+
+    {/* 范围修改对话框 */}
+    {onScopeChange && (
+      <ScopeModifyDialog
+        open={scopeDialogOpen}
+        onOpenChange={setScopeDialogOpen}
+        resourceType="hook"
+        resourceName={hook.name}
+        currentScope={currentScope}
+        onScopeChange={handleScopeChange}
+        isLoading={isScopeChanging}
+      />
+    )}
+    </>
   );
 };
 

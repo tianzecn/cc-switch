@@ -29,6 +29,10 @@ export interface InstalledAgent {
   apps: AgentApps;
   fileHash?: string;
   installedAt: number;
+  /** 安装范围：global 或 project */
+  scope: "global" | "project";
+  /** 项目路径（当 scope="project" 时有效） */
+  projectPath?: string;
 }
 
 /** 可发现的 Agent（来自仓库） */
@@ -118,8 +122,15 @@ export const agentsApi = {
   async installUnified(
     agent: DiscoverableAgent,
     currentApp: AppType,
+    scope?: "global" | "project",
+    projectPath?: string,
   ): Promise<InstalledAgent> {
-    return await invoke("install_agent_unified", { agent, currentApp });
+    return await invoke("install_agent_unified", {
+      agent,
+      currentApp,
+      scope,
+      projectPath,
+    });
   },
 
   /** 卸载 Agent（统一卸载） */
@@ -139,6 +150,21 @@ export const agentsApi = {
     enabled: boolean,
   ): Promise<boolean> {
     return await invoke("toggle_agent_app", { id, app, enabled });
+  },
+
+  /** 修改 Agent 的安装范围 */
+  async changeScope(
+    id: string,
+    scope: "global" | "project",
+    projectPath: string | undefined,
+    currentApp: AppType,
+  ): Promise<boolean> {
+    return await invoke("change_agent_scope", {
+      id,
+      scope,
+      projectPath,
+      currentApp,
+    });
   },
 
   /** 创建命名空间 */

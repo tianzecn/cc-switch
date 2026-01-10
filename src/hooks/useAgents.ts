@@ -145,10 +145,14 @@ export function useInstallAgent() {
     mutationFn: ({
       agent,
       currentApp,
+      scope,
+      projectPath,
     }: {
       agent: DiscoverableAgent;
       currentApp: AppType;
-    }) => agentsApi.installUnified(agent, currentApp),
+      scope?: "global" | "project";
+      projectPath?: string;
+    }) => agentsApi.installUnified(agent, currentApp, scope, projectPath),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: agentKeys.installed() });
       queryClient.invalidateQueries({ queryKey: agentKeys.namespaces() });
@@ -202,6 +206,29 @@ export function useToggleAgentApp() {
       app: AppType;
       enabled: boolean;
     }) => agentsApi.toggleApp(id, app, enabled),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: agentKeys.installed() });
+    },
+  });
+}
+
+/**
+ * 修改 Agent 安装范围
+ */
+export function useChangeAgentScope() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      scope,
+      projectPath,
+      currentApp,
+    }: {
+      id: string;
+      scope: "global" | "project";
+      projectPath?: string;
+      currentApp: AppType;
+    }) => agentsApi.changeScope(id, scope, projectPath, currentApp),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: agentKeys.installed() });
     },
