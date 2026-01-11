@@ -133,8 +133,10 @@ interface HookDiscoveryTreeProps {
   selectedNamespace: string | null;
   /** 命名空间被选中时的回调 */
   onSelectNamespace: (namespaceId: string, hooks: DiscoverableHook[]) => void;
-  expandedNodes?: Set<string>;
-  onToggleNode?: (nodeId: string) => void;
+  /** 手风琴模式：当前展开的仓库 ID（只能展开一个） */
+  expandedRepoId?: string | null;
+  /** 展开状态变化回调 */
+  onExpandedChange?: (repoId: string | null) => void;
 }
 
 /**
@@ -145,36 +147,38 @@ export const HookDiscoveryTree: React.FC<HookDiscoveryTreeProps> = ({
   hooks,
   selectedNamespace,
   onSelectNamespace,
-  expandedNodes: controlledExpanded,
-  onToggleNode: controlledToggle,
+  expandedRepoId: controlledExpandedRepoId,
+  onExpandedChange: controlledExpandedChange,
 }) => {
   const { t } = useTranslation();
 
-  // 内部展开状态（如果没有外部控制）
-  const [internalExpanded, setInternalExpanded] = React.useState<Set<string>>(
-    new Set(),
-  );
+  // 手风琴模式：内部展开状态（只能展开一个仓库）
+  const [internalExpandedRepoId, setInternalExpandedRepoId] = React.useState<
+    string | null
+  >(null);
 
-  const expanded = controlledExpanded ?? internalExpanded;
-  const toggleNode =
-    controlledToggle ??
-    ((nodeId: string) => {
-      setInternalExpanded((prev) => {
-        const next = new Set(prev);
-        if (next.has(nodeId)) {
-          next.delete(nodeId);
-        } else {
-          next.add(nodeId);
-        }
-        return next;
-      });
-    });
+  const expandedRepoId = controlledExpandedRepoId ?? internalExpandedRepoId;
+  const setExpandedRepoId =
+    controlledExpandedChange ?? setInternalExpandedRepoId;
 
   // 构建树结构
   const tree = useMemo(() => buildTree(hooks), [hooks]);
 
-  // 处理命名空间选中
-  const handleSelectNamespace = (node: NamespaceNode) => {
+  // 点击仓库：手风琴模式切换展开状态
+  const handleRepoClick = (repoId: string) => {
+    if (expandedRepoId === repoId) {
+      // 当前仓库已展开 -> 折叠
+      setExpandedRepoId(null);
+    } else {
+      // 展开新仓库，折叠其他（手风琴模式）
+      setExpandedRepoId(repoId);
+    }
+  };
+
+  // 处理命名空间选中（确保仓库展开）
+  const handleSelectNamespace = (repoId: string, node: NamespaceNode) => {
+    // 确保仓库展开
+    setExpandedRepoId(repoId);
     const hookList = node.children.map((c) => c.hook);
     onSelectNamespace(node.id, hookList);
   };
@@ -193,10 +197,10 @@ export const HookDiscoveryTree: React.FC<HookDiscoveryTreeProps> = ({
         <RepoTreeNode
           key={repo.id}
           node={repo}
-          expanded={expanded}
-          toggleNode={toggleNode}
+          isExpanded={expandedRepoId === repo.id}
+          onRepoClick={() => handleRepoClick(repo.id)}
           selectedNamespace={selectedNamespace}
-          onSelectNamespace={handleSelectNamespace}
+          onSelectNamespace={(ns) => handleSelectNamespace(repo.id, ns)}
         />
       ))}
     </div>
@@ -207,27 +211,25 @@ export const HookDiscoveryTree: React.FC<HookDiscoveryTreeProps> = ({
 
 interface RepoTreeNodeProps {
   node: RepoNode;
-  expanded: Set<string>;
-  toggleNode: (nodeId: string) => void;
+  isExpanded: boolean;
+  onRepoClick: () => void;
   selectedNamespace: string | null;
   onSelectNamespace: (node: NamespaceNode) => void;
 }
 
 const RepoTreeNode: React.FC<RepoTreeNodeProps> = ({
   node,
-  expanded,
-  toggleNode,
+  isExpanded,
+  onRepoClick,
   selectedNamespace,
   onSelectNamespace,
 }) => {
-  const isExpanded = expanded.has(node.id);
-
   return (
     <div>
       {/* Repo Header */}
       <div
         className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-muted transition-colors"
-        onClick={() => toggleNode(node.id)}
+        onClick={onRepoClick}
       >
         {isExpanded ? (
           <ChevronDown size={14} className="text-muted-foreground" />

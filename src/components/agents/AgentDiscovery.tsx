@@ -54,7 +54,8 @@ export const AgentDiscovery: React.FC<AgentDiscoveryProps> = ({ onBack }) => {
   const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState("");
   const [showRepoManager, setShowRepoManager] = useState(false);
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+  // 手风琴模式：只允许一个仓库展开
+  const [expandedRepoId, setExpandedRepoId] = useState<string | null>(null);
   // 选中状态（支持仓库和命名空间选择）
   const [selection, setSelection] = useState<DiscoverySelection>({
     type: "all",
@@ -182,18 +183,6 @@ export const AgentDiscovery: React.FC<AgentDiscoveryProps> = ({ onBack }) => {
     toast.success(t("agents.repo.removeSuccess"), { closeButton: true });
   };
 
-  const handleToggleNode = (nodeId: string) => {
-    setExpandedNodes((prev) => {
-      const next = new Set(prev);
-      if (next.has(nodeId)) {
-        next.delete(nodeId);
-      } else {
-        next.add(nodeId);
-      }
-      return next;
-    });
-  };
-
   const isAgentInstalled = (agent: DiscoverableAgent) => {
     const id = agent.namespace
       ? `${agent.namespace}/${agent.filename}`
@@ -303,8 +292,8 @@ export const AgentDiscovery: React.FC<AgentDiscoveryProps> = ({ onBack }) => {
                 agents={filteredAgents}
                 selection={selection}
                 onSelectionChange={setSelection}
-                expandedNodes={expandedNodes}
-                onToggleNode={handleToggleNode}
+                expandedRepoId={expandedRepoId}
+                onExpandedChange={setExpandedRepoId}
               />
             )}
           </div>

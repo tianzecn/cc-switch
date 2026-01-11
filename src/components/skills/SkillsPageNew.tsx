@@ -120,9 +120,10 @@ export const SkillsPageNew = forwardRef<
   const [discoveryNsSkills, setDiscoveryNsSkills] = useState<
     DiscoverableSkill[]
   >([]);
-  const [discoveryExpandedNodes, setDiscoveryExpandedNodes] = useState<
-    Set<string>
-  >(new Set());
+  // 手风琴模式：只允许一个仓库展开
+  const [discoveryExpandedRepoId, setDiscoveryExpandedRepoId] = useState<
+    string | null
+  >(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
     title: string;
@@ -859,18 +860,8 @@ export const SkillsPageNew = forwardRef<
                 setDiscoverySelection(selection);
                 setDiscoveryNsSkills(skills);
               }}
-              expandedNodes={discoveryExpandedNodes}
-              onToggleNode={(nodeId) => {
-                setDiscoveryExpandedNodes((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(nodeId)) {
-                    next.delete(nodeId);
-                  } else {
-                    next.add(nodeId);
-                  }
-                  return next;
-                });
-              }}
+              expandedRepoId={discoveryExpandedRepoId}
+              onExpandedChange={setDiscoveryExpandedRepoId}
             />
           ) : null}
         </div>

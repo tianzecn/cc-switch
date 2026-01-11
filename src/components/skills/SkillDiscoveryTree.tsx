@@ -147,8 +147,10 @@ interface SkillDiscoveryTreeProps {
     selection: TreeSelection,
     skills: DiscoverableSkill[],
   ) => void;
-  expandedNodes?: Set<string>;
-  onToggleNode?: (nodeId: string) => void;
+  /** 手风琴模式：当前展开的仓库 ID（只能展开一个） */
+  expandedRepoId?: string | null;
+  /** 展开状态变化回调 */
+  onExpandedChange?: (repoId: string | null) => void;
 }
 
 /**
@@ -160,30 +162,19 @@ export const SkillDiscoveryTree: React.FC<SkillDiscoveryTreeProps> = ({
   skills,
   selection,
   onSelectionChange,
-  expandedNodes: controlledExpanded,
-  onToggleNode: controlledToggle,
+  expandedRepoId: controlledExpandedRepoId,
+  onExpandedChange: controlledExpandedChange,
 }) => {
   const { t } = useTranslation();
 
-  // 内部展开状态（如果没有外部控制）
-  const [internalExpanded, setInternalExpanded] = React.useState<Set<string>>(
-    new Set(),
-  );
+  // 手风琴模式：内部展开状态（只能展开一个仓库）
+  const [internalExpandedRepoId, setInternalExpandedRepoId] = React.useState<
+    string | null
+  >(null);
 
-  const expanded = controlledExpanded ?? internalExpanded;
-  const toggleNode =
-    controlledToggle ??
-    ((nodeId: string) => {
-      setInternalExpanded((prev) => {
-        const next = new Set(prev);
-        if (next.has(nodeId)) {
-          next.delete(nodeId);
-        } else {
-          next.add(nodeId);
-        }
-        return next;
-      });
-    });
+  const expandedRepoId = controlledExpandedRepoId ?? internalExpandedRepoId;
+  const setExpandedRepoId =
+    controlledExpandedChange ?? setInternalExpandedRepoId;
 
   // 构建树结构
   const tree = useMemo(() => buildTree(skills), [skills]);
@@ -191,18 +182,23 @@ export const SkillDiscoveryTree: React.FC<SkillDiscoveryTreeProps> = ({
   // 计算总数
   const totalCount = skills.length;
 
-  // 点击仓库：展开 + 选中
+  // 点击仓库：手风琴模式（展开 + 选中，再点击折叠）
   const handleRepoClick = (repo: RepoNode) => {
-    // 展开仓库（如果未展开）
-    if (!expanded.has(repo.id)) {
-      toggleNode(repo.id);
+    if (expandedRepoId === repo.id) {
+      // 当前仓库已展开 -> 折叠并选中"全部"
+      setExpandedRepoId(null);
+      onSelectionChange(createAllSelection(), skills);
+    } else {
+      // 展开新仓库，折叠其他（手风琴模式），选中该仓库
+      setExpandedRepoId(repo.id);
+      onSelectionChange(createRepoSelection(repo.id), repo.allSkills);
     }
-    // 选中仓库，传递该仓库下所有技能
-    onSelectionChange(createRepoSelection(repo.id), repo.allSkills);
   };
 
-  // 点击命名空间：仅选中（独占）
+  // 点击命名空间：选中（确保仓库展开）
   const handleNamespaceClick = (repoId: string, ns: NamespaceNode) => {
+    // 确保仓库展开
+    setExpandedRepoId(repoId);
     onSelectionChange(createNamespaceSelection(repoId, ns.id), ns.skills);
   };
 
@@ -248,7 +244,7 @@ export const SkillDiscoveryTree: React.FC<SkillDiscoveryTreeProps> = ({
         <RepoTreeNode
           key={repo.id}
           node={repo}
-          expanded={expanded}
+          isExpanded={expandedRepoId === repo.id}
           selection={selection}
           onRepoClick={() => handleRepoClick(repo)}
           onNamespaceClick={(ns) => handleNamespaceClick(repo.id, ns)}
@@ -262,7 +258,7 @@ export const SkillDiscoveryTree: React.FC<SkillDiscoveryTreeProps> = ({
 
 interface RepoTreeNodeProps {
   node: RepoNode;
-  expanded: Set<string>;
+  isExpanded: boolean;
   selection: TreeSelection;
   onRepoClick: () => void;
   onNamespaceClick: (ns: NamespaceNode) => void;
@@ -270,12 +266,11 @@ interface RepoTreeNodeProps {
 
 const RepoTreeNode: React.FC<RepoTreeNodeProps> = ({
   node,
-  expanded,
+  isExpanded,
   selection,
   onRepoClick,
   onNamespaceClick,
 }) => {
-  const isExpanded = expanded.has(node.id);
   const repoSelected = isRepoSelected(selection, node.id);
 
   return (

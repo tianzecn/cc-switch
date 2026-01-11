@@ -52,7 +52,8 @@ export const HookDiscovery: React.FC<HookDiscoveryProps> = ({ onBack }) => {
   const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState("");
   const [showRepoManager, setShowRepoManager] = useState(false);
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+  // 手风琴模式：只允许一个仓库展开
+  const [expandedRepoId, setExpandedRepoId] = useState<string | null>(null);
   const [selectedNamespace, setSelectedNamespace] = useState<string | null>(
     null,
   );
@@ -124,18 +125,6 @@ export const HookDiscovery: React.FC<HookDiscoveryProps> = ({ onBack }) => {
   const handleRemoveRepo = async (owner: string, name: string) => {
     await removeRepoMutation.mutateAsync({ owner, name });
     toast.success(t("hooks.repo.removeSuccess"), { closeButton: true });
-  };
-
-  const handleToggleNode = (nodeId: string) => {
-    setExpandedNodes((prev) => {
-      const next = new Set(prev);
-      if (next.has(nodeId)) {
-        next.delete(nodeId);
-      } else {
-        next.add(nodeId);
-      }
-      return next;
-    });
   };
 
   const handleSelectNamespace = (
@@ -238,8 +227,8 @@ export const HookDiscovery: React.FC<HookDiscoveryProps> = ({ onBack }) => {
                 hooks={filteredHooks}
                 selectedNamespace={selectedNamespace}
                 onSelectNamespace={handleSelectNamespace}
-                expandedNodes={expandedNodes}
-                onToggleNode={handleToggleNode}
+                expandedRepoId={expandedRepoId}
+                onExpandedChange={setExpandedRepoId}
               />
             )}
           </div>

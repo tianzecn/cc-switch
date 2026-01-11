@@ -64,7 +64,8 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [showRepoManager, setShowRepoManager] = useState(false);
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+  // 手风琴模式：只允许一个仓库展开
+  const [expandedRepoId, setExpandedRepoId] = useState<string | null>(null);
   // 选中状态（支持仓库和命名空间选择）
   const [selection, setSelection] = useState<DiscoverySelection>({
     type: "all",
@@ -210,18 +211,6 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
     toast.success(t("commands.repo.removeSuccess"), { closeButton: true });
   };
 
-  const handleToggleNode = (nodeId: string) => {
-    setExpandedNodes((prev) => {
-      const next = new Set(prev);
-      if (next.has(nodeId)) {
-        next.delete(nodeId);
-      } else {
-        next.add(nodeId);
-      }
-      return next;
-    });
-  };
-
   // 检查命令是否已安装
   const isCommandInstalled = (cmd: DiscoverableCommand) => {
     const id = cmd.namespace
@@ -345,8 +334,8 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
                 commands={filteredCommands}
                 selection={selection}
                 onSelectionChange={setSelection}
-                expandedNodes={expandedNodes}
-                onToggleNode={handleToggleNode}
+                expandedRepoId={expandedRepoId}
+                onExpandedChange={setExpandedRepoId}
               />
             )}
           </div>

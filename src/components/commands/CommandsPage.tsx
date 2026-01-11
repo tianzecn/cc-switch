@@ -102,9 +102,10 @@ export const CommandsPage: React.FC = () => {
 
   // === Discovery 模式状态 ===
   const [showRepoManager, setShowRepoManager] = useState(false);
-  const [discoveryExpandedNodes, setDiscoveryExpandedNodes] = useState<
-    Set<string>
-  >(new Set());
+  // 手风琴模式：只允许一个仓库展开
+  const [discoveryExpandedRepoId, setDiscoveryExpandedRepoId] = useState<
+    string | null
+  >(null);
   const [discoverySelection, setDiscoverySelection] =
     useState<DiscoverySelection>({
       type: "all",
@@ -548,18 +549,6 @@ export const CommandsPage: React.FC = () => {
     }
   };
 
-  const handleToggleDiscoveryNode = (nodeId: string) => {
-    setDiscoveryExpandedNodes((prev) => {
-      const next = new Set(prev);
-      if (next.has(nodeId)) {
-        next.delete(nodeId);
-      } else {
-        next.add(nodeId);
-      }
-      return next;
-    });
-  };
-
   const isCommandInstalled = (cmd: DiscoverableCommand) => {
     const id = cmd.namespace
       ? `${cmd.namespace}/${cmd.filename}`
@@ -848,8 +837,8 @@ export const CommandsPage: React.FC = () => {
                   commands={filteredDiscoverableCommands}
                   selection={discoverySelection}
                   onSelectionChange={setDiscoverySelection}
-                  expandedNodes={discoveryExpandedNodes}
-                  onToggleNode={handleToggleDiscoveryNode}
+                  expandedRepoId={discoveryExpandedRepoId}
+                  onExpandedChange={setDiscoveryExpandedRepoId}
                 />
               )}
             </div>

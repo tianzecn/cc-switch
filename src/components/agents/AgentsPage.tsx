@@ -88,9 +88,10 @@ export const AgentsPage: React.FC = () => {
 
   // === Discovery 模式状态 ===
   const [showRepoManager, setShowRepoManager] = useState(false);
-  const [discoveryExpandedNodes, setDiscoveryExpandedNodes] = useState<
-    Set<string>
-  >(new Set());
+  // 手风琴模式：只允许一个仓库展开
+  const [discoveryExpandedRepoId, setDiscoveryExpandedRepoId] = useState<
+    string | null
+  >(null);
   const [discoverySelection, setDiscoverySelection] =
     useState<DiscoverySelection>({
       type: "all",
@@ -498,18 +499,6 @@ export const AgentsPage: React.FC = () => {
     toast.success(t("agents.repo.removeSuccess"), { closeButton: true });
   };
 
-  const handleToggleDiscoveryNode = (nodeId: string) => {
-    setDiscoveryExpandedNodes((prev) => {
-      const next = new Set(prev);
-      if (next.has(nodeId)) {
-        next.delete(nodeId);
-      } else {
-        next.add(nodeId);
-      }
-      return next;
-    });
-  };
-
   const isAgentInstalled = (agent: DiscoverableAgent) => {
     const id = agent.namespace
       ? `${agent.namespace}/${agent.filename}`
@@ -776,8 +765,8 @@ export const AgentsPage: React.FC = () => {
               ) : (
                 <AgentDiscoveryTree
                   agents={filteredDiscoverableAgents}
-                  expandedNodes={discoveryExpandedNodes}
-                  onToggleNode={handleToggleDiscoveryNode}
+                  expandedRepoId={discoveryExpandedRepoId}
+                  onExpandedChange={setDiscoveryExpandedRepoId}
                   selection={discoverySelection}
                   onSelectionChange={setDiscoverySelection}
                 />

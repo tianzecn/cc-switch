@@ -79,9 +79,10 @@ export const HooksPage: React.FC = () => {
 
   // === Discovery 模式状态 ===
   const [showRepoManager, setShowRepoManager] = useState(false);
-  const [discoveryExpandedNodes, setDiscoveryExpandedNodes] = useState<
-    Set<string>
-  >(new Set());
+  // 手风琴模式：只允许一个仓库展开
+  const [discoveryExpandedRepoId, setDiscoveryExpandedRepoId] = useState<
+    string | null
+  >(null);
   const [discoverySelectedNamespace, setDiscoverySelectedNamespace] = useState<
     string | null
   >(null);
@@ -257,18 +258,6 @@ export const HooksPage: React.FC = () => {
   const handleRemoveRepo = async (owner: string, name: string) => {
     await removeRepoMutation.mutateAsync({ owner, name });
     toast.success(t("hooks.repo.removeSuccess"), { closeButton: true });
-  };
-
-  const handleToggleDiscoveryNode = (nodeId: string) => {
-    setDiscoveryExpandedNodes((prev) => {
-      const next = new Set(prev);
-      if (next.has(nodeId)) {
-        next.delete(nodeId);
-      } else {
-        next.add(nodeId);
-      }
-      return next;
-    });
   };
 
   const handleSelectDiscoveryNamespace = (
@@ -495,8 +484,8 @@ export const HooksPage: React.FC = () => {
                   hooks={filteredDiscoverableHooks}
                   selectedNamespace={discoverySelectedNamespace}
                   onSelectNamespace={handleSelectDiscoveryNamespace}
-                  expandedNodes={discoveryExpandedNodes}
-                  onToggleNode={handleToggleDiscoveryNode}
+                  expandedRepoId={discoveryExpandedRepoId}
+                  onExpandedChange={setDiscoveryExpandedRepoId}
                 />
               )}
             </div>

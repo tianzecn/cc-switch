@@ -143,8 +143,10 @@ interface CommandDiscoveryTreeProps {
   selection: DiscoverySelection;
   /** 选择变化回调 */
   onSelectionChange: (selection: DiscoverySelection) => void;
-  expandedNodes?: Set<string>;
-  onToggleNode?: (nodeId: string) => void;
+  /** 手风琴模式：当前展开的仓库 ID（只能展开一个） */
+  expandedRepoId?: string | null;
+  /** 展开状态变化回调 */
+  onExpandedChange?: (repoId: string | null) => void;
 }
 
 /**
@@ -157,53 +159,52 @@ export const CommandDiscoveryTree: React.FC<CommandDiscoveryTreeProps> = ({
   commands,
   selection,
   onSelectionChange,
-  expandedNodes: controlledExpanded,
-  onToggleNode: controlledToggle,
+  expandedRepoId: controlledExpandedRepoId,
+  onExpandedChange: controlledExpandedChange,
 }) => {
   const { t } = useTranslation();
 
-  // 内部展开状态（如果没有外部控制）
-  const [internalExpanded, setInternalExpanded] = React.useState<Set<string>>(
-    new Set(),
-  );
+  // 手风琴模式：内部展开状态（只能展开一个仓库）
+  const [internalExpandedRepoId, setInternalExpandedRepoId] = React.useState<
+    string | null
+  >(null);
 
-  const expanded = controlledExpanded ?? internalExpanded;
-  const toggleNode =
-    controlledToggle ??
-    ((nodeId: string) => {
-      setInternalExpanded((prev) => {
-        const next = new Set(prev);
-        if (next.has(nodeId)) {
-          next.delete(nodeId);
-        } else {
-          next.add(nodeId);
-        }
-        return next;
-      });
-    });
+  const expandedRepoId = controlledExpandedRepoId ?? internalExpandedRepoId;
+  const setExpandedRepoId =
+    controlledExpandedChange ?? setInternalExpandedRepoId;
 
   // 构建树结构
   const tree = useMemo(() => buildTree(commands), [commands]);
 
-  // 处理仓库选中（点击仓库 = 展开 + 选中）
+  // 处理仓库选中（手风琴模式：点击展开 + 选中，再点击折叠）
   const handleSelectRepo = (node: RepoNode) => {
-    // 展开仓库
-    if (!expanded.has(node.id)) {
-      toggleNode(node.id);
+    if (expandedRepoId === node.id) {
+      // 当前仓库已展开 -> 折叠并选中"全部"
+      setExpandedRepoId(null);
+      onSelectionChange({
+        type: "all",
+        id: null,
+        commands: [],
+      });
+    } else {
+      // 展开新仓库，折叠其他（手风琴模式），选中该仓库
+      setExpandedRepoId(node.id);
+      // 获取仓库下所有命令
+      const cmds = node.children.flatMap((ns) =>
+        ns.children.map((c) => c.command),
+      );
+      onSelectionChange({
+        type: "repo",
+        id: node.id,
+        commands: cmds,
+      });
     }
-    // 获取仓库下所有命令
-    const cmds = node.children.flatMap((ns) =>
-      ns.children.map((c) => c.command),
-    );
-    onSelectionChange({
-      type: "repo",
-      id: node.id,
-      commands: cmds,
-    });
   };
 
-  // 处理命名空间选中
-  const handleSelectNamespace = (node: NamespaceNode) => {
+  // 处理命名空间选中（确保仓库展开）
+  const handleSelectNamespace = (repoId: string, node: NamespaceNode) => {
+    // 确保仓库展开
+    setExpandedRepoId(repoId);
     const cmds = node.children.map((c) => c.command);
     onSelectionChange({
       type: "namespace",
@@ -259,10 +260,10 @@ export const CommandDiscoveryTree: React.FC<CommandDiscoveryTreeProps> = ({
         <RepoTreeNode
           key={repo.id}
           node={repo}
-          expanded={expanded}
+          isExpanded={expandedRepoId === repo.id}
           selection={selection}
           onSelectRepo={handleSelectRepo}
-          onSelectNamespace={handleSelectNamespace}
+          onSelectNamespace={(ns) => handleSelectNamespace(repo.id, ns)}
         />
       ))}
     </div>
@@ -273,7 +274,7 @@ export const CommandDiscoveryTree: React.FC<CommandDiscoveryTreeProps> = ({
 
 interface RepoTreeNodeProps {
   node: RepoNode;
-  expanded: Set<string>;
+  isExpanded: boolean;
   selection: DiscoverySelection;
   onSelectRepo: (node: RepoNode) => void;
   onSelectNamespace: (node: NamespaceNode) => void;
@@ -281,12 +282,11 @@ interface RepoTreeNodeProps {
 
 const RepoTreeNode: React.FC<RepoTreeNodeProps> = ({
   node,
-  expanded,
+  isExpanded,
   selection,
   onSelectRepo,
   onSelectNamespace,
 }) => {
-  const isExpanded = expanded.has(node.id);
   const isRepoSelected = selection.type === "repo" && selection.id === node.id;
 
   return (

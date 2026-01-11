@@ -47,6 +47,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **发现模式手风琴未生效** - 修复 Skills/Commands/Hooks/Agents 发现模式下仓库树的手风琴行为
+  - 问题：发现模式使用 `Set<string>` 允许多个仓库同时展开，与已安装列表的手风琴模式不一致
+  - 修复：统一使用 `string | null` 状态，展开一个仓库时自动折叠其他
+  - 影响文件：`*DiscoveryTree.tsx`、`*Page.tsx`、`*Discovery.tsx` 共 11 个组件
+
 - **安装时间显示 1970 年** - 修复时间戳格式化逻辑，正确处理秒级/毫秒级时间戳
 - **Skills 查看文档打不开** - 修复「查看文档」按钮，正确使用 `readmeUrl` 打开外部链接
 - **发现模式空状态问题** - 修复 `displayedDiscoveryCommands/Agents` 在"全部"模式下返回空数组的 Bug
