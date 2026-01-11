@@ -155,9 +155,7 @@ export function UnifiedNavbar({
 
   // 根据布局模式计算内容区宽度
   const contentWidthClass =
-    mode === "adaptive"
-      ? "w-[95%] max-w-[1920px]"
-      : "max-w-[56rem]";
+    mode === "adaptive" ? "w-[95%] max-w-[1920px]" : "max-w-[56rem]";
   const addActionButtonClass =
     "bg-orange-500 hover:bg-orange-600 dark:bg-orange-500 dark:hover:bg-orange-600 text-white shadow-lg shadow-orange-500/30 dark:shadow-orange-500/40 rounded-full w-8 h-8";
 
@@ -372,7 +370,7 @@ export function UnifiedNavbar({
           "mx-auto h-full flex flex-col justify-center gap-1 py-2",
           "px-4 sm:px-6 lg:px-8",
           "transition-[width,max-width,padding] duration-150 ease-out",
-          contentWidthClass
+          contentWidthClass,
         )}
         data-tauri-drag-region
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}

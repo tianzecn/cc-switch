@@ -6,7 +6,15 @@
 
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowRight, Download, RefreshCw, RotateCcw, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
+import {
+  ArrowRight,
+  Download,
+  RefreshCw,
+  RotateCcw,
+  AlertTriangle,
+  CheckCircle2,
+  Loader2,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -81,7 +89,8 @@ function parseReleaseNotes(notes?: string): string[] {
   for (const line of lines) {
     const trimmed = line.trim();
     // 匹配 Markdown 列表项
-    const match = trimmed.match(/^[-*•]\s+(.+)$/) || trimmed.match(/^\d+\.\s+(.+)$/);
+    const match =
+      trimmed.match(/^[-*•]\s+(.+)$/) || trimmed.match(/^\d+\.\s+(.+)$/);
     if (match) {
       listItems.push(match[1]);
     } else if (trimmed && !trimmed.startsWith("#")) {
@@ -111,14 +120,18 @@ export function UpdateDialog({
   // 解析更新日志
   const releaseNotes = useMemo(
     () => parseReleaseNotes(updateInfo?.notes),
-    [updateInfo?.notes]
+    [updateInfo?.notes],
   );
 
   // 是否强制更新
   const isMandatory = updateInfo?.mandatory ?? false;
 
   // 是否可以关闭对话框
-  const canDismiss = !isMandatory && phase !== "downloading" && phase !== "installing" && phase !== "restarting";
+  const canDismiss =
+    !isMandatory &&
+    phase !== "downloading" &&
+    phase !== "installing" &&
+    phase !== "restarting";
 
   // 渲染状态图标
   const renderStatusIcon = () => {
@@ -167,7 +180,9 @@ export function UpdateDialog({
   const renderDescription = () => {
     switch (phase) {
       case "checking":
-        return t("updater.checkingDesc", { defaultValue: "正在连接服务器检查更新..." });
+        return t("updater.checkingDesc", {
+          defaultValue: "正在连接服务器检查更新...",
+        });
       case "available":
         return isMandatory
           ? t("updater.mandatoryUpdateDesc", {
@@ -185,11 +200,16 @@ export function UpdateDialog({
           defaultValue: "下载完成！点击「立即重启」以完成安装。",
         });
       case "installing":
-        return t("updater.installingDesc", { defaultValue: "正在安装更新，请稍候..." });
+        return t("updater.installingDesc", {
+          defaultValue: "正在安装更新，请稍候...",
+        });
       case "restarting":
         return t("updater.restartingDesc", { defaultValue: "应用即将重启..." });
       case "error":
-        return error?.message || t("updater.unknownError", { defaultValue: "发生未知错误" });
+        return (
+          error?.message ||
+          t("updater.unknownError", { defaultValue: "发生未知错误" })
+        );
       default:
         return "";
     }
@@ -217,25 +237,30 @@ export function UpdateDialog({
           </DialogTitle>
 
           {/* 版本对比 */}
-          {updateInfo && (phase === "available" || phase === "downloading" || phase === "downloaded") && (
-            <div className="flex items-center justify-center gap-3 rounded-lg bg-muted/50 px-4 py-3">
-              <div className="text-center">
-                <div className="text-xs text-muted-foreground">
-                  {t("updater.currentVersion", { defaultValue: "当前版本" })}
+          {updateInfo &&
+            (phase === "available" ||
+              phase === "downloading" ||
+              phase === "downloaded") && (
+              <div className="flex items-center justify-center gap-3 rounded-lg bg-muted/50 px-4 py-3">
+                <div className="text-center">
+                  <div className="text-xs text-muted-foreground">
+                    {t("updater.currentVersion", { defaultValue: "当前版本" })}
+                  </div>
+                  <div className="font-mono text-sm font-medium">
+                    {currentVersion}
+                  </div>
                 </div>
-                <div className="font-mono text-sm font-medium">{currentVersion}</div>
+                <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                <div className="text-center">
+                  <div className="text-xs text-muted-foreground">
+                    {t("updater.newVersion", { defaultValue: "新版本" })}
+                  </div>
+                  <div className="font-mono text-sm font-medium text-primary">
+                    {updateInfo.availableVersion}
+                  </div>
+                </div>
               </div>
-              <ArrowRight className="h-4 w-4 text-muted-foreground" />
-              <div className="text-center">
-                <div className="text-xs text-muted-foreground">
-                  {t("updater.newVersion", { defaultValue: "新版本" })}
-                </div>
-                <div className="font-mono text-sm font-medium text-primary">
-                  {updateInfo.availableVersion}
-                </div>
-              </div>
-            </div>
-          )}
+            )}
 
           <DialogDescription className="text-sm leading-relaxed">
             {renderDescription()}
@@ -253,21 +278,27 @@ export function UpdateDialog({
           )}
 
           {/* 更新日志 */}
-          {releaseNotes.length > 0 && (phase === "available" || phase === "downloading" || phase === "downloaded") && (
-            <div className="space-y-2">
-              <div className="text-sm font-medium">
-                {t("updater.releaseNotes", { defaultValue: "更新内容" })}
+          {releaseNotes.length > 0 &&
+            (phase === "available" ||
+              phase === "downloading" ||
+              phase === "downloaded") && (
+              <div className="space-y-2">
+                <div className="text-sm font-medium">
+                  {t("updater.releaseNotes", { defaultValue: "更新内容" })}
+                </div>
+                <ul className="max-h-32 space-y-1 overflow-y-auto rounded-lg bg-muted/30 p-3">
+                  {releaseNotes.map((note, index) => (
+                    <li
+                      key={index}
+                      className="flex items-start gap-2 text-xs text-muted-foreground"
+                    >
+                      <span className="mt-1.5 h-1 w-1 flex-shrink-0 rounded-full bg-primary" />
+                      <span>{note}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <ul className="max-h-32 space-y-1 overflow-y-auto rounded-lg bg-muted/30 p-3">
-                {releaseNotes.map((note, index) => (
-                  <li key={index} className="flex items-start gap-2 text-xs text-muted-foreground">
-                    <span className="mt-1.5 h-1 w-1 flex-shrink-0 rounded-full bg-primary" />
-                    <span>{note}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+            )}
         </DialogHeader>
 
         <DialogFooter className="flex gap-2 pt-2 sm:justify-end">

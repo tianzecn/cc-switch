@@ -177,7 +177,9 @@ export function CommandRepoManager({
               disabled={isRestoring}
               className="text-xs"
             >
-              <RotateCcw className={`h-3.5 w-3.5 mr-1.5 ${isRestoring ? "animate-spin" : ""}`} />
+              <RotateCcw
+                className={`h-3.5 w-3.5 mr-1.5 ${isRestoring ? "animate-spin" : ""}`}
+              />
               {t("commands.repo.restoreBuiltin")}
             </Button>
           )}
@@ -203,7 +205,10 @@ export function CommandRepoManager({
                         {repo.owner}/{repo.name}
                       </span>
                       {repo.builtin && (
-                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] px-1.5 py-0 shrink-0"
+                        >
                           {t("commands.repo.builtin")}
                         </Badge>
                       )}

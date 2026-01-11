@@ -17,7 +17,11 @@ import {
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { settingsApi } from "@/lib/api";
 import { toast } from "sonner";
-import { ScopeBadge, createScopeFromDb, type InstallScope } from "@/components/common/ScopeBadge";
+import {
+  ScopeBadge,
+  createScopeFromDb,
+  type InstallScope,
+} from "@/components/common/ScopeBadge";
 import { ScopeModifyDialog } from "@/components/common/ScopeModifyDialog";
 
 interface HooksListProps {
@@ -173,7 +177,11 @@ export const HooksList: React.FC<HooksListProps> = ({
               codex: codexSupported,
               gemini: geminiSupported,
             }}
-            onScopeChange={onScopeChange ? (newScope) => onScopeChange(hook.id, newScope) : undefined}
+            onScopeChange={
+              onScopeChange
+                ? (newScope) => onScopeChange(hook.id, newScope)
+                : undefined
+            }
           />
         ))}
       </div>
@@ -256,222 +264,226 @@ const HookListItem: React.FC<HookListItemProps> = ({
 
   return (
     <>
-    <div
-      className={`group relative flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all duration-300 ${
-        hook.enabled
-          ? "border-border-default bg-muted/50 hover:bg-muted hover:border-border-default/80"
-          : "border-border-default/50 bg-muted/20 opacity-60"
-      } hover:shadow-sm`}
-    >
-      {/* 左侧：Hook 信息 */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1 flex-wrap">
-          {/* 全局启用开关 */}
-          <div
-            onClick={(e) => e.stopPropagation()}
-            title={hook.enabled ? t("hooks.disable") : t("hooks.enable")}
-          >
-            <Button
-              variant={hook.enabled ? "default" : "outline"}
-              size="sm"
-              className={`h-6 w-6 p-0 ${hook.enabled ? "bg-green-500 hover:bg-green-600" : ""}`}
-              onClick={() => onToggleEnabled(hook.id, !hook.enabled)}
+      <div
+        className={`group relative flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all duration-300 ${
+          hook.enabled
+            ? "border-border-default bg-muted/50 hover:bg-muted hover:border-border-default/80"
+            : "border-border-default/50 bg-muted/20 opacity-60"
+        } hover:shadow-sm`}
+      >
+        {/* 左侧：Hook 信息 */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            {/* 全局启用开关 */}
+            <div
+              onClick={(e) => e.stopPropagation()}
+              title={hook.enabled ? t("hooks.disable") : t("hooks.enable")}
             >
-              <Power size={12} />
-            </Button>
-          </div>
+              <Button
+                variant={hook.enabled ? "default" : "outline"}
+                size="sm"
+                className={`h-6 w-6 p-0 ${hook.enabled ? "bg-green-500 hover:bg-green-600" : ""}`}
+                onClick={() => onToggleEnabled(hook.id, !hook.enabled)}
+              >
+                <Power size={12} />
+              </Button>
+            </div>
 
-          <h3 className="font-medium text-foreground">{hook.name}</h3>
+            <h3 className="font-medium text-foreground">{hook.name}</h3>
 
-          {/* 事件类型 Badge */}
-          <Badge
-            variant="secondary"
-            className={EVENT_TYPE_COLORS[hook.eventType]}
-          >
-            {hook.eventType}
-          </Badge>
+            {/* 事件类型 Badge */}
+            <Badge
+              variant="secondary"
+              className={EVENT_TYPE_COLORS[hook.eventType]}
+            >
+              {hook.eventType}
+            </Badge>
 
-          {/* 安装范围徽章 - 可点击修改 */}
-          <ScopeBadge
-            scope={currentScope}
-            size="sm"
-            onClick={onScopeChange ? (e) => {
-              e.stopPropagation();
-              setScopeDialogOpen(true);
-            } : undefined}
-          />
+            {/* 安装范围徽章 - 可点击修改 */}
+            <ScopeBadge
+              scope={currentScope}
+              size="sm"
+              onClick={
+                onScopeChange
+                  ? (e) => {
+                      e.stopPropagation();
+                      setScopeDialogOpen(true);
+                    }
+                  : undefined
+              }
+            />
 
-          {/* 优先级 */}
-          <span className="text-xs text-muted-foreground">
-            #{hook.priority}
-          </span>
+            {/* 优先级 */}
+            <span className="text-xs text-muted-foreground">
+              #{hook.priority}
+            </span>
 
-          {onOpenDocs && (
+            {onOpenDocs && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenDocs();
+                }}
+                className="h-6 px-2"
+              >
+                <ExternalLink size={14} />
+              </Button>
+            )}
             <Button
               type="button"
               variant="ghost"
               size="sm"
               onClick={(e) => {
                 e.stopPropagation();
-                onOpenDocs();
+                onOpenEditor();
               }}
               className="h-6 px-2"
+              title={t("hooks.openInEditor")}
             >
-              <ExternalLink size={14} />
+              <FileEdit size={14} />
             </Button>
+          </div>
+
+          {hook.description && (
+            <p className="text-sm text-muted-foreground line-clamp-2">
+              {hook.description}
+            </p>
           )}
+
+          <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground/70">
+            <span>{sourceLabel}</span>
+            {rulesSummary && (
+              <>
+                <span>·</span>
+                <span className="font-mono">{rulesSummary}</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* 中间：应用开关 */}
+        <div
+          className="flex flex-col gap-2 flex-shrink-0 min-w-[120px]"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <label
+              htmlFor={`${hook.id}-claude`}
+              className={`text-sm cursor-pointer ${
+                appSupport.claude && hook.enabled
+                  ? "text-foreground/80"
+                  : "text-muted-foreground"
+              }`}
+            >
+              {t("hooks.apps.claude")}
+            </label>
+            <Switch
+              id={`${hook.id}-claude`}
+              checked={hook.apps.claude}
+              onCheckedChange={(checked: boolean) =>
+                onToggleApp(hook.id, "claude", checked)
+              }
+              disabled={!appSupport.claude || !hook.enabled}
+              title={
+                !appSupport.claude
+                  ? t("hooks.appUnsupported")
+                  : !hook.enabled
+                    ? t("hooks.enableFirst")
+                    : undefined
+              }
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <label
+              htmlFor={`${hook.id}-codex`}
+              className={`text-sm cursor-pointer ${
+                appSupport.codex && hook.enabled
+                  ? "text-foreground/80"
+                  : "text-muted-foreground"
+              }`}
+            >
+              {t("hooks.apps.codex")}
+            </label>
+            <Switch
+              id={`${hook.id}-codex`}
+              checked={hook.apps.codex}
+              onCheckedChange={(checked: boolean) =>
+                onToggleApp(hook.id, "codex", checked)
+              }
+              disabled={!appSupport.codex || !hook.enabled}
+              title={
+                !appSupport.codex
+                  ? t("hooks.appUnsupported")
+                  : !hook.enabled
+                    ? t("hooks.enableFirst")
+                    : undefined
+              }
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <label
+              htmlFor={`${hook.id}-gemini`}
+              className={`text-sm cursor-pointer ${
+                appSupport.gemini && hook.enabled
+                  ? "text-foreground/80"
+                  : "text-muted-foreground"
+              }`}
+            >
+              {t("hooks.apps.gemini")}
+            </label>
+            <Switch
+              id={`${hook.id}-gemini`}
+              checked={hook.apps.gemini}
+              onCheckedChange={(checked: boolean) =>
+                onToggleApp(hook.id, "gemini", checked)
+              }
+              disabled={!appSupport.gemini || !hook.enabled}
+              title={
+                !appSupport.gemini
+                  ? t("hooks.appUnsupported")
+                  : !hook.enabled
+                    ? t("hooks.enableFirst")
+                    : undefined
+              }
+            />
+          </div>
+        </div>
+
+        {/* 右侧：删除按钮 */}
+        <div className="flex items-center gap-2 flex-shrink-0">
           <Button
             type="button"
             variant="ghost"
-            size="sm"
+            size="icon"
             onClick={(e) => {
               e.stopPropagation();
-              onOpenEditor();
+              onUninstall();
             }}
-            className="h-6 px-2"
-            title={t("hooks.openInEditor")}
+            className="hover:text-red-500 hover:bg-red-100 dark:hover:text-red-400 dark:hover:bg-red-500/10"
+            title={t("hooks.uninstall")}
           >
-            <FileEdit size={14} />
+            <Trash2 size={16} />
           </Button>
         </div>
-
-        {hook.description && (
-          <p className="text-sm text-muted-foreground line-clamp-2">
-            {hook.description}
-          </p>
-        )}
-
-        <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground/70">
-          <span>{sourceLabel}</span>
-          {rulesSummary && (
-            <>
-              <span>·</span>
-              <span className="font-mono">{rulesSummary}</span>
-            </>
-          )}
-        </div>
       </div>
 
-      {/* 中间：应用开关 */}
-      <div
-        className="flex flex-col gap-2 flex-shrink-0 min-w-[120px]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between gap-3">
-          <label
-            htmlFor={`${hook.id}-claude`}
-            className={`text-sm cursor-pointer ${
-              appSupport.claude && hook.enabled
-                ? "text-foreground/80"
-                : "text-muted-foreground"
-            }`}
-          >
-            {t("hooks.apps.claude")}
-          </label>
-          <Switch
-            id={`${hook.id}-claude`}
-            checked={hook.apps.claude}
-            onCheckedChange={(checked: boolean) =>
-              onToggleApp(hook.id, "claude", checked)
-            }
-            disabled={!appSupport.claude || !hook.enabled}
-            title={
-              !appSupport.claude
-                ? t("hooks.appUnsupported")
-                : !hook.enabled
-                  ? t("hooks.enableFirst")
-                  : undefined
-            }
-          />
-        </div>
-
-        <div className="flex items-center justify-between gap-3">
-          <label
-            htmlFor={`${hook.id}-codex`}
-            className={`text-sm cursor-pointer ${
-              appSupport.codex && hook.enabled
-                ? "text-foreground/80"
-                : "text-muted-foreground"
-            }`}
-          >
-            {t("hooks.apps.codex")}
-          </label>
-          <Switch
-            id={`${hook.id}-codex`}
-            checked={hook.apps.codex}
-            onCheckedChange={(checked: boolean) =>
-              onToggleApp(hook.id, "codex", checked)
-            }
-            disabled={!appSupport.codex || !hook.enabled}
-            title={
-              !appSupport.codex
-                ? t("hooks.appUnsupported")
-                : !hook.enabled
-                  ? t("hooks.enableFirst")
-                  : undefined
-            }
-          />
-        </div>
-
-        <div className="flex items-center justify-between gap-3">
-          <label
-            htmlFor={`${hook.id}-gemini`}
-            className={`text-sm cursor-pointer ${
-              appSupport.gemini && hook.enabled
-                ? "text-foreground/80"
-                : "text-muted-foreground"
-            }`}
-          >
-            {t("hooks.apps.gemini")}
-          </label>
-          <Switch
-            id={`${hook.id}-gemini`}
-            checked={hook.apps.gemini}
-            onCheckedChange={(checked: boolean) =>
-              onToggleApp(hook.id, "gemini", checked)
-            }
-            disabled={!appSupport.gemini || !hook.enabled}
-            title={
-              !appSupport.gemini
-                ? t("hooks.appUnsupported")
-                : !hook.enabled
-                  ? t("hooks.enableFirst")
-                  : undefined
-            }
-          />
-        </div>
-      </div>
-
-      {/* 右侧：删除按钮 */}
-      <div className="flex items-center gap-2 flex-shrink-0">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={(e) => {
-            e.stopPropagation();
-            onUninstall();
-          }}
-          className="hover:text-red-500 hover:bg-red-100 dark:hover:text-red-400 dark:hover:bg-red-500/10"
-          title={t("hooks.uninstall")}
-        >
-          <Trash2 size={16} />
-        </Button>
-      </div>
-    </div>
-
-    {/* 范围修改对话框 */}
-    {onScopeChange && (
-      <ScopeModifyDialog
-        open={scopeDialogOpen}
-        onOpenChange={setScopeDialogOpen}
-        resourceType="hook"
-        resourceName={hook.name}
-        currentScope={currentScope}
-        onScopeChange={handleScopeChange}
-        isLoading={isScopeChanging}
-      />
-    )}
+      {/* 范围修改对话框 */}
+      {onScopeChange && (
+        <ScopeModifyDialog
+          open={scopeDialogOpen}
+          onOpenChange={setScopeDialogOpen}
+          resourceType="hook"
+          resourceName={hook.name}
+          currentScope={currentScope}
+          onScopeChange={handleScopeChange}
+          isLoading={isScopeChanging}
+        />
+      )}
     </>
   );
 };

@@ -1,6 +1,12 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Trash2, ExternalLink, FileEdit, GitBranch, HardDrive } from "lucide-react";
+import {
+  Trash2,
+  ExternalLink,
+  FileEdit,
+  GitBranch,
+  HardDrive,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +19,11 @@ import { cn } from "@/lib/utils";
 import type { InstalledAgent, AppType } from "@/hooks/useAgents";
 import type { UpdateCheckResult } from "@/hooks/useResourceUpdates";
 import { UpdateBadge } from "@/components/updates";
-import { ScopeBadge, createScopeFromDb, type InstallScope } from "@/components/common/ScopeBadge";
+import {
+  ScopeBadge,
+  createScopeFromDb,
+  type InstallScope,
+} from "@/components/common/ScopeBadge";
 import { ScopeModifyDialog } from "@/components/common/ScopeModifyDialog";
 
 interface AgentListItemProps {
@@ -75,38 +85,64 @@ export const AgentListItem: React.FC<AgentListItemProps> = ({
 
   return (
     <>
-    <div
-      className={cn(
-        "group flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all",
-        isSelected
-          ? "border-primary bg-primary/5"
-          : "border-border hover:border-primary/50 hover:bg-muted/50",
-      )}
-      onClick={onSelect}
-    >
-      {/* 左侧：名称、描述和操作按钮 */}
-      <div className="flex-1 min-w-0">
-        {/* 第一行：名称 + 范围 + Badge + 更新徽章 + 操作按钮 */}
-        <div className="flex items-center gap-2">
-          <h4 className="font-medium text-sm truncate">{agent.id}</h4>
-          {/* 安装范围徽章 - 可点击修改 */}
-          <ScopeBadge
-            scope={currentScope}
-            size="sm"
-            onClick={onScopeChange ? (e) => {
-              e.stopPropagation();
-              setScopeDialogOpen(true);
-            } : undefined}
-          />
-          <Badge variant="outline" className="text-xs flex items-center gap-1 flex-shrink-0">
-            <SourceIcon size={10} />
-            <span className="truncate max-w-[100px]">{sourceName}</span>
-          </Badge>
-          {/* 更新状态徽章 */}
-          <UpdateBadge status={updateStatus} />
-          {/* 操作按钮 */}
-          <div className="flex items-center gap-0.5 ml-auto mr-4 opacity-0 group-hover:opacity-100 transition-opacity">
-            {onOpenDocs && (
+      <div
+        className={cn(
+          "group flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all",
+          isSelected
+            ? "border-primary bg-primary/5"
+            : "border-border hover:border-primary/50 hover:bg-muted/50",
+        )}
+        onClick={onSelect}
+      >
+        {/* 左侧：名称、描述和操作按钮 */}
+        <div className="flex-1 min-w-0">
+          {/* 第一行：名称 + 范围 + Badge + 更新徽章 + 操作按钮 */}
+          <div className="flex items-center gap-2">
+            <h4 className="font-medium text-sm truncate">{agent.id}</h4>
+            {/* 安装范围徽章 - 可点击修改 */}
+            <ScopeBadge
+              scope={currentScope}
+              size="sm"
+              onClick={
+                onScopeChange
+                  ? (e) => {
+                      e.stopPropagation();
+                      setScopeDialogOpen(true);
+                    }
+                  : undefined
+              }
+            />
+            <Badge
+              variant="outline"
+              className="text-xs flex items-center gap-1 flex-shrink-0"
+            >
+              <SourceIcon size={10} />
+              <span className="truncate max-w-[100px]">{sourceName}</span>
+            </Badge>
+            {/* 更新状态徽章 */}
+            <UpdateBadge status={updateStatus} />
+            {/* 操作按钮 */}
+            <div className="flex items-center gap-0.5 ml-auto mr-4 opacity-0 group-hover:opacity-100 transition-opacity">
+              {onOpenDocs && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenDocs();
+                      }}
+                    >
+                      <ExternalLink size={12} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {t("agents.viewDocs", "View Documentation")}
+                  </TooltipContent>
+                </Tooltip>
+              )}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -115,105 +151,88 @@ export const AgentListItem: React.FC<AgentListItemProps> = ({
                     className="h-6 w-6"
                     onClick={(e) => {
                       e.stopPropagation();
-                      onOpenDocs();
+                      onOpenEditor();
                     }}
                   >
-                    <ExternalLink size={12} />
+                    <FileEdit size={12} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  {t("agents.viewDocs", "View Documentation")}
+                  {t("agents.openInEditor", "Open in Editor")}
                 </TooltipContent>
               </Tooltip>
-            )}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenEditor();
-                  }}
-                >
-                  <FileEdit size={12} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {t("agents.openInEditor", "Open in Editor")}
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 hover:text-destructive"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onUninstall();
-                  }}
-                >
-                  <Trash2 size={12} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{t("agents.uninstall", "Uninstall")}</TooltipContent>
-            </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 hover:text-destructive"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUninstall();
+                    }}
+                  >
+                    <Trash2 size={12} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {t("agents.uninstall", "Uninstall")}
+                </TooltipContent>
+              </Tooltip>
+            </div>
           </div>
+          {/* 第二行：描述 */}
+          {agent.description && (
+            <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+              {agent.description}
+            </p>
+          )}
         </div>
-        {/* 第二行：描述 */}
-        {agent.description && (
-          <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
-            {agent.description}
-          </p>
-        )}
+
+        {/* 右侧：三应用开关 - 垂直排列 */}
+        <div
+          className="flex flex-col gap-1.5 flex-shrink-0 min-w-[100px] mr-1"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <AppSwitch
+            app="claude"
+            agentId={agent.id}
+            enabled={agent.apps.claude}
+            supported={appSupport.claude}
+            onToggle={(enabled) => onToggleApp("claude", enabled)}
+            label={t("agents.apps.claude")}
+          />
+          <AppSwitch
+            app="codex"
+            agentId={agent.id}
+            enabled={agent.apps.codex}
+            supported={appSupport.codex}
+            onToggle={(enabled) => onToggleApp("codex", enabled)}
+            label={t("agents.apps.codex")}
+          />
+          <AppSwitch
+            app="gemini"
+            agentId={agent.id}
+            enabled={agent.apps.gemini}
+            supported={appSupport.gemini}
+            onToggle={(enabled) => onToggleApp("gemini", enabled)}
+            label={t("agents.apps.gemini")}
+          />
+        </div>
       </div>
 
-      {/* 右侧：三应用开关 - 垂直排列 */}
-      <div
-        className="flex flex-col gap-1.5 flex-shrink-0 min-w-[100px] mr-1"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <AppSwitch
-          app="claude"
-          agentId={agent.id}
-          enabled={agent.apps.claude}
-          supported={appSupport.claude}
-          onToggle={(enabled) => onToggleApp("claude", enabled)}
-          label={t("agents.apps.claude")}
+      {/* 范围修改对话框 */}
+      {onScopeChange && (
+        <ScopeModifyDialog
+          open={scopeDialogOpen}
+          onOpenChange={setScopeDialogOpen}
+          resourceType="agent"
+          resourceName={agent.name}
+          currentScope={currentScope}
+          onScopeChange={handleScopeChange}
+          isLoading={isScopeChanging}
         />
-        <AppSwitch
-          app="codex"
-          agentId={agent.id}
-          enabled={agent.apps.codex}
-          supported={appSupport.codex}
-          onToggle={(enabled) => onToggleApp("codex", enabled)}
-          label={t("agents.apps.codex")}
-        />
-        <AppSwitch
-          app="gemini"
-          agentId={agent.id}
-          enabled={agent.apps.gemini}
-          supported={appSupport.gemini}
-          onToggle={(enabled) => onToggleApp("gemini", enabled)}
-          label={t("agents.apps.gemini")}
-        />
-      </div>
-    </div>
-
-    {/* 范围修改对话框 */}
-    {onScopeChange && (
-      <ScopeModifyDialog
-        open={scopeDialogOpen}
-        onOpenChange={setScopeDialogOpen}
-        resourceType="agent"
-        resourceName={agent.name}
-        currentScope={currentScope}
-        onScopeChange={handleScopeChange}
-        isLoading={isScopeChanging}
-      />
-    )}
+      )}
     </>
   );
 };
@@ -253,7 +272,7 @@ const AppSwitch: React.FC<AppSwitchProps> = ({
         htmlFor={switchId}
         className={cn(
           "text-xs cursor-pointer",
-          supported ? "text-foreground/80" : "text-muted-foreground"
+          supported ? "text-foreground/80" : "text-muted-foreground",
         )}
       >
         {label}

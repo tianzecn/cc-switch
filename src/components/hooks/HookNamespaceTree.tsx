@@ -58,8 +58,9 @@ export const HookNamespaceTree: React.FC<HookNamespaceTreeProps> = ({
   const { t } = useTranslation();
   const [isCreating, setIsCreating] = React.useState(false);
   const [newNamespaceName, setNewNamespaceName] = React.useState("");
-  const [expandedRepos, setExpandedRepos] = React.useState<Set<string>>(
-    new Set(["local"]),
+  // 手风琴模式：只允许一个仓库展开
+  const [expandedRepoId, setExpandedRepoId] = React.useState<string | null>(
+    "local", // 默认展开本地
   );
   const [deleteConfirm, setDeleteConfirm] = React.useState<{
     isOpen: boolean;
@@ -136,16 +137,15 @@ export const HookNamespaceTree: React.FC<HookNamespaceTreeProps> = ({
     });
   }, [hooks, t]);
 
+  // 手风琴模式：切换仓库展开状态
   const toggleRepo = (repoId: string) => {
-    setExpandedRepos((prev) => {
-      const next = new Set(prev);
-      if (next.has(repoId)) {
-        next.delete(repoId);
-      } else {
-        next.add(repoId);
-      }
-      return next;
-    });
+    if (expandedRepoId === repoId) {
+      // 当前仓库已展开 -> 折叠
+      setExpandedRepoId(null);
+    } else {
+      // 展开新仓库，折叠其他
+      setExpandedRepoId(repoId);
+    }
   };
 
   const handleCreate = async () => {
@@ -262,14 +262,14 @@ export const HookNamespaceTree: React.FC<HookNamespaceTreeProps> = ({
                 }
                 label={repo.name}
                 count={repo.count}
-                expanded={expandedRepos.has(repo.id)}
+                expanded={expandedRepoId === repo.id}
                 onClick={() => toggleRepo(repo.id)}
                 depth={0}
                 expandable
               />
 
               {/* Namespace Nodes */}
-              {expandedRepos.has(repo.id) &&
+              {expandedRepoId === repo.id &&
                 repo.namespaces.map((ns) => (
                   <TreeItem
                     key={`${repo.id}/${ns.name}`}

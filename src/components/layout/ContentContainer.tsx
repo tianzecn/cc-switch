@@ -30,7 +30,7 @@ export function ContentContainer({
         "px-4 sm:px-6 lg:px-8",
         // 过渡动画
         "transition-[width,max-width,padding] duration-150 ease-out",
-        className
+        className,
       )}
     >
       {children}

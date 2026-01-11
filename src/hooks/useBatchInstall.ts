@@ -85,7 +85,9 @@ export function useBatchInstall(): UseBatchInstallReturn {
       });
 
       if (toInstall.length === 0) {
-        toast.info(t("skills.batch.allInstalled", "All skills are already installed"));
+        toast.info(
+          t("skills.batch.allInstalled", "All skills are already installed"),
+        );
         return;
       }
 
@@ -150,16 +152,13 @@ export function useBatchInstall(): UseBatchInstallReturn {
 
       // 显示汇总 toast
       if (cancelledRef.current) {
-        toast.info(
-          t("skills.batch.cancelled", "Installation cancelled"),
-          {
-            description: t(
-              "skills.batch.cancelledDetail",
-              "Installed {{success}} of {{total}} skills",
-              { success: successCount, total: toInstall.length },
-            ),
-          },
-        );
+        toast.info(t("skills.batch.cancelled", "Installation cancelled"), {
+          description: t(
+            "skills.batch.cancelledDetail",
+            "Installed {{success}} of {{total}} skills",
+            { success: successCount, total: toInstall.length },
+          ),
+        });
       } else if (failCount === 0) {
         toast.success(
           t("skills.batch.success", "All skills installed successfully"),

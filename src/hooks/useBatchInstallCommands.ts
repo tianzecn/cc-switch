@@ -80,7 +80,10 @@ export function useBatchInstallCommands(): UseBatchInstallCommandsReturn {
 
       if (toInstall.length === 0) {
         toast.info(
-          t("commands.batch.allInstalled", "All commands are already installed"),
+          t(
+            "commands.batch.allInstalled",
+            "All commands are already installed",
+          ),
         );
         return;
       }

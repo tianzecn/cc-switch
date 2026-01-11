@@ -27,7 +27,7 @@ interface AppUpdaterContextValue {
 }
 
 const AppUpdaterContext = createContext<AppUpdaterContextValue | undefined>(
-  undefined
+  undefined,
 );
 
 export function AppUpdaterProvider({
@@ -49,7 +49,11 @@ export function AppUpdaterProvider({
   // 手动打开对话框并检查更新
   const openUpdateDialog = useCallback(() => {
     setIsDialogOpen(true);
-    if (updater.phase === "idle" || updater.phase === "upToDate" || updater.phase === "error") {
+    if (
+      updater.phase === "idle" ||
+      updater.phase === "upToDate" ||
+      updater.phase === "error"
+    ) {
       void updater.checkUpdate();
     }
   }, [updater]);
@@ -91,7 +95,13 @@ export function AppUpdaterProvider({
       openUpdateDialog,
       checkUpdate: updater.checkUpdate,
     }),
-    [updater.phase, hasUpdate, updater.currentVersion, openUpdateDialog, updater.checkUpdate]
+    [
+      updater.phase,
+      hasUpdate,
+      updater.currentVersion,
+      openUpdateDialog,
+      updater.checkUpdate,
+    ],
   );
 
   return (
@@ -119,7 +129,7 @@ export function useAppUpdaterContext() {
   const context = useContext(AppUpdaterContext);
   if (!context) {
     throw new Error(
-      "useAppUpdaterContext must be used within AppUpdaterProvider"
+      "useAppUpdaterContext must be used within AppUpdaterProvider",
     );
   }
   return context;

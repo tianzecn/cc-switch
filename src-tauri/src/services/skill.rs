@@ -981,6 +981,26 @@ impl SkillService {
         Ok(())
     }
 
+    /// 获取 Skill 的 SKILL.md 内容
+    ///
+    /// 从 SSOT 目录读取 SKILL.md 文件内容
+    pub fn get_skill_content(db: &Arc<Database>, id: &str) -> Result<String> {
+        // 获取 skill 信息以确定目录名
+        let skill = db
+            .get_installed_skill(id)?
+            .ok_or_else(|| anyhow!("Skill 不存在: {}", id))?;
+
+        let ssot_dir = Self::get_ssot_dir()?;
+        let skill_dir = ssot_dir.join(&skill.directory);
+        let skill_md = skill_dir.join("SKILL.md");
+
+        if !skill_md.exists() {
+            return Err(anyhow!("SKILL.md 文件不存在: {}", skill.directory));
+        }
+
+        fs::read_to_string(&skill_md).map_err(|e| anyhow!("读取 SKILL.md 失败: {}", e))
+    }
+
     // ========== 发现功能（保留原有逻辑）==========
 
     /// 列出所有可发现的技能（从仓库获取）

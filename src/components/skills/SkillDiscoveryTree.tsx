@@ -103,7 +103,9 @@ function buildTree(skills: DiscoverableSkill[]): RepoNode[] {
     );
 
     for (const [namespace, nsSkills] of sortedNamespaces) {
-      const sortedSkills = nsSkills.sort((a, b) => a.name.localeCompare(b.name));
+      const sortedSkills = nsSkills.sort((a, b) =>
+        a.name.localeCompare(b.name),
+      );
       namespaces.push({
         id: `${repoKey}/${namespace}`,
         name: namespace === ROOT_NAMESPACE ? "skills" : namespace,
@@ -141,7 +143,10 @@ interface SkillDiscoveryTreeProps {
   /** 当前选中状态 */
   selection: TreeSelection;
   /** 选中状态变化回调 */
-  onSelectionChange: (selection: TreeSelection, skills: DiscoverableSkill[]) => void;
+  onSelectionChange: (
+    selection: TreeSelection,
+    skills: DiscoverableSkill[],
+  ) => void;
   expandedNodes?: Set<string>;
   onToggleNode?: (nodeId: string) => void;
 }
@@ -229,9 +234,7 @@ export const SkillDiscoveryTree: React.FC<SkillDiscoveryTreeProps> = ({
         <Folder
           size={14}
           className={
-            isAllSelected(selection)
-              ? "text-primary"
-              : "text-muted-foreground"
+            isAllSelected(selection) ? "text-primary" : "text-muted-foreground"
           }
         />
         <span className="flex-1 text-sm">

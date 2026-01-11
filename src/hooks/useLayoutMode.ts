@@ -21,6 +21,6 @@ export const useLayoutMode = create<LayoutModeState>()(
     }),
     {
       name: "cc-switch-layout-mode",
-    }
-  )
+    },
+  ),
 );

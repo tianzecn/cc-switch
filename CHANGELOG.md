@@ -9,6 +9,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **虚拟滚动基础设施** - 提升大数据量列表的渲染性能
+  - 新增 `VirtualList` 通用虚拟列表组件（基于 @tanstack/react-virtual）
+  - 新增 `ListItemSkeleton` 骨架屏组件，统一加载状态样式
+  - 支持预估高度、过度扫描、无限滚动等配置
+  - 集成到 Skills/Commands/Agents 发现模式列表
+
+- **左侧导航手风琴模式** - 优化仓库树导航的交互体验
+  - 新增 `useTreeNavigation` Hook 管理展开/选中状态
+  - 实现手风琴逻辑：展开新仓库时自动折叠其他
+  - 支持再次点击已展开仓库时折叠
+  - 展开时自动选中并显示对应内容
+  - 更新 Skills/Commands/Hooks/Agents 四个页面
+
+- **发现模式"全部"节点** - 发现模式默认显示所有资源
+  - Commands/Agents 发现树添加"全部"节点
+  - 默认选中"全部"，右侧面板展示所有可用资源
+  - 按仓库分组排序，支持全局搜索（名称+描述）
+
+- **Skills 内容预览** - 在详情面板中预览 SKILL.md 内容
+  - 后端新增 `get_skill_content` API
+  - 前端新增 `useSkillContent` Hook
+  - 支持源码视图和渲染视图切换
+  - 可折叠的内容预览区域
+
+- **Agents 详情面板** - 新增 Agent 配置查看功能
+  - 新增 `AgentDetailPanel` 组件
+  - 展示基本信息（名称、描述、来源）
+  - 展示完整配置内容预览
+  - 支持查看文档、在编辑器中打开等操作
+
+- **日期格式化工具** - 新增 `src/lib/utils/date.ts` 统一处理时间戳格式化
+
+### Changed
+
+- **发现模式交互优化** - Commands/Agents 发现模式默认展示全部资源，而非空状态
+
+### Fixed
+
+- **安装时间显示 1970 年** - 修复时间戳格式化逻辑，正确处理秒级/毫秒级时间戳
+- **Skills 查看文档打不开** - 修复「查看文档」按钮，正确使用 `readmeUrl` 打开外部链接
+- **发现模式空状态问题** - 修复 `displayedDiscoveryCommands/Agents` 在"全部"模式下返回空数组的 Bug
+- **翻译缺失** - 添加 `commands.noCommandsFound` 和 `agents.noAgentsFound` 翻译 key
+
 - **响应式布局系统** - 全新的布局系统，支持固定宽度和自适应两种模式切换
   - 新增 `useLayoutMode` Hook（Zustand 状态管理 + localStorage 持久化）
   - 新增 `ContentContainer` 统一布局容器组件（standard/wide 变体）

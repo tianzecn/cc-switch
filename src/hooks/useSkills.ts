@@ -235,6 +235,18 @@ export function useSkillConflicts() {
   });
 }
 
+/**
+ * 获取 Skill 内容（SKILL.md）
+ */
+export function useSkillContent(id: string | null) {
+  return useQuery({
+    queryKey: ["skills", "content", id],
+    queryFn: () => skillsApi.getContent(id!),
+    enabled: !!id,
+    staleTime: 5 * 60 * 1000, // 5 分钟缓存
+  });
+}
+
 // ========== 辅助类型 ==========
 
 export type { InstalledSkill, DiscoverableSkill, AppType, SkillConflict };

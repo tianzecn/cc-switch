@@ -34,8 +34,12 @@ import {
 import { UpdateBadge } from "@/components/updates";
 import { toast } from "sonner";
 import { CommandRepoManager } from "@/components/commands/CommandRepoManager";
-import { AgentDiscoveryTree, type DiscoverySelection } from "./AgentDiscoveryTree";
+import {
+  AgentDiscoveryTree,
+  type DiscoverySelection,
+} from "./AgentDiscoveryTree";
 import { BatchInstallAgentsButton } from "./BatchInstallAgentsButton";
+import { VirtualList } from "@/components/common/VirtualList";
 
 interface AgentDiscoveryProps {
   onBack: () => void;
@@ -93,15 +97,36 @@ export const AgentDiscovery: React.FC<AgentDiscoveryProps> = ({ onBack }) => {
     });
   }, [discoverableAgents, searchQuery]);
 
+  // 按仓库分组排序的 agent 列表（仅在 selection.type === "all" 时使用）
+  const sortedFilteredAgents = useMemo(() => {
+    if (filteredAgents.length === 0) return [];
+    return [...filteredAgents].sort((a, b) => {
+      // 先按仓库排序
+      const repoCompare = `${a.repoOwner}/${a.repoName}`.localeCompare(
+        `${b.repoOwner}/${b.repoName}`,
+      );
+      if (repoCompare !== 0) return repoCompare;
+      // 再按命名空间排序
+      const nsCompare = (a.namespace || "").localeCompare(b.namespace || "");
+      if (nsCompare !== 0) return nsCompare;
+      // 最后按名称排序
+      return a.name.localeCompare(b.name);
+    });
+  }, [filteredAgents]);
+
   // 当前显示的 agent 列表（根据选择状态）
   const displayedAgents = useMemo(() => {
-    // 如果有选择（仓库或命名空间），使用选择的 agents
-    if (selection.type !== "all" && selection.agents.length > 0) {
+    // 全部模式：使用排序后的所有 agents
+    if (selection.type === "all") {
+      return sortedFilteredAgents;
+    }
+    // 仓库/命名空间模式：使用选择的 agents
+    if (selection.agents.length > 0) {
       return selection.agents;
     }
-    // 否则返回空（需要用户选择仓库或命名空间）
-    return [];
-  }, [selection]);
+    // fallback：返回排序后的所有 agents
+    return sortedFilteredAgents;
+  }, [selection.type, selection.agents, sortedFilteredAgents]);
 
   // 计算未安装 agent 数量（基于当前显示的 agents）
   const uninstalledCount = useMemo(() => {
@@ -177,7 +202,9 @@ export const AgentDiscovery: React.FC<AgentDiscoveryProps> = ({ onBack }) => {
   };
 
   // 获取 agent 的更新状态
-  const getAgentUpdateStatus = (agent: DiscoverableAgent): UpdateCheckResult | undefined => {
+  const getAgentUpdateStatus = (
+    agent: DiscoverableAgent,
+  ): UpdateCheckResult | undefined => {
     if (!updateCheckResult) return undefined;
     const id = agent.namespace
       ? `${agent.namespace}/${agent.filename}`
@@ -186,7 +213,10 @@ export const AgentDiscovery: React.FC<AgentDiscoveryProps> = ({ onBack }) => {
   };
 
   return (
-    <ContentContainer variant="wide" className="flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
+    <ContentContainer
+      variant="wide"
+      className="flex flex-col h-[calc(100vh-8rem)] overflow-hidden"
+    >
       {/* Header */}
       <div className="flex-shrink-0 flex items-center gap-4 py-4">
         <Button variant="ghost" size="icon" onClick={onBack}>
@@ -282,42 +312,51 @@ export const AgentDiscovery: React.FC<AgentDiscoveryProps> = ({ onBack }) => {
 
         {/* Right Panel - Agent List */}
         <div className="flex-1 rounded-xl border border-border bg-muted/30 overflow-hidden flex flex-col">
-          {displayedAgents.length > 0 ? (
-            <>
-              <div className="flex-shrink-0 px-4 py-3 border-b border-border/50">
-                <h3 className="text-sm font-medium text-foreground">
-                  {selection.type === "repo"
-                    ? selection.id
-                    : selection.id?.split("/").slice(-1)[0]}
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  {displayedAgents.length} {t("agents.title").toLowerCase()}
+          <div className="flex-shrink-0 px-4 py-3 border-b border-border/50">
+            <h3 className="text-sm font-medium text-foreground">
+              {selection.type === "all"
+                ? t("agents.allAgents")
+                : selection.type === "repo"
+                  ? selection.id
+                  : selection.id?.split("/").slice(-1)[0]}
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              {displayedAgents.length} {t("agents.title").toLowerCase()}
+              {" "}(type: {selection.type}, filtered: {filteredAgents.length})
+            </p>
+          </div>
+          <VirtualList
+            items={displayedAgents}
+            renderItem={(agent) => (
+              <div className="pb-2 px-2">
+                <AgentListItem
+                  agent={agent}
+                  isInstalled={isAgentInstalled(agent)}
+                  updateStatus={getAgentUpdateStatus(agent)}
+                  isInstalling={
+                    installMutation.isPending &&
+                    installMutation.variables?.agent.key === agent.key
+                  }
+                  onInstall={() => handleInstall(agent)}
+                />
+              </div>
+            )}
+            getItemKey={(agent) => agent.key}
+            estimatedItemHeight={100}
+            overscan={5}
+            isLoading={isLoading}
+            skeletonCount={8}
+            showSkeletonSwitches={false}
+            className="flex-1 pt-2"
+            emptyState={
+              <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground h-full">
+                <Bot size={48} className="mb-4 opacity-30" />
+                <p className="text-sm">
+                  {t("agents.noAgentsFound")}
                 </p>
               </div>
-              <div className="flex-1 overflow-y-auto p-2">
-                <div className="space-y-2">
-                  {displayedAgents.map((agent) => (
-                    <AgentListItem
-                      key={agent.key}
-                      agent={agent}
-                      isInstalled={isAgentInstalled(agent)}
-                      updateStatus={getAgentUpdateStatus(agent)}
-                      isInstalling={
-                        installMutation.isPending &&
-                        installMutation.variables?.agent.key === agent.key
-                      }
-                      onInstall={() => handleInstall(agent)}
-                    />
-                  ))}
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
-              <Bot size={48} className="mb-4 opacity-30" />
-              <p className="text-sm">{t("agents.selectToView")}</p>
-            </div>
-          )}
+            }
+          />
         </div>
       </div>
 

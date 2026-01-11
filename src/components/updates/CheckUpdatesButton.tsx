@@ -59,9 +59,7 @@ export const CheckUpdatesButton: React.FC<CheckUpdatesButtonProps> = ({
             <RefreshCcw size={16} />
           )}
           {hasUpdates && (
-            <span className="ml-1.5 text-xs font-medium">
-              {updateCount}
-            </span>
+            <span className="ml-1.5 text-xs font-medium">{updateCount}</span>
           )}
         </Button>
       </TooltipTrigger>

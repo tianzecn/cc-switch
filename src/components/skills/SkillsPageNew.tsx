@@ -16,8 +16,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, RefreshCw, Download, Compass, Sparkles, Loader2, Settings, Trash2 } from "lucide-react";
-import { CheckUpdatesButton, UpdateNotificationBar, UpdateBadge } from "@/components/updates";
+import {
+  Search,
+  RefreshCw,
+  Download,
+  Compass,
+  Sparkles,
+  Loader2,
+  Settings,
+  Trash2,
+} from "lucide-react";
+import {
+  CheckUpdatesButton,
+  UpdateNotificationBar,
+  UpdateBadge,
+} from "@/components/updates";
 import { toast } from "sonner";
 import { SkillNamespaceTree } from "./SkillNamespaceTree";
 import { SkillDiscoveryTree } from "./SkillDiscoveryTree";
@@ -90,9 +103,8 @@ export const SkillsPageNew = forwardRef<
   // 状态
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   // 列表模式：树选中状态
-  const [listSelection, setListSelection] = useState<TreeSelection>(
-    createAllSelection(),
-  );
+  const [listSelection, setListSelection] =
+    useState<TreeSelection>(createAllSelection());
   const [selectedSkill, setSelectedSkill] = useState<InstalledSkill | null>(
     null,
   );
@@ -103,9 +115,8 @@ export const SkillsPageNew = forwardRef<
   const [repoManagerOpen, setRepoManagerOpen] = useState(false);
 
   // 发现模式状态
-  const [discoverySelection, setDiscoverySelection] = useState<TreeSelection>(
-    createAllSelection(),
-  );
+  const [discoverySelection, setDiscoverySelection] =
+    useState<TreeSelection>(createAllSelection());
   const [discoveryNsSkills, setDiscoveryNsSkills] = useState<
     DiscoverableSkill[]
   >([]);
@@ -194,10 +205,13 @@ export const SkillsPageNew = forwardRef<
   }, []);
 
   // 根据 TreeSelection 计算命名空间 ID
-  const getNamespaceId = useCallback((skill: InstalledSkill): string => {
-    const repoKey = getRepoKey(skill);
-    return `${repoKey}/${skill.namespace || ""}`;
-  }, [getRepoKey]);
+  const getNamespaceId = useCallback(
+    (skill: InstalledSkill): string => {
+      const repoKey = getRepoKey(skill);
+      return `${repoKey}/${skill.namespace || ""}`;
+    },
+    [getRepoKey],
+  );
 
   // 按树选中状态和搜索过滤 Skills
   const filteredSkills = useMemo(() => {
@@ -207,9 +221,14 @@ export const SkillsPageNew = forwardRef<
     if (listSelection.type === "repo" && listSelection.repoId) {
       // 选中仓库：显示该仓库下所有 Skills
       result = result.filter((s) => getRepoKey(s) === listSelection.repoId);
-    } else if (listSelection.type === "namespace" && listSelection.namespaceId) {
+    } else if (
+      listSelection.type === "namespace" &&
+      listSelection.namespaceId
+    ) {
       // 选中命名空间：显示该命名空间下的 Skills
-      result = result.filter((s) => getNamespaceId(s) === listSelection.namespaceId);
+      result = result.filter(
+        (s) => getNamespaceId(s) === listSelection.namespaceId,
+      );
     }
     // type === "all" 时不过滤
 
@@ -241,10 +260,13 @@ export const SkillsPageNew = forwardRef<
       let updateStatus: UpdateCheckResult | undefined = undefined;
       if (installed && updateCheckResult) {
         const installedSkill = installedSkills.find(
-          (s) => s.directory.toLowerCase() === installName
+          (s) => s.directory.toLowerCase() === installName,
         );
         if (installedSkill) {
-          updateStatus = getResourceUpdateStatus(updateCheckResult, installedSkill.id);
+          updateStatus = getResourceUpdateStatus(
+            updateCheckResult,
+            installedSkill.id,
+          );
         }
       }
 
@@ -274,7 +296,15 @@ export const SkillsPageNew = forwardRef<
     }
 
     return result;
-  }, [discoverableSkills, viewMode, filterStatus, searchQuery, installedDirs, updateCheckResult, installedSkills]);
+  }, [
+    discoverableSkills,
+    viewMode,
+    filterStatus,
+    searchQuery,
+    installedDirs,
+    updateCheckResult,
+    installedSkills,
+  ]);
 
   // 发现模式按树选中状态过滤后的列表
   const filteredDiscoverySkills = useMemo(() => {
@@ -291,10 +321,13 @@ export const SkillsPageNew = forwardRef<
         let updateStatus: UpdateCheckResult | undefined = undefined;
         if (installed && updateCheckResult) {
           const installedSkill = installedSkills.find(
-            (s) => s.directory.toLowerCase() === installName
+            (s) => s.directory.toLowerCase() === installName,
           );
           if (installedSkill) {
-            updateStatus = getResourceUpdateStatus(updateCheckResult, installedSkill.id);
+            updateStatus = getResourceUpdateStatus(
+              updateCheckResult,
+              installedSkill.id,
+            );
           }
         }
 
@@ -307,10 +340,21 @@ export const SkillsPageNew = forwardRef<
     }
     // 否则显示全部
     return discoverySkills;
-  }, [discoverySelection, discoveryNsSkills, discoverySkills, installedDirs, updateCheckResult, installedSkills]);
+  }, [
+    discoverySelection,
+    discoveryNsSkills,
+    discoverySkills,
+    installedDirs,
+    updateCheckResult,
+    installedSkills,
+  ]);
 
   // 计算空状态类型
-  const emptyStateType = useMemo((): "all" | "repo" | "namespace" | "search" => {
+  const emptyStateType = useMemo(():
+    | "all"
+    | "repo"
+    | "namespace"
+    | "search" => {
     if (searchQuery.trim()) return "search";
     if (listSelection.type === "namespace") return "namespace";
     if (listSelection.type === "repo") return "repo";
@@ -357,7 +401,8 @@ export const SkillsPageNew = forwardRef<
       toast.info(t("updates.checkingRange", { count: skillIdsToCheck.length }));
 
       // 检查指定范围的 Skills 更新
-      const result = await checkSkillsUpdatesByIdsMutation.mutateAsync(skillIdsToCheck);
+      const result =
+        await checkSkillsUpdatesByIdsMutation.mutateAsync(skillIdsToCheck);
       if (result.updateCount === 0) {
         toast.success(t("updates.noUpdates"));
       }
@@ -366,12 +411,18 @@ export const SkillsPageNew = forwardRef<
         description: String(error),
       });
     }
-  }, [filteredSkills, checkSkillsUpdatesByIdsMutation, fixSkillsHashMutation, t]);
+  }, [
+    filteredSkills,
+    checkSkillsUpdatesByIdsMutation,
+    fixSkillsHashMutation,
+    t,
+  ]);
 
   const handleUpdateAll = useCallback(async () => {
     if (updatableSkillIds.length === 0) return;
     try {
-      const result = await updateSkillsBatchMutation.mutateAsync(updatableSkillIds);
+      const result =
+        await updateSkillsBatchMutation.mutateAsync(updatableSkillIds);
       if (result.successCount > 0) {
         toast.success(t("updates.updateSuccess"), {
           description: `${result.successCount} ${t("skills.title")}`,
@@ -456,7 +507,9 @@ export const SkillsPageNew = forwardRef<
     setConfirmDialog({
       isOpen: true,
       title: t("skills.uninstallAll"),
-      message: t("skills.uninstallAllConfirm", { count: filteredSkills.length }),
+      message: t("skills.uninstallAllConfirm", {
+        count: filteredSkills.length,
+      }),
       onConfirm: async () => {
         try {
           const ids = filteredSkills.map((s) => s.id);
@@ -475,7 +528,10 @@ export const SkillsPageNew = forwardRef<
     });
   };
 
-  const handleInstall = async (skill: DiscoverableSkill, scope?: InstallScope) => {
+  const handleInstall = async (
+    skill: DiscoverableSkill,
+    scope?: InstallScope,
+  ) => {
     setInstallingKey(skill.key);
     try {
       await installMutation.mutateAsync({
@@ -598,7 +654,10 @@ export const SkillsPageNew = forwardRef<
     (viewMode === "discovery" && (loadingDiscoverable || fetchingDiscoverable));
 
   return (
-    <ContentContainer variant="wide" className="h-[calc(100vh-8rem)] flex flex-col overflow-hidden">
+    <ContentContainer
+      variant="wide"
+      className="h-[calc(100vh-8rem)] flex flex-col overflow-hidden"
+    >
       {/* Header */}
       <div className="flex-shrink-0 py-4">
         {/* Title & Actions */}
@@ -634,7 +693,12 @@ export const SkillsPageNew = forwardRef<
                   {t("skills.import", "Import")}
                 </Button>
                 <CheckUpdatesButton
-                  isChecking={isCheckingUpdates || isFetchingUpdates || checkSkillsUpdatesByIdsMutation.isPending || fixSkillsHashMutation.isPending}
+                  isChecking={
+                    isCheckingUpdates ||
+                    isFetchingUpdates ||
+                    checkSkillsUpdatesByIdsMutation.isPending ||
+                    fixSkillsHashMutation.isPending
+                  }
                   onCheck={handleCheckUpdates}
                   result={updateCheckResult}
                   disabled={loading || filteredSkills.length === 0}
@@ -643,7 +707,10 @@ export const SkillsPageNew = forwardRef<
                   variant="outline"
                   size="sm"
                   onClick={handleUninstallAll}
-                  disabled={filteredSkills.length === 0 || uninstallBatchMutation.isPending}
+                  disabled={
+                    filteredSkills.length === 0 ||
+                    uninstallBatchMutation.isPending
+                  }
                   className="text-destructive hover:text-destructive"
                 >
                   <Trash2 size={16} />
@@ -660,7 +727,10 @@ export const SkillsPageNew = forwardRef<
                 onClick={handleRefresh}
                 disabled={loading}
               >
-                <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+                <RefreshCw
+                  size={16}
+                  className={loading ? "animate-spin" : ""}
+                />
                 <span className="ml-2">{t("common.refresh")}</span>
               </Button>
             )}
@@ -674,7 +744,10 @@ export const SkillsPageNew = forwardRef<
                 <TabsTrigger value="list" className="text-xs px-3 min-w-[80px]">
                   {t("common.installed")}
                 </TabsTrigger>
-                <TabsTrigger value="discovery" className="text-xs px-3 min-w-[80px]">
+                <TabsTrigger
+                  value="discovery"
+                  className="text-xs px-3 min-w-[80px]"
+                >
                   {t("common.discover")}
                 </TabsTrigger>
               </TabsList>
@@ -721,12 +794,11 @@ export const SkillsPageNew = forwardRef<
           {/* Stats */}
           <div className="text-sm text-muted-foreground whitespace-nowrap">
             {viewMode === "list" ? (
-              <>
-                {t("skills.installed", { count: stats.total })}
-              </>
+              <>{t("skills.installed", { count: stats.total })}</>
             ) : (
               <>
-                {t("skills.available", { count: discoverySkills.length })} · {t("skills.installedCount", { count: stats.total })}
+                {t("skills.available", { count: discoverySkills.length })} ·{" "}
+                {t("skills.installedCount", { count: stats.total })}
               </>
             )}
           </div>
@@ -734,7 +806,9 @@ export const SkillsPageNew = forwardRef<
           {/* 发现模式：Install All */}
           {viewMode === "discovery" && batchInstallState && (
             <BatchInstallButton
-              uninstalledCount={filteredDiscoverySkills.filter((s) => !s.installed).length}
+              uninstalledCount={
+                filteredDiscoverySkills.filter((s) => !s.installed).length
+              }
               state={batchInstallState}
               onStartInstall={handleBatchInstall}
               onCancelInstall={cancelBatchInstall}
@@ -752,17 +826,20 @@ export const SkillsPageNew = forwardRef<
       )}
 
       {/* Update Notification Bar */}
-      {updateCheckResult && !updatesDismissed && (updateCheckResult.updateCount > 0 || updateCheckResult.deletedCount > 0) && (
-        <div className="flex-shrink-0 mb-4">
-          <UpdateNotificationBar
-            result={updateCheckResult}
-            resourceLabel={t("skills.title")}
-            onUpdateAll={handleUpdateAll}
-            onDismiss={() => setUpdatesDismissed(true)}
-            isUpdating={updateSkillsBatchMutation.isPending}
-          />
-        </div>
-      )}
+      {updateCheckResult &&
+        !updatesDismissed &&
+        (updateCheckResult.updateCount > 0 ||
+          updateCheckResult.deletedCount > 0) && (
+          <div className="flex-shrink-0 mb-4">
+            <UpdateNotificationBar
+              result={updateCheckResult}
+              resourceLabel={t("skills.title")}
+              onUpdateAll={handleUpdateAll}
+              onDismiss={() => setUpdatesDismissed(true)}
+              isUpdating={updateSkillsBatchMutation.isPending}
+            />
+          </div>
+        )}
 
       {/* Main Content */}
       <div className="flex-1 flex gap-4 overflow-hidden">
@@ -922,7 +999,13 @@ const DiscoveryList: React.FC<DiscoveryListProps> = ({
             key={skill.key}
             skill={skill}
             onInstall={(scope) => onInstall(skill, scope)}
-            isInstalling={installingKey === skill.key || Boolean(batchState?.isInstalling && batchState?.currentName === skill.name)}
+            isInstalling={
+              installingKey === skill.key ||
+              Boolean(
+                batchState?.isInstalling &&
+                  batchState?.currentName === skill.name,
+              )
+            }
           />
         ))}
       </div>
@@ -934,7 +1017,10 @@ const DiscoveryList: React.FC<DiscoveryListProps> = ({
  * 发现卡片组件
  */
 interface DiscoveryCardProps {
-  skill: DiscoverableSkill & { installed: boolean; updateStatus?: UpdateCheckResult };
+  skill: DiscoverableSkill & {
+    installed: boolean;
+    updateStatus?: UpdateCheckResult;
+  };
   onInstall: (scope?: InstallScope) => void;
   isInstalling: boolean;
 }

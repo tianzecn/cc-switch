@@ -171,7 +171,9 @@ export function RepoManagerPanel({
               disabled={isRestoring}
               className="text-xs"
             >
-              <RotateCcw className={`h-3.5 w-3.5 mr-1.5 ${isRestoring ? "animate-spin" : ""}`} />
+              <RotateCcw
+                className={`h-3.5 w-3.5 mr-1.5 ${isRestoring ? "animate-spin" : ""}`}
+              />
               {t("skills.repo.restoreBuiltin")}
             </Button>
           )}
@@ -197,7 +199,10 @@ export function RepoManagerPanel({
                         {repo.owner}/{repo.name}
                       </span>
                       {repo.builtin && (
-                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] px-1.5 py-0 shrink-0"
+                        >
                           {t("skills.repo.builtin")}
                         </Badge>
                       )}

@@ -343,6 +343,12 @@ pub fn get_skills_by_namespace(
         .map_err(|e| e.to_string())
 }
 
+/// 获取 Skill 内容（SKILL.md）
+#[tauri::command]
+pub fn get_skill_content(id: String, app_state: State<'_, AppState>) -> Result<String, String> {
+    SkillService::get_skill_content(&app_state.db, &id).map_err(|e| e.to_string())
+}
+
 /// 检测 Skill 冲突（跨仓库同名）
 #[tauri::command]
 pub fn detect_skill_conflicts(app_state: State<'_, AppState>) -> Result<Vec<SkillConflict>, String> {

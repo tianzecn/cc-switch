@@ -56,5 +56,7 @@ export function isNamespaceSelected(
   selection: TreeSelection,
   namespaceId: string,
 ): boolean {
-  return selection.type === "namespace" && selection.namespaceId === namespaceId;
+  return (
+    selection.type === "namespace" && selection.namespaceId === namespaceId
+  );
 }

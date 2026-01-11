@@ -79,9 +79,15 @@ export const HooksPage: React.FC = () => {
 
   // === Discovery 模式状态 ===
   const [showRepoManager, setShowRepoManager] = useState(false);
-  const [discoveryExpandedNodes, setDiscoveryExpandedNodes] = useState<Set<string>>(new Set());
-  const [discoverySelectedNamespace, setDiscoverySelectedNamespace] = useState<string | null>(null);
-  const [discoveryNamespaceHooks, setDiscoveryNamespaceHooks] = useState<DiscoverableHook[]>([]);
+  const [discoveryExpandedNodes, setDiscoveryExpandedNodes] = useState<
+    Set<string>
+  >(new Set());
+  const [discoverySelectedNamespace, setDiscoverySelectedNamespace] = useState<
+    string | null
+  >(null);
+  const [discoveryNamespaceHooks, setDiscoveryNamespaceHooks] = useState<
+    DiscoverableHook[]
+  >([]);
 
   // Queries
   const { data: hooks, isLoading } = useInstalledHooks();
@@ -90,7 +96,8 @@ export const HooksPage: React.FC = () => {
   const changeScopeMutation = useChangeHookScope();
 
   // === Discovery 模式 Queries ===
-  const { data: discoverableHooks, isLoading: isLoadingDiscoverable } = useDiscoverableHooks();
+  const { data: discoverableHooks, isLoading: isLoadingDiscoverable } =
+    useDiscoverableHooks();
   const { data: repos = [] } = useHookRepos();
   const installMutation = useInstallHook();
   const addRepoMutation = useAddHookRepo();
@@ -221,7 +228,10 @@ export const HooksPage: React.FC = () => {
     }
   };
 
-  const handleInstallHook = async (hook: DiscoverableHook, scope?: InstallScope) => {
+  const handleInstallHook = async (
+    hook: DiscoverableHook,
+    scope?: InstallScope,
+  ) => {
     try {
       await installMutation.mutateAsync({
         hook,
@@ -261,7 +271,10 @@ export const HooksPage: React.FC = () => {
     });
   };
 
-  const handleSelectDiscoveryNamespace = (namespaceId: string, hooksInNamespace: DiscoverableHook[]) => {
+  const handleSelectDiscoveryNamespace = (
+    namespaceId: string,
+    hooksInNamespace: DiscoverableHook[],
+  ) => {
     setDiscoverySelectedNamespace(namespaceId);
     setDiscoveryNamespaceHooks(hooksInNamespace);
   };
@@ -274,7 +287,10 @@ export const HooksPage: React.FC = () => {
   };
 
   return (
-    <ContentContainer variant="wide" className="flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
+    <ContentContainer
+      variant="wide"
+      className="flex flex-col h-[calc(100vh-8rem)] overflow-hidden"
+    >
       {/* ========== 统一 Header ========== */}
       <div className="flex-shrink-0 flex items-center justify-between py-4">
         {/* 左侧: 图标 + 标题 */}
@@ -314,7 +330,9 @@ export const HooksPage: React.FC = () => {
                     <Filter size={16} className="mr-1" />
                     {selectedEventTypes.size === EVENT_TYPES.length
                       ? t("hooks.allEvents")
-                      : t("hooks.filteredEvents", { count: selectedEventTypes.size })}
+                      : t("hooks.filteredEvents", {
+                          count: selectedEventTypes.size,
+                        })}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -339,7 +357,9 @@ export const HooksPage: React.FC = () => {
               >
                 <RefreshCw
                   size={16}
-                  className={syncMutation.isPending ? "animate-spin mr-1" : "mr-1"}
+                  className={
+                    syncMutation.isPending ? "animate-spin mr-1" : "mr-1"
+                  }
                 />
                 {t("hooks.sync")}
               </Button>
@@ -356,7 +376,11 @@ export const HooksPage: React.FC = () => {
             >
               <RefreshCw
                 size={16}
-                className={refreshDiscoverableMutation.isPending ? "animate-spin mr-1" : "mr-1"}
+                className={
+                  refreshDiscoverableMutation.isPending
+                    ? "animate-spin mr-1"
+                    : "mr-1"
+                }
               />
               {t("common.refresh")}
             </Button>
@@ -371,7 +395,10 @@ export const HooksPage: React.FC = () => {
               <TabsTrigger value="list" className="text-xs px-3 min-w-[80px]">
                 {t("common.installed")}
               </TabsTrigger>
-              <TabsTrigger value="discovery" className="text-xs px-3 min-w-[80px]">
+              <TabsTrigger
+                value="discovery"
+                className="text-xs px-3 min-w-[80px]"
+              >
                 {t("common.discover")}
               </TabsTrigger>
             </TabsList>
@@ -413,8 +440,10 @@ export const HooksPage: React.FC = () => {
           {/* 发现模式：统计信息 */}
           {viewMode === "discovery" && (
             <div className="text-sm text-muted-foreground">
-              {t("hooks.available", { count: filteredDiscoverableHooks.length })} ·{" "}
-              {t("hooks.installedCount", { count: installedIds.size })}
+              {t("hooks.available", {
+                count: filteredDiscoverableHooks.length,
+              })}{" "}
+              · {t("hooks.installedCount", { count: installedIds.size })}
             </div>
           )}
         </div>
@@ -482,7 +511,8 @@ export const HooksPage: React.FC = () => {
                     {discoverySelectedNamespace.split("/").slice(-1)[0]}
                   </h3>
                   <p className="text-xs text-muted-foreground">
-                    {discoveryNamespaceHooks.length} {t("hooks.title").toLowerCase()}
+                    {discoveryNamespaceHooks.length}{" "}
+                    {t("hooks.title").toLowerCase()}
                   </p>
                 </div>
                 <div className="flex-1 overflow-y-auto p-2">
@@ -517,7 +547,8 @@ export const HooksPage: React.FC = () => {
         <CommandRepoManager
           repos={repos}
           commands={
-            (discoverableHooks || []) as unknown as import("@/hooks/useCommands").DiscoverableCommand[]
+            (discoverableHooks ||
+              []) as unknown as import("@/hooks/useCommands").DiscoverableCommand[]
           }
           onAdd={handleAddRepo}
           onRemove={handleRemoveRepo}

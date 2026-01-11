@@ -28,7 +28,11 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
             "h-full bg-primary transition-all duration-300 ease-in-out",
             indeterminate && "animate-progress-indeterminate w-1/3",
           )}
-          style={indeterminate ? undefined : { width: `${Math.min(100, Math.max(0, value))}%` }}
+          style={
+            indeterminate
+              ? undefined
+              : { width: `${Math.min(100, Math.max(0, value))}%` }
+          }
         />
       </div>
     );

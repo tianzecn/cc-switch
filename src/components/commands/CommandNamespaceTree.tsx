@@ -64,8 +64,9 @@ export const CommandNamespaceTree: React.FC<CommandNamespaceTreeProps> = ({
   onSelectionChange,
 }) => {
   const { t } = useTranslation();
-  const [expandedRepos, setExpandedRepos] = React.useState<Set<string>>(
-    new Set(["local"]), // 默认展开本地
+  // 手风琴模式：只允许一个仓库展开
+  const [expandedRepoId, setExpandedRepoId] = React.useState<string | null>(
+    "local", // 默认展开本地
   );
   const [isCreating, setIsCreating] = React.useState(false);
   const [newNamespaceName, setNewNamespaceName] = React.useState("");
@@ -149,22 +150,23 @@ export const CommandNamespaceTree: React.FC<CommandNamespaceTreeProps> = ({
     });
   }, [commands, t]);
 
-  // 点击仓库：展开 + 选中
+  // 点击仓库：手风琴模式展开/折叠 + 选中
   const handleRepoClick = (repoId: string) => {
-    // 展开仓库（如果未展开）
-    if (!expandedRepos.has(repoId)) {
-      setExpandedRepos((prev) => {
-        const next = new Set(prev);
-        next.add(repoId);
-        return next;
-      });
+    if (expandedRepoId === repoId) {
+      // 当前仓库已展开 -> 折叠并选中"全部"
+      setExpandedRepoId(null);
+      onSelectionChange(createAllSelection());
+    } else {
+      // 展开新仓库，折叠其他，自动选中该仓库
+      setExpandedRepoId(repoId);
+      onSelectionChange(createRepoSelection(repoId));
     }
-    // 选中仓库
-    onSelectionChange(createRepoSelection(repoId));
   };
 
-  // 点击命名空间：仅选中（独占）
+  // 点击命名空间：选中命名空间，确保仓库展开
   const handleNamespaceClick = (repoId: string, nsId: string) => {
+    // 确保仓库展开
+    setExpandedRepoId(repoId);
     onSelectionChange(createNamespaceSelection(repoId, nsId));
   };
 
@@ -295,7 +297,7 @@ export const CommandNamespaceTree: React.FC<CommandNamespaceTreeProps> = ({
           <RepoTreeItem
             key={repo.id}
             repo={repo}
-            isExpanded={expandedRepos.has(repo.id)}
+            isExpanded={expandedRepoId === repo.id}
             isRepoSelected={isRepoSelected(selection, repo.id)}
             selection={selection}
             namespaces={namespaces}
@@ -430,7 +432,10 @@ const RepoTreeItem: React.FC<RepoTreeItemProps> = ({
             // 查找是否可删除（空的本地命名空间）
             const nsInfo = namespaces.find((n) => n.name === ns.name);
             const canDelete =
-              repo.isLocal && nsInfo && nsInfo.commandCount === 0 && ns.name !== "";
+              repo.isLocal &&
+              nsInfo &&
+              nsInfo.commandCount === 0 &&
+              ns.name !== "";
 
             return (
               <div
@@ -447,8 +452,12 @@ const RepoTreeItem: React.FC<RepoTreeItemProps> = ({
                   size={14}
                   className={nsSelected ? "text-primary" : "text-yellow-500"}
                 />
-                <span className="flex-1 text-sm truncate">{ns.displayName}</span>
-                <span className="text-xs text-muted-foreground">{ns.count}</span>
+                <span className="flex-1 text-sm truncate">
+                  {ns.displayName}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {ns.count}
+                </span>
 
                 {canDelete && (
                   <Button

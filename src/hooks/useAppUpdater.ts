@@ -178,7 +178,7 @@ export function useAppUpdater(): UseAppUpdaterResult {
 
       // 检查是否被跳过
       const isSkipped = await appUpdaterApi.isVersionSkipped(
-        result.info.availableVersion
+        result.info.availableVersion,
       );
       if (isSkipped) {
         setPhase("upToDate");
@@ -208,7 +208,7 @@ export function useAppUpdater(): UseAppUpdaterResult {
       if (retryCountRef.current < MAX_RETRY_COUNT) {
         retryCountRef.current++;
         console.warn(
-          `[useAppUpdater] Check failed, retry ${retryCountRef.current}/${MAX_RETRY_COUNT}`
+          `[useAppUpdater] Check failed, retry ${retryCountRef.current}/${MAX_RETRY_COUNT}`,
         );
         setTimeout(() => checkUpdate(), 3000);
       }
@@ -253,11 +253,13 @@ export function useAppUpdater(): UseAppUpdaterResult {
 
             const downloaded = downloadedBytesRef.current;
             const total = prev.total;
-            const percentage = total > 0 ? Math.round((downloaded / total) * 100) : 0;
+            const percentage =
+              total > 0 ? Math.round((downloaded / total) * 100) : 0;
 
             // 计算下载速度
             const elapsedMs = Date.now() - progressStartTimeRef.current;
-            const speed = elapsedMs > 0 ? Math.round((downloaded / elapsedMs) * 1000) : 0;
+            const speed =
+              elapsedMs > 0 ? Math.round((downloaded / elapsedMs) * 1000) : 0;
 
             return {
               downloaded,
@@ -273,7 +275,7 @@ export function useAppUpdater(): UseAppUpdaterResult {
                   ...prev,
                   percentage: 100,
                 }
-              : prev
+              : prev,
           );
           // downloadAndInstall 完成后，检查是否需要手动安装（macOS 特定问题）
           // Tauri 的 downloadAndInstall 可能无法自动移动更新包到 /Applications
@@ -283,13 +285,21 @@ export function useAppUpdater(): UseAppUpdaterResult {
       // 检查是否有待安装的 macOS 更新（Tauri downloadAndInstall 可能静默失败）
       const pendingVersion = await appUpdaterApi.checkPendingMacOSUpdate();
       if (pendingVersion) {
-        console.warn("[useAppUpdater] Detected pending macOS update, attempting manual install...");
+        console.warn(
+          "[useAppUpdater] Detected pending macOS update, attempting manual install...",
+        );
         const installResult = await appUpdaterApi.tryInstallMacOSUpdate();
         if (!installResult.success) {
-          console.error("[useAppUpdater] macOS manual install failed:", installResult.error);
+          console.error(
+            "[useAppUpdater] macOS manual install failed:",
+            installResult.error,
+          );
           // 即使手动安装失败，也继续流程，让用户可以尝试重启
         } else {
-          console.info("[useAppUpdater] macOS manual install successful:", installResult.installed_version);
+          console.info(
+            "[useAppUpdater] macOS manual install successful:",
+            installResult.installed_version,
+          );
         }
       }
 
@@ -304,7 +314,7 @@ export function useAppUpdater(): UseAppUpdaterResult {
       if (retryCountRef.current < MAX_RETRY_COUNT) {
         retryCountRef.current++;
         console.warn(
-          `[useAppUpdater] Download failed, retry ${retryCountRef.current}/${MAX_RETRY_COUNT}`
+          `[useAppUpdater] Download failed, retry ${retryCountRef.current}/${MAX_RETRY_COUNT}`,
         );
         setTimeout(() => downloadUpdate(), 3000);
       }
@@ -359,7 +369,7 @@ export function useAppUpdater(): UseAppUpdaterResult {
         setError(error);
       }
     },
-    [setProxyMutation]
+    [setProxyMutation],
   );
 
   /**
@@ -401,7 +411,10 @@ export function useAppUpdater(): UseAppUpdaterResult {
           setTimeout(() => checkUpdate(), 3000);
         }
       } catch (err) {
-        console.warn("[useAppUpdater] Failed to check auto-update status:", err);
+        console.warn(
+          "[useAppUpdater] Failed to check auto-update status:",
+          err,
+        );
       }
     };
 
@@ -421,7 +434,12 @@ export function useAppUpdater(): UseAppUpdaterResult {
     }, intervalMs);
 
     return () => clearInterval(interval);
-  }, [config.auto_check_enabled, config.check_interval_hours, phase, checkUpdate]);
+  }, [
+    config.auto_check_enabled,
+    config.check_interval_hours,
+    phase,
+    checkUpdate,
+  ]);
 
   return useMemo(
     () => ({
@@ -455,6 +473,6 @@ export function useAppUpdater(): UseAppUpdaterResult {
       dismissUpdate,
       retryLastAction,
       configQuery.isLoading,
-    ]
+    ],
   );
 }

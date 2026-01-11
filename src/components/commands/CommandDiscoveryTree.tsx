@@ -192,7 +192,9 @@ export const CommandDiscoveryTree: React.FC<CommandDiscoveryTreeProps> = ({
       toggleNode(node.id);
     }
     // 获取仓库下所有命令
-    const cmds = node.children.flatMap((ns) => ns.children.map((c) => c.command));
+    const cmds = node.children.flatMap((ns) =>
+      ns.children.map((c) => c.command),
+    );
     onSelectionChange({
       type: "repo",
       id: node.id,
@@ -210,6 +212,15 @@ export const CommandDiscoveryTree: React.FC<CommandDiscoveryTreeProps> = ({
     });
   };
 
+  // 处理"全部"选中
+  const handleSelectAll = () => {
+    onSelectionChange({
+      type: "all",
+      id: null,
+      commands: [],
+    });
+  };
+
   if (tree.length === 0) {
     return (
       <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
@@ -218,8 +229,32 @@ export const CommandDiscoveryTree: React.FC<CommandDiscoveryTreeProps> = ({
     );
   }
 
+  const totalCount = commands.length;
+
   return (
     <div className="space-y-1">
+      {/* 全部节点 */}
+      <div
+        className={cn(
+          "flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors",
+          selection.type === "all"
+            ? "bg-primary/15 border-l-2 border-primary"
+            : "hover:bg-muted",
+        )}
+        onClick={handleSelectAll}
+      >
+        <span
+          className={cn(
+            "flex-1 text-sm font-medium",
+            selection.type === "all" && "text-primary",
+          )}
+        >
+          {t("common.all")}
+        </span>
+        <span className="text-xs text-muted-foreground">{totalCount}</span>
+      </div>
+
+      {/* 仓库列表 */}
       {tree.map((repo) => (
         <RepoTreeNode
           key={repo.id}
@@ -290,7 +325,9 @@ const RepoTreeNode: React.FC<RepoTreeNodeProps> = ({
             <NamespaceTreeNode
               key={ns.id}
               node={ns}
-              isSelected={selection.type === "namespace" && selection.id === ns.id}
+              isSelected={
+                selection.type === "namespace" && selection.id === ns.id
+              }
               onSelect={() => onSelectNamespace(ns)}
             />
           ))}

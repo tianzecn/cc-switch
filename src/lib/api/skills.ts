@@ -238,4 +238,9 @@ export const skillsApi = {
   async detectConflicts(): Promise<SkillConflict[]> {
     return await invoke("detect_skill_conflicts");
   },
+
+  /** 获取 Skill 内容（SKILL.md） */
+  async getContent(id: string): Promise<string> {
+    return await invoke("get_skill_content", { id });
+  },
 };

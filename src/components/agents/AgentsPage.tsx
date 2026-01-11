@@ -37,7 +37,10 @@ import {
 } from "@/hooks/useAgents";
 import { useBatchInstallAgents } from "@/hooks/useBatchInstallAgents";
 import { ContentContainer } from "@/components/layout";
-import { InstallScopeDialog, type InstallScope } from "@/components/common/InstallScopeDialog";
+import {
+  InstallScopeDialog,
+  type InstallScope,
+} from "@/components/common/InstallScopeDialog";
 import {
   useCheckAgentsUpdates,
   useCheckAgentsUpdatesByIds,
@@ -47,13 +50,21 @@ import {
   getResourceUpdateStatus,
   type UpdateCheckResult,
 } from "@/hooks/useResourceUpdates";
-import { CheckUpdatesButton, UpdateNotificationBar, UpdateBadge } from "@/components/updates";
+import {
+  CheckUpdatesButton,
+  UpdateNotificationBar,
+  UpdateBadge,
+} from "@/components/updates";
 import { AgentNamespaceTree } from "./AgentNamespaceTree";
 import { GroupedAgentsList } from "./GroupedAgentsList";
 import { AgentImport } from "./AgentImport";
-import { AgentDiscoveryTree, type DiscoverySelection } from "./AgentDiscoveryTree";
+import {
+  AgentDiscoveryTree,
+  type DiscoverySelection,
+} from "./AgentDiscoveryTree";
 import { BatchInstallAgentsButton } from "./BatchInstallAgentsButton";
 import { CommandRepoManager } from "@/components/commands/CommandRepoManager";
+import { AgentDetailPanel } from "./AgentDetailPanel";
 import { toast } from "sonner";
 import { settingsApi } from "@/lib/api";
 import type { TreeSelection } from "@/types/tree";
@@ -68,18 +79,24 @@ type ViewMode = "list" | "discovery" | "import";
 export const AgentsPage: React.FC = () => {
   const { t } = useTranslation();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
-  const [selection, setSelection] = useState<TreeSelection>(createAllSelection());
-  const [selectedAgent, setSelectedAgent] = useState<InstalledAgent | null>(null);
+  const [selection, setSelection] =
+    useState<TreeSelection>(createAllSelection());
+  const [selectedAgent, setSelectedAgent] = useState<InstalledAgent | null>(
+    null,
+  );
   const [searchQuery, setSearchQuery] = useState("");
 
   // === Discovery 模式状态 ===
   const [showRepoManager, setShowRepoManager] = useState(false);
-  const [discoveryExpandedNodes, setDiscoveryExpandedNodes] = useState<Set<string>>(new Set());
-  const [discoverySelection, setDiscoverySelection] = useState<DiscoverySelection>({
-    type: "all",
-    id: null,
-    agents: [],
-  });
+  const [discoveryExpandedNodes, setDiscoveryExpandedNodes] = useState<
+    Set<string>
+  >(new Set());
+  const [discoverySelection, setDiscoverySelection] =
+    useState<DiscoverySelection>({
+      type: "all",
+      id: null,
+      agents: [],
+    });
 
   // Queries
   const { data: agents, isLoading } = useInstalledAgents();
@@ -91,7 +108,8 @@ export const AgentsPage: React.FC = () => {
   const changeScopeMutation = useChangeAgentScope();
 
   // === Discovery 模式 Queries ===
-  const { data: discoverableAgents, isLoading: isLoadingDiscoverable } = useDiscoverableAgents();
+  const { data: discoverableAgents, isLoading: isLoadingDiscoverable } =
+    useDiscoverableAgents();
   const { data: repos = [] } = useAgentRepos();
   const installMutation = useInstallAgent();
   const addRepoMutation = useAddAgentRepo();
@@ -225,13 +243,36 @@ export const AgentsPage: React.FC = () => {
     });
   }, [discoverableAgents, searchQuery, viewMode]);
 
+  // 按仓库分组排序的 agents 列表（用于 "全部" 模式）
+  const sortedFilteredDiscoverableAgents = useMemo(() => {
+    if (filteredDiscoverableAgents.length === 0) return [];
+    return [...filteredDiscoverableAgents].sort((a, b) => {
+      // 先按仓库排序
+      const repoCompare = `${a.repoOwner}/${a.repoName}`.localeCompare(
+        `${b.repoOwner}/${b.repoName}`,
+      );
+      if (repoCompare !== 0) return repoCompare;
+      // 再按命名空间排序
+      const nsCompare = (a.namespace || "").localeCompare(b.namespace || "");
+      if (nsCompare !== 0) return nsCompare;
+      // 最后按名称排序
+      return a.name.localeCompare(b.name);
+    });
+  }, [filteredDiscoverableAgents]);
+
   // 当前显示的 agent 列表（根据选择状态）
   const displayedDiscoveryAgents = useMemo(() => {
-    if (discoverySelection.type !== "all" && discoverySelection.agents.length > 0) {
+    // 全部模式：使用排序后的所有 agents
+    if (discoverySelection.type === "all") {
+      return sortedFilteredDiscoverableAgents;
+    }
+    // 仓库/命名空间模式：使用选择的 agents
+    if (discoverySelection.agents.length > 0) {
       return discoverySelection.agents;
     }
-    return [];
-  }, [discoverySelection]);
+    // fallback：返回排序后的所有 agents
+    return sortedFilteredDiscoverableAgents;
+  }, [discoverySelection.type, discoverySelection.agents, sortedFilteredDiscoverableAgents]);
 
   // 计算未安装 agent 数量（基于当前显示的 agents）
   const uninstalledCount = useMemo(() => {
@@ -280,7 +321,8 @@ export const AgentsPage: React.FC = () => {
       toast.info(t("updates.checkingRange", { count: agentIdsToCheck.length }));
 
       // 检查指定范围的 Agents 更新
-      const result = await checkAgentsUpdatesByIdsMutation.mutateAsync(agentIdsToCheck);
+      const result =
+        await checkAgentsUpdatesByIdsMutation.mutateAsync(agentIdsToCheck);
       if (result.updateCount === 0) {
         toast.success(t("updates.noUpdates"));
       }
@@ -289,7 +331,12 @@ export const AgentsPage: React.FC = () => {
         description: String(error),
       });
     }
-  }, [filteredAgents, checkAgentsUpdatesByIdsMutation, fixAgentsHashMutation, t]);
+  }, [
+    filteredAgents,
+    checkAgentsUpdatesByIdsMutation,
+    fixAgentsHashMutation,
+    t,
+  ]);
 
   const handleUpdateAll = useCallback(async () => {
     if (updatableIds.length === 0) return;
@@ -297,11 +344,15 @@ export const AgentsPage: React.FC = () => {
     try {
       const result = await updateBatchMutation.mutateAsync(updatableIds);
       if (result.successCount > 0) {
-        toast.success(t("updates.updateSuccess", { count: result.successCount }));
+        toast.success(
+          t("updates.updateSuccess", { count: result.successCount }),
+        );
         setUpdatesDismissed(true);
       }
       if (result.failedCount > 0) {
-        toast.error(t("updates.updatePartialFailed", { count: result.failedCount }));
+        toast.error(
+          t("updates.updatePartialFailed", { count: result.failedCount }),
+        );
       }
     } catch (error) {
       toast.error(t("updates.error.updateFailed"), {
@@ -411,7 +462,10 @@ export const AgentsPage: React.FC = () => {
     }
   };
 
-  const handleInstallAgent = async (agent: DiscoverableAgent, scope?: InstallScope) => {
+  const handleInstallAgent = async (
+    agent: DiscoverableAgent,
+    scope?: InstallScope,
+  ) => {
     try {
       await installMutation.mutateAsync({
         agent,
@@ -463,7 +517,9 @@ export const AgentsPage: React.FC = () => {
     return installedIds.has(id);
   };
 
-  const getAgentUpdateStatus = (agent: DiscoverableAgent): UpdateCheckResult | undefined => {
+  const getAgentUpdateStatus = (
+    agent: DiscoverableAgent,
+  ): UpdateCheckResult | undefined => {
     if (!updateCheckResult) return undefined;
     const id = agent.namespace
       ? `${agent.namespace}/${agent.filename}`
@@ -477,7 +533,10 @@ export const AgentsPage: React.FC = () => {
   }
 
   return (
-    <ContentContainer variant="wide" className="flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
+    <ContentContainer
+      variant="wide"
+      className="flex flex-col h-[calc(100vh-8rem)] overflow-hidden"
+    >
       {/* ========== 统一 Header ========== */}
       <div className="flex-shrink-0 flex items-center justify-between py-4">
         {/* 左侧: 图标 + 标题 */}
@@ -521,7 +580,12 @@ export const AgentsPage: React.FC = () => {
           {viewMode === "list" && (
             <>
               <CheckUpdatesButton
-                isChecking={isCheckingUpdates || isFetchingUpdates || checkAgentsUpdatesByIdsMutation.isPending || fixAgentsHashMutation.isPending}
+                isChecking={
+                  isCheckingUpdates ||
+                  isFetchingUpdates ||
+                  checkAgentsUpdatesByIdsMutation.isPending ||
+                  fixAgentsHashMutation.isPending
+                }
                 onCheck={handleCheckUpdates}
                 result={updateCheckResult}
                 disabled={isLoading}
@@ -551,7 +615,11 @@ export const AgentsPage: React.FC = () => {
             >
               <RefreshCw
                 size={16}
-                className={refreshDiscoverableMutation.isPending ? "animate-spin mr-1" : "mr-1"}
+                className={
+                  refreshDiscoverableMutation.isPending
+                    ? "animate-spin mr-1"
+                    : "mr-1"
+                }
               />
               {t("common.refresh")}
             </Button>
@@ -566,7 +634,10 @@ export const AgentsPage: React.FC = () => {
               <TabsTrigger value="list" className="text-xs px-3 min-w-[80px]">
                 {t("common.installed")}
               </TabsTrigger>
-              <TabsTrigger value="discovery" className="text-xs px-3 min-w-[80px]">
+              <TabsTrigger
+                value="discovery"
+                className="text-xs px-3 min-w-[80px]"
+              >
                 {t("common.discover")}
               </TabsTrigger>
             </TabsList>
@@ -606,8 +677,10 @@ export const AgentsPage: React.FC = () => {
           {viewMode === "discovery" && (
             <>
               <div className="text-sm text-muted-foreground">
-                {t("agents.available", { count: filteredDiscoverableAgents.length })} ·{" "}
-                {t("agents.installedCount", { count: installedIds.size })}
+                {t("agents.available", {
+                  count: filteredDiscoverableAgents.length,
+                })}{" "}
+                · {t("agents.installedCount", { count: installedIds.size })}
               </div>
               {uninstalledCount > 0 && (
                 <BatchInstallAgentsButton
@@ -623,17 +696,21 @@ export const AgentsPage: React.FC = () => {
       </div>
 
       {/* Update Notification Bar */}
-      {viewMode === "list" && updateCheckResult && !updatesDismissed && (updateCheckResult.updateCount > 0 || updateCheckResult.deletedCount > 0) && (
-        <div className="flex-shrink-0 mb-4">
-          <UpdateNotificationBar
-            result={updateCheckResult}
-            resourceLabel={t("agents.title")}
-            onDismiss={() => setUpdatesDismissed(true)}
-            onUpdateAll={handleUpdateAll}
-            isUpdating={updateBatchMutation.isPending}
-          />
-        </div>
-      )}
+      {viewMode === "list" &&
+        updateCheckResult &&
+        !updatesDismissed &&
+        (updateCheckResult.updateCount > 0 ||
+          updateCheckResult.deletedCount > 0) && (
+          <div className="flex-shrink-0 mb-4">
+            <UpdateNotificationBar
+              result={updateCheckResult}
+              resourceLabel={t("agents.title")}
+              onDismiss={() => setUpdatesDismissed(true)}
+              onUpdateAll={handleUpdateAll}
+              isUpdating={updateBatchMutation.isPending}
+            />
+          </div>
+        )}
 
       {/* ========== 已安装模式内容 ========== */}
       {viewMode === "list" && (
@@ -666,6 +743,17 @@ export const AgentsPage: React.FC = () => {
               updateCheckResult={updateCheckResult}
             />
           </div>
+
+          {/* Right Sidebar - Agent Detail Panel */}
+          {selectedAgent && (
+            <div className="w-80 flex-shrink-0">
+              <AgentDetailPanel
+                agent={selectedAgent}
+                onClose={() => setSelectedAgent(null)}
+                onOpenEditor={() => handleOpenEditor(selectedAgent.id)}
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -700,18 +788,20 @@ export const AgentsPage: React.FC = () => {
           {/* Right Panel - Agent List */}
           <div className="flex-1 rounded-xl border border-border bg-muted/30 overflow-hidden flex flex-col">
             <div className="flex-shrink-0 px-4 py-3 border-b border-border/50">
-              <h3 className="text-sm font-medium text-muted-foreground">
+              <h3 className="text-sm font-medium text-foreground">
                 {discoverySelection.type === "all"
-                  ? t("agents.selectToView")
-                  : t("agents.agentsInSelection", { count: displayedDiscoveryAgents.length })}
+                  ? t("agents.allAgents")
+                  : discoverySelection.type === "repo"
+                    ? discoverySelection.id
+                    : discoverySelection.id?.split("/").slice(-1)[0]}
               </h3>
+              <p className="text-xs text-muted-foreground">
+                {displayedDiscoveryAgents.length}{" "}
+                {t("agents.title").toLowerCase()}
+              </p>
             </div>
-            <div className="flex-1 overflow-y-auto p-2">
-              {displayedDiscoveryAgents.length === 0 ? (
-                <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
-                  {t("agents.selectRepoOrNamespace")}
-                </div>
-              ) : (
+            {displayedDiscoveryAgents.length > 0 ? (
+              <div className="flex-1 overflow-y-auto p-2">
                 <div className="space-y-2">
                   {displayedDiscoveryAgents.map((agent) => (
                     <AgentListItem
@@ -725,8 +815,13 @@ export const AgentsPage: React.FC = () => {
                     />
                   ))}
                 </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
+                <Bot size={48} className="mb-4 opacity-30" />
+                <p className="text-sm">{t("agents.noAgentsFound")}</p>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -736,7 +831,8 @@ export const AgentsPage: React.FC = () => {
         <CommandRepoManager
           repos={repos}
           commands={
-            (discoverableAgents || []) as unknown as import("@/hooks/useCommands").DiscoverableCommand[]
+            (discoverableAgents ||
+              []) as unknown as import("@/hooks/useCommands").DiscoverableCommand[]
           }
           onAdd={handleAddRepo}
           onRemove={handleRemoveRepo}
@@ -789,9 +885,7 @@ function AgentListItem({
               {t("common.installed")}
             </span>
           )}
-          {updateStatus?.hasUpdate && (
-            <UpdateBadge status={updateStatus} />
-          )}
+          {updateStatus?.hasUpdate && <UpdateBadge status={updateStatus} />}
         </div>
         {agent.description && (
           <p className="text-sm text-muted-foreground mt-1 line-clamp-2">

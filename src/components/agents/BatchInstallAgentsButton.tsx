@@ -25,7 +25,9 @@ interface BatchInstallAgentsButtonProps {
  * 2. 安装中：显示进度条和当前 Agent 名称
  * 3. 已完成：自动隐藏或显示结果
  */
-export const BatchInstallAgentsButton: React.FC<BatchInstallAgentsButtonProps> = ({
+export const BatchInstallAgentsButton: React.FC<
+  BatchInstallAgentsButtonProps
+> = ({
   uninstalledCount,
   state,
   onStartInstall,
@@ -120,10 +122,9 @@ interface BatchInstallAgentsProgressProps {
   onCancel: () => void;
 }
 
-export const BatchInstallAgentsProgress: React.FC<BatchInstallAgentsProgressProps> = ({
-  state,
-  onCancel,
-}) => {
+export const BatchInstallAgentsProgress: React.FC<
+  BatchInstallAgentsProgressProps
+> = ({ state, onCancel }) => {
   const { t } = useTranslation();
 
   if (!state.isInstalling) {
@@ -152,7 +153,12 @@ export const BatchInstallAgentsProgress: React.FC<BatchInstallAgentsProgressProp
         </div>
         <Progress value={progress} className="h-1 mt-1" />
       </div>
-      <Button variant="ghost" size="icon" onClick={onCancel} className="h-6 w-6">
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onCancel}
+        className="h-6 w-6"
+      >
         <X size={14} />
       </Button>
     </div>

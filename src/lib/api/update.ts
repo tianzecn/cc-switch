@@ -129,7 +129,9 @@ export const updateApi = {
   },
 
   /** 检查指定 Commands 的更新（按仓库/命名空间过滤） */
-  async checkCommandsUpdatesByIds(commandIds: string[]): Promise<BatchCheckResult> {
+  async checkCommandsUpdatesByIds(
+    commandIds: string[],
+  ): Promise<BatchCheckResult> {
     return await invoke("check_commands_updates_by_ids", { commandIds });
   },
 

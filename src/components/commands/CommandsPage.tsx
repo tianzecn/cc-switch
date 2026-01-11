@@ -55,7 +55,11 @@ import {
   getResourceUpdateStatus,
   type UpdateCheckResult,
 } from "@/hooks/useResourceUpdates";
-import { CheckUpdatesButton, UpdateNotificationBar, UpdateBadge } from "@/components/updates";
+import {
+  CheckUpdatesButton,
+  UpdateNotificationBar,
+  UpdateBadge,
+} from "@/components/updates";
 import { CommandNamespaceTree } from "./CommandNamespaceTree";
 import { GroupedCommandsList } from "./GroupedCommandsList";
 import { CommandDetailPanel } from "./CommandDetailPanel";
@@ -84,11 +88,11 @@ export const CommandsPage: React.FC = () => {
   const { t } = useTranslation();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   // 树选中状态（使用 TreeSelection 类型）
-  const [listSelection, setListSelection] = useState<TreeSelection>(
-    createAllSelection(),
-  );
+  const [listSelection, setListSelection] =
+    useState<TreeSelection>(createAllSelection());
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCommand, setSelectedCommand] = useState<InstalledCommand | null>(null);
+  const [selectedCommand, setSelectedCommand] =
+    useState<InstalledCommand | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
     title: string;
@@ -98,12 +102,15 @@ export const CommandsPage: React.FC = () => {
 
   // === Discovery 模式状态 ===
   const [showRepoManager, setShowRepoManager] = useState(false);
-  const [discoveryExpandedNodes, setDiscoveryExpandedNodes] = useState<Set<string>>(new Set());
-  const [discoverySelection, setDiscoverySelection] = useState<DiscoverySelection>({
-    type: "all",
-    id: null,
-    commands: [],
-  });
+  const [discoveryExpandedNodes, setDiscoveryExpandedNodes] = useState<
+    Set<string>
+  >(new Set());
+  const [discoverySelection, setDiscoverySelection] =
+    useState<DiscoverySelection>({
+      type: "all",
+      id: null,
+      commands: [],
+    });
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
 
   // Queries
@@ -116,7 +123,8 @@ export const CommandsPage: React.FC = () => {
   const changeScopeMutation = useChangeCommandScope();
 
   // === Discovery 模式 Queries ===
-  const { data: discoverableCommands, isLoading: isLoadingDiscoverable } = useDiscoverableCommands();
+  const { data: discoverableCommands, isLoading: isLoadingDiscoverable } =
+    useDiscoverableCommands();
   const { data: repos = [] } = useCommandRepos();
   const installMutation = useInstallCommand();
   const addRepoMutation = useAddCommandRepo();
@@ -199,13 +207,36 @@ export const CommandsPage: React.FC = () => {
     });
   }, [discoverableCommands, searchQuery, categoryFilter, viewMode]);
 
+  // 按仓库分组排序的命令列表（用于 "全部" 模式）
+  const sortedFilteredDiscoverableCommands = useMemo(() => {
+    if (filteredDiscoverableCommands.length === 0) return [];
+    return [...filteredDiscoverableCommands].sort((a, b) => {
+      // 先按仓库排序
+      const repoCompare = `${a.repoOwner}/${a.repoName}`.localeCompare(
+        `${b.repoOwner}/${b.repoName}`,
+      );
+      if (repoCompare !== 0) return repoCompare;
+      // 再按命名空间排序
+      const nsCompare = (a.namespace || "").localeCompare(b.namespace || "");
+      if (nsCompare !== 0) return nsCompare;
+      // 最后按名称排序
+      return a.name.localeCompare(b.name);
+    });
+  }, [filteredDiscoverableCommands]);
+
   // 当前显示的命令列表（根据选择状态）
   const displayedDiscoveryCommands = useMemo(() => {
-    if (discoverySelection.type !== "all" && discoverySelection.commands.length > 0) {
+    // 全部模式：使用排序后的所有命令
+    if (discoverySelection.type === "all") {
+      return sortedFilteredDiscoverableCommands;
+    }
+    // 仓库/命名空间模式：使用选择的命令
+    if (discoverySelection.commands.length > 0) {
       return discoverySelection.commands;
     }
-    return [];
-  }, [discoverySelection]);
+    // fallback：返回排序后的所有命令
+    return sortedFilteredDiscoverableCommands;
+  }, [discoverySelection.type, discoverySelection.commands, sortedFilteredDiscoverableCommands]);
 
   // 计算未安装命令数量（基于当前显示的命令）
   const uninstalledCount = useMemo(() => {
@@ -241,8 +272,13 @@ export const CommandsPage: React.FC = () => {
     // 按树选中状态过滤
     if (listSelection.type === "repo" && listSelection.repoId) {
       result = result.filter((c) => getRepoKey(c) === listSelection.repoId);
-    } else if (listSelection.type === "namespace" && listSelection.namespaceId) {
-      result = result.filter((c) => getNamespaceId(c) === listSelection.namespaceId);
+    } else if (
+      listSelection.type === "namespace" &&
+      listSelection.namespaceId
+    ) {
+      result = result.filter(
+        (c) => getNamespaceId(c) === listSelection.namespaceId,
+      );
     }
     // type === "all" 时不过滤
 
@@ -261,7 +297,11 @@ export const CommandsPage: React.FC = () => {
   }, [commands, listSelection, searchQuery, getRepoKey, getNamespaceId]);
 
   // 计算空状态类型
-  const emptyStateType = useMemo((): "all" | "repo" | "namespace" | "search" => {
+  const emptyStateType = useMemo(():
+    | "all"
+    | "repo"
+    | "namespace"
+    | "search" => {
     if (searchQuery.trim()) return "search";
     if (listSelection.type === "namespace") return "namespace";
     if (listSelection.type === "repo") return "repo";
@@ -294,10 +334,13 @@ export const CommandsPage: React.FC = () => {
       }
 
       // 显示检查范围提示
-      toast.info(t("updates.checkingRange", { count: commandIdsToCheck.length }));
+      toast.info(
+        t("updates.checkingRange", { count: commandIdsToCheck.length }),
+      );
 
       // 检查指定范围的 Commands 更新
-      const result = await checkCommandsUpdatesByIdsMutation.mutateAsync(commandIdsToCheck);
+      const result =
+        await checkCommandsUpdatesByIdsMutation.mutateAsync(commandIdsToCheck);
       if (result.updateCount === 0) {
         toast.success(t("updates.noUpdates"));
       }
@@ -306,7 +349,12 @@ export const CommandsPage: React.FC = () => {
         description: String(error),
       });
     }
-  }, [filteredCommands, checkCommandsUpdatesByIdsMutation, fixCommandsHashMutation, t]);
+  }, [
+    filteredCommands,
+    checkCommandsUpdatesByIdsMutation,
+    fixCommandsHashMutation,
+    t,
+  ]);
 
   const handleUpdateAll = useCallback(async () => {
     if (updatableIds.length === 0) return;
@@ -314,11 +362,15 @@ export const CommandsPage: React.FC = () => {
     try {
       const result = await updateBatchMutation.mutateAsync(updatableIds);
       if (result.successCount > 0) {
-        toast.success(t("updates.updateSuccess", { count: result.successCount }));
+        toast.success(
+          t("updates.updateSuccess", { count: result.successCount }),
+        );
         setUpdatesDismissed(true);
       }
       if (result.failedCount > 0) {
-        toast.error(t("updates.updatePartialFailed", { count: result.failedCount }));
+        toast.error(
+          t("updates.updatePartialFailed", { count: result.failedCount }),
+        );
       }
     } catch (error) {
       toast.error(t("updates.error.updateFailed"), {
@@ -327,7 +379,11 @@ export const CommandsPage: React.FC = () => {
     }
   }, [updatableIds, updateBatchMutation, t]);
 
-  const handleToggleApp = async (id: string, app: AppType, enabled: boolean) => {
+  const handleToggleApp = async (
+    id: string,
+    app: AppType,
+    enabled: boolean,
+  ) => {
     try {
       await toggleAppMutation.mutateAsync({ id, app, enabled });
     } catch (error) {
@@ -337,7 +393,10 @@ export const CommandsPage: React.FC = () => {
     }
   };
 
-  const handleScopeChange = async (commandId: string, newScope: InstallScope) => {
+  const handleScopeChange = async (
+    commandId: string,
+    newScope: InstallScope,
+  ) => {
     try {
       await changeScopeMutation.mutateAsync({
         id: commandId,
@@ -370,9 +429,12 @@ export const CommandsPage: React.FC = () => {
           if (selectedCommand?.id === commandId) {
             setSelectedCommand(null);
           }
-          toast.success(t("commands.uninstallSuccess", { name: command.name }), {
-            closeButton: true,
-          });
+          toast.success(
+            t("commands.uninstallSuccess", { name: command.name }),
+            {
+              closeButton: true,
+            },
+          );
         } catch (error) {
           toast.error(t("common.error"), {
             description: String(error),
@@ -398,7 +460,9 @@ export const CommandsPage: React.FC = () => {
     setConfirmDialog({
       isOpen: true,
       title: t("commands.uninstallAll"),
-      message: t("commands.uninstallAllConfirm", { count: filteredCommands.length }),
+      message: t("commands.uninstallAllConfirm", {
+        count: filteredCommands.length,
+      }),
       onConfirm: async () => {
         try {
           const ids = filteredCommands.map((c) => c.id);
@@ -429,7 +493,10 @@ export const CommandsPage: React.FC = () => {
     }
   };
 
-  const handleInstallCommand = async (command: DiscoverableCommand, scope?: InstallScope) => {
+  const handleInstallCommand = async (
+    command: DiscoverableCommand,
+    scope?: InstallScope,
+  ) => {
     try {
       await installMutation.mutateAsync({
         command,
@@ -500,7 +567,9 @@ export const CommandsPage: React.FC = () => {
     return installedIds.has(id);
   };
 
-  const getCommandUpdateStatus = (cmd: DiscoverableCommand): UpdateCheckResult | undefined => {
+  const getCommandUpdateStatus = (
+    cmd: DiscoverableCommand,
+  ): UpdateCheckResult | undefined => {
     if (!updateCheckResult) return undefined;
     const id = cmd.namespace
       ? `${cmd.namespace}/${cmd.filename}`
@@ -514,7 +583,10 @@ export const CommandsPage: React.FC = () => {
   }
 
   return (
-    <ContentContainer variant="wide" className="flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
+    <ContentContainer
+      variant="wide"
+      className="flex flex-col h-[calc(100vh-8rem)] overflow-hidden"
+    >
       {/* ========== 统一 Header ========== */}
       <div className="flex-shrink-0 flex items-center justify-between py-4">
         {/* 左侧: 图标 + 标题 */}
@@ -556,7 +628,12 @@ export const CommandsPage: React.FC = () => {
                 {t("commands.import")}
               </Button>
               <CheckUpdatesButton
-                isChecking={isCheckingUpdates || isFetchingUpdates || checkCommandsUpdatesByIdsMutation.isPending || fixCommandsHashMutation.isPending}
+                isChecking={
+                  isCheckingUpdates ||
+                  isFetchingUpdates ||
+                  checkCommandsUpdatesByIdsMutation.isPending ||
+                  fixCommandsHashMutation.isPending
+                }
                 onCheck={handleCheckUpdates}
                 result={updateCheckResult}
                 disabled={isLoading}
@@ -565,7 +642,10 @@ export const CommandsPage: React.FC = () => {
                 variant="outline"
                 size="sm"
                 onClick={handleUninstallAll}
-                disabled={filteredCommands.length === 0 || uninstallBatchMutation.isPending}
+                disabled={
+                  filteredCommands.length === 0 ||
+                  uninstallBatchMutation.isPending
+                }
                 className="text-destructive hover:text-destructive"
               >
                 <Trash2 size={16} className="mr-1" />
@@ -584,7 +664,11 @@ export const CommandsPage: React.FC = () => {
             >
               <RefreshCw
                 size={16}
-                className={refreshDiscoverableMutation.isPending ? "animate-spin mr-1" : "mr-1"}
+                className={
+                  refreshDiscoverableMutation.isPending
+                    ? "animate-spin mr-1"
+                    : "mr-1"
+                }
               />
               {t("common.refresh")}
             </Button>
@@ -599,7 +683,10 @@ export const CommandsPage: React.FC = () => {
               <TabsTrigger value="list" className="text-xs px-3 min-w-[80px]">
                 {t("common.installed")}
               </TabsTrigger>
-              <TabsTrigger value="discovery" className="text-xs px-3 min-w-[80px]">
+              <TabsTrigger
+                value="discovery"
+                className="text-xs px-3 min-w-[80px]"
+              >
                 {t("common.discover")}
               </TabsTrigger>
             </TabsList>
@@ -620,7 +707,11 @@ export const CommandsPage: React.FC = () => {
               type="text"
               placeholder={t("commands.searchPlaceholder")}
               value={searchQuery}
-              onChange={(e) => viewMode === "list" ? handleSearchChange(e.target.value) : setSearchQuery(e.target.value)}
+              onChange={(e) =>
+                viewMode === "list"
+                  ? handleSearchChange(e.target.value)
+                  : setSearchQuery(e.target.value)
+              }
               className="pl-9"
             />
           </div>
@@ -643,7 +734,9 @@ export const CommandsPage: React.FC = () => {
                   <SelectValue placeholder={t("commands.allCategories")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">{t("commands.allCategories")}</SelectItem>
+                  <SelectItem value="all">
+                    {t("commands.allCategories")}
+                  </SelectItem>
                   {categories.map((cat) => (
                     <SelectItem key={cat} value={cat}>
                       {cat}
@@ -652,8 +745,10 @@ export const CommandsPage: React.FC = () => {
                 </SelectContent>
               </Select>
               <div className="text-sm text-muted-foreground">
-                {t("commands.available", { count: filteredDiscoverableCommands.length })} ·{" "}
-                {t("commands.installedCount", { count: installedIds.size })}
+                {t("commands.available", {
+                  count: filteredDiscoverableCommands.length,
+                })}{" "}
+                · {t("commands.installedCount", { count: installedIds.size })}
               </div>
               <BatchInstallCommandsButton
                 uninstalledCount={uninstalledCount}
@@ -672,17 +767,21 @@ export const CommandsPage: React.FC = () => {
       )}
 
       {/* Update Notification Bar (只在 list 模式显示) */}
-      {viewMode === "list" && updateCheckResult && !updatesDismissed && (updateCheckResult.updateCount > 0 || updateCheckResult.deletedCount > 0) && (
-        <div className="flex-shrink-0 mb-4">
-          <UpdateNotificationBar
-            result={updateCheckResult}
-            resourceLabel={t("commands.title")}
-            onDismiss={() => setUpdatesDismissed(true)}
-            onUpdateAll={handleUpdateAll}
-            isUpdating={updateBatchMutation.isPending}
-          />
-        </div>
-      )}
+      {viewMode === "list" &&
+        updateCheckResult &&
+        !updatesDismissed &&
+        (updateCheckResult.updateCount > 0 ||
+          updateCheckResult.deletedCount > 0) && (
+          <div className="flex-shrink-0 mb-4">
+            <UpdateNotificationBar
+              result={updateCheckResult}
+              resourceLabel={t("commands.title")}
+              onDismiss={() => setUpdatesDismissed(true)}
+              onUpdateAll={handleUpdateAll}
+              isUpdating={updateBatchMutation.isPending}
+            />
+          </div>
+        )}
 
       {/* ========== 已安装模式内容 ========== */}
       {viewMode === "list" && (
@@ -758,40 +857,41 @@ export const CommandsPage: React.FC = () => {
 
           {/* Right Panel - Command List */}
           <div className="flex-1 rounded-xl border border-border bg-muted/30 overflow-hidden flex flex-col">
+            <div className="flex-shrink-0 px-4 py-3 border-b border-border/50">
+              <h3 className="text-sm font-medium text-foreground">
+                {discoverySelection.type === "all"
+                  ? t("commands.allCommands")
+                  : discoverySelection.type === "repo"
+                    ? discoverySelection.id
+                    : discoverySelection.id?.split("/").slice(-1)[0]}
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                {displayedDiscoveryCommands.length}{" "}
+                {t("commands.title").toLowerCase()}
+              </p>
+            </div>
             {displayedDiscoveryCommands.length > 0 ? (
-              <>
-                <div className="flex-shrink-0 px-4 py-3 border-b border-border/50">
-                  <h3 className="text-sm font-medium text-foreground">
-                    {discoverySelection.type === "repo"
-                      ? discoverySelection.id
-                      : discoverySelection.id?.split("/").slice(-1)[0]}
-                  </h3>
-                  <p className="text-xs text-muted-foreground">
-                    {displayedDiscoveryCommands.length} {t("commands.title").toLowerCase()}
-                  </p>
+              <div className="flex-1 overflow-y-auto p-2">
+                <div className="space-y-2">
+                  {displayedDiscoveryCommands.map((cmd) => (
+                    <CommandListItem
+                      key={cmd.key}
+                      command={cmd}
+                      isInstalled={isCommandInstalled(cmd)}
+                      updateStatus={getCommandUpdateStatus(cmd)}
+                      isInstalling={
+                        installMutation.isPending &&
+                        installMutation.variables?.command.key === cmd.key
+                      }
+                      onInstall={(scope) => handleInstallCommand(cmd, scope)}
+                    />
+                  ))}
                 </div>
-                <div className="flex-1 overflow-y-auto p-2">
-                  <div className="space-y-2">
-                    {displayedDiscoveryCommands.map((cmd) => (
-                      <CommandListItem
-                        key={cmd.key}
-                        command={cmd}
-                        isInstalled={isCommandInstalled(cmd)}
-                        updateStatus={getCommandUpdateStatus(cmd)}
-                        isInstalling={
-                          installMutation.isPending &&
-                          installMutation.variables?.command.key === cmd.key
-                        }
-                        onInstall={(scope) => handleInstallCommand(cmd, scope)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </>
+              </div>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
                 <FileText size={48} className="mb-4 opacity-30" />
-                <p className="text-sm">{t("commands.selectToView")}</p>
+                <p className="text-sm">{t("commands.noCommandsFound")}</p>
               </div>
             )}
           </div>

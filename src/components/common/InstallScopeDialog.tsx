@@ -65,10 +65,12 @@ export function InstallScopeDialog({
 }: InstallScopeDialogProps) {
   const { t } = useTranslation();
   const [selectedType, setSelectedType] = useState<"global" | "project">(
-    "global"
+    "global",
   );
   const [showProjectSelector, setShowProjectSelector] = useState(false);
-  const [selectedProjectPath, setSelectedProjectPath] = useState<string | null>(null);
+  const [selectedProjectPath, setSelectedProjectPath] = useState<string | null>(
+    null,
+  );
   const [isInstalling, setIsInstalling] = useState(false);
 
   // 获取资源类型的显示名称
@@ -97,7 +99,10 @@ export function InstallScopeDialog({
 
     setIsInstalling(true);
     try {
-      const scope: InstallScope = { type: "project", path: selectedProjectPath };
+      const scope: InstallScope = {
+        type: "project",
+        path: selectedProjectPath,
+      };
       await onInstall(scope);
       onOpenChange(false);
       // 重置状态
@@ -177,7 +182,7 @@ export function InstallScopeDialog({
               type="button"
               className={cn(
                 "flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-accent",
-                selectedType === "global" && "border-primary bg-primary/5"
+                selectedType === "global" && "border-primary bg-primary/5",
               )}
               onClick={() => {
                 setSelectedType("global");
@@ -189,7 +194,7 @@ export function InstallScopeDialog({
                   "flex h-10 w-10 items-center justify-center rounded-lg",
                   selectedType === "global"
                     ? "bg-blue-100 dark:bg-blue-900/30"
-                    : "bg-muted"
+                    : "bg-muted",
                 )}
               >
                 <Globe
@@ -197,7 +202,7 @@ export function InstallScopeDialog({
                     "h-5 w-5",
                     selectedType === "global"
                       ? "text-blue-600 dark:text-blue-400"
-                      : "text-muted-foreground"
+                      : "text-muted-foreground",
                   )}
                 />
               </div>
@@ -221,7 +226,7 @@ export function InstallScopeDialog({
               type="button"
               className={cn(
                 "flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-accent",
-                selectedType === "project" && "border-primary bg-primary/5"
+                selectedType === "project" && "border-primary bg-primary/5",
               )}
               onClick={() => {
                 setSelectedType("project");
@@ -236,7 +241,7 @@ export function InstallScopeDialog({
                   "flex h-10 w-10 items-center justify-center rounded-lg",
                   selectedType === "project"
                     ? "bg-green-100 dark:bg-green-900/30"
-                    : "bg-muted"
+                    : "bg-muted",
                 )}
               >
                 <FolderOpen
@@ -244,7 +249,7 @@ export function InstallScopeDialog({
                     "h-5 w-5",
                     selectedType === "project"
                       ? "text-green-600 dark:text-green-400"
-                      : "text-muted-foreground"
+                      : "text-muted-foreground",
                   )}
                 />
               </div>
@@ -271,7 +276,9 @@ export function InstallScopeDialog({
                 </div>
                 <div className="flex items-center gap-2">
                   <FolderOpen className="h-4 w-4 text-green-500" />
-                  <span className="truncate text-sm">{selectedProjectPath}</span>
+                  <span className="truncate text-sm">
+                    {selectedProjectPath}
+                  </span>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -288,10 +295,7 @@ export function InstallScopeDialog({
             {selectedType === "project" && !selectedProjectPath && (
               <div className="rounded-lg border border-dashed bg-muted/20 p-3">
                 <div className="text-center text-sm text-muted-foreground">
-                  {t(
-                    "scope.clickToSelectProject",
-                    "点击下方按钮选择目标项目"
-                  )}
+                  {t("scope.clickToSelectProject", "点击下方按钮选择目标项目")}
                 </div>
               </div>
             )}
@@ -307,7 +311,9 @@ export function InstallScopeDialog({
             </Button>
             <Button
               onClick={handleInstallClick}
-              disabled={loading || (selectedType === "project" && !selectedProjectPath)}
+              disabled={
+                loading || (selectedType === "project" && !selectedProjectPath)
+              }
             >
               {loading ? (
                 <>{t("common.installing", "安装中...")}</>
@@ -332,7 +338,7 @@ export function InstallScopeDialog({
         title={t("scope.selectInstallProject", "选择安装项目")}
         description={t(
           "scope.selectInstallProjectDesc",
-          "选择要安装资源的目标项目"
+          "选择要安装资源的目标项目",
         )}
       />
     </>

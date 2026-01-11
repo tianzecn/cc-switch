@@ -1,6 +1,12 @@
 import React, { useMemo, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { GitBranch, HardDrive, Folder, PackageOpen, Loader2 } from "lucide-react";
+import {
+  GitBranch,
+  HardDrive,
+  Folder,
+  PackageOpen,
+  Loader2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SkillListItem } from "./SkillListItem";
 import type { InstalledSkill, AppType } from "@/hooks/useSkills";
@@ -162,7 +168,8 @@ export const GroupedSkillsList: React.FC<GroupedSkillsListProps> = ({
 
   // 根据选中状态决定渲染方式
   const shouldShowRepoHeaders = selection.type === "all";
-  const shouldShowNamespaceHeaders = selection.type === "all" || selection.type === "repo";
+  const shouldShowNamespaceHeaders =
+    selection.type === "all" || selection.type === "repo";
 
   // 计算当前显示的分组数据（考虑分页）- 必须在条件返回之前调用
   const displayedGroupData = useMemo(() => {
@@ -219,10 +226,7 @@ export const GroupedSkillsList: React.FC<GroupedSkillsListProps> = ({
         <div key={repo.repoId}>
           {/* 仓库 Sticky Header */}
           {shouldShowRepoHeaders && (
-            <RepoStickyHeader
-              repoName={repo.repoName}
-              isLocal={repo.isLocal}
-            />
+            <RepoStickyHeader repoName={repo.repoName} isLocal={repo.isLocal} />
           )}
 
           {repo.namespaces.map((ns) => (
@@ -236,7 +240,12 @@ export const GroupedSkillsList: React.FC<GroupedSkillsListProps> = ({
               )}
 
               {/* Skills 列表 */}
-              <div className={cn("space-y-2", shouldShowNamespaceHeaders && "mt-2")}>
+              <div
+                className={cn(
+                  "space-y-2",
+                  shouldShowNamespaceHeaders && "mt-2",
+                )}
+              >
                 {ns.skills.map((skill) => (
                   <SkillListItem
                     key={skill.id}
@@ -249,8 +258,15 @@ export const GroupedSkillsList: React.FC<GroupedSkillsListProps> = ({
                       onToggleApp(skill.id, app, enabled)
                     }
                     onUninstall={() => onUninstall(skill.id)}
-                    onScopeChange={onScopeChange ? (newScope) => onScopeChange(skill.id, newScope) : undefined}
-                    updateStatus={getResourceUpdateStatus(updateCheckResult, skill.id)}
+                    onScopeChange={
+                      onScopeChange
+                        ? (newScope) => onScopeChange(skill.id, newScope)
+                        : undefined
+                    }
+                    updateStatus={getResourceUpdateStatus(
+                      updateCheckResult,
+                      skill.id,
+                    )}
                   />
                 ))}
               </div>
@@ -261,7 +277,10 @@ export const GroupedSkillsList: React.FC<GroupedSkillsListProps> = ({
 
       {/* 加载更多区域 */}
       {hasMore && (
-        <div ref={loadMoreRef} className="flex flex-col items-center gap-2 py-4">
+        <div
+          ref={loadMoreRef}
+          className="flex flex-col items-center gap-2 py-4"
+        >
           <Button
             variant="outline"
             size="sm"
@@ -293,9 +312,7 @@ const RepoStickyHeader: React.FC<RepoStickyHeaderProps> = ({
   const iconColor = isLocal ? "text-green-500" : "text-blue-500";
 
   return (
-    <div
-      className="flex items-center gap-2 px-3 py-2 bg-background/95 backdrop-blur-sm border-b border-border/50"
-    >
+    <div className="flex items-center gap-2 px-3 py-2 bg-background/95 backdrop-blur-sm border-b border-border/50">
       <Icon size={16} className={iconColor} />
       <span className="text-sm font-semibold text-foreground">{repoName}</span>
     </div>

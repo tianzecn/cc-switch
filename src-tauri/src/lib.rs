@@ -743,6 +743,7 @@ pub fn run() {
             // Skill namespace management (v3.12.0+)
             commands::get_skill_namespaces,
             commands::get_skills_by_namespace,
+            commands::get_skill_content,
             commands::detect_skill_conflicts,
             // Command management (v3.11.0+ unified)
             commands::get_installed_commands,

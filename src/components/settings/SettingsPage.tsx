@@ -255,19 +255,28 @@ export function SettingsPage({
                             {t("settings.layout.title", "布局模式")}
                           </h3>
                           <p className="text-xs text-muted-foreground">
-                            {t("settings.layout.description", "切换固定宽度或自适应布局")}
+                            {t(
+                              "settings.layout.description",
+                              "切换固定宽度或自适应布局",
+                            )}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className={`text-xs ${layoutMode === "fixed" ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+                        <span
+                          className={`text-xs ${layoutMode === "fixed" ? "text-foreground font-medium" : "text-muted-foreground"}`}
+                        >
                           {t("settings.layout.fixed", "固定")}
                         </span>
                         <Switch
                           checked={layoutMode === "adaptive"}
-                          onCheckedChange={(checked) => setLayoutMode(checked ? "adaptive" : "fixed")}
+                          onCheckedChange={(checked) =>
+                            setLayoutMode(checked ? "adaptive" : "fixed")
+                          }
                         />
-                        <span className={`text-xs ${layoutMode === "adaptive" ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+                        <span
+                          className={`text-xs ${layoutMode === "adaptive" ? "text-foreground font-medium" : "text-muted-foreground"}`}
+                        >
                           {t("settings.layout.adaptive", "自适应")}
                         </span>
                       </div>
@@ -333,10 +342,16 @@ export function SettingsPage({
                           <Github className="h-5 w-5 text-purple-500" />
                           <div className="text-left">
                             <h3 className="text-base font-semibold">
-                              {t("settings.advanced.github.title", "GitHub API")}
+                              {t(
+                                "settings.advanced.github.title",
+                                "GitHub API",
+                              )}
                             </h3>
                             <p className="text-sm text-muted-foreground font-normal">
-                              {t("settings.advanced.github.description", "Configure Personal Access Token for higher API rate limits")}
+                              {t(
+                                "settings.advanced.github.description",
+                                "Configure Personal Access Token for higher API rate limits",
+                              )}
                             </p>
                           </div>
                         </div>

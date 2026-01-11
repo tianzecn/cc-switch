@@ -39,7 +39,7 @@ interface ProjectSelectorProps {
 function formatRelativeTime(
   dateStr: string | null,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  t: (key: string, options?: any) => string
+  t: (key: string, options?: any) => string,
 ): string {
   if (!dateStr) return t("project.unknownTime");
 
@@ -92,7 +92,7 @@ export function ProjectSelector({
 
   const [searchQuery, setSearchQuery] = useState("");
   const [localSelection, setLocalSelection] = useState<Set<string>>(
-    new Set(selectedProjects)
+    new Set(selectedProjects),
   );
 
   // 过滤项目列表
@@ -104,7 +104,7 @@ export function ProjectSelector({
     return projects.filter(
       (p) =>
         p.name.toLowerCase().includes(query) ||
-        p.path.toLowerCase().includes(query)
+        p.path.toLowerCase().includes(query),
     );
   }, [projects, searchQuery]);
 
@@ -152,10 +152,7 @@ export function ProjectSelector({
           </DialogTitle>
           <DialogDescription>
             {description ||
-              t(
-                "project.selectDescription",
-                "选择要安装资源的目标项目"
-              )}
+              t("project.selectDescription", "选择要安装资源的目标项目")}
           </DialogDescription>
         </DialogHeader>
 
@@ -245,7 +242,7 @@ function ProjectItem({
     <div
       className={cn(
         "flex cursor-pointer items-center gap-3 px-3 py-2 transition-colors hover:bg-accent",
-        isSelected && "bg-accent/50"
+        isSelected && "bg-accent/50",
       )}
       onClick={onToggle}
     >
@@ -257,7 +254,7 @@ function ProjectItem({
             "h-4 w-4 rounded-full border-2",
             isSelected
               ? "border-primary bg-primary"
-              : "border-muted-foreground"
+              : "border-muted-foreground",
           )}
         >
           {isSelected && (

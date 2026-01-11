@@ -38,7 +38,11 @@ export function GitHubTokenSettings() {
   } | null>(null);
 
   // Hooks
-  const { data: tokenStatus, isLoading: isLoadingStatus, refetch: refetchStatus } = useGitHubTokenStatus();
+  const {
+    data: tokenStatus,
+    isLoading: isLoadingStatus,
+    refetch: refetchStatus,
+  } = useGitHubTokenStatus();
   const validateMutation = useValidateGitHubToken();
   const saveMutation = useSaveGitHubToken();
 
@@ -79,7 +83,9 @@ export function GitHubTokenSettings() {
       setTokenInput("");
       setValidationResult(null);
       await refetchStatus();
-      toast.success(t("settings.github.tokenSaved", "Token saved successfully!"));
+      toast.success(
+        t("settings.github.tokenSaved", "Token saved successfully!"),
+      );
     } catch (error) {
       toast.error(t("settings.github.saveFailed", "Failed to save token"));
     }
@@ -144,12 +150,15 @@ export function GitHubTokenSettings() {
             <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-yellow-600 dark:text-yellow-400">
               <p className="font-medium">
-                {t("settings.github.rateLimitWarning", "API Rate Limit Warning")}
+                {t(
+                  "settings.github.rateLimitWarning",
+                  "API Rate Limit Warning",
+                )}
               </p>
               <p className="mt-1 opacity-90">
                 {t(
                   "settings.github.rateLimitDescription",
-                  "Without a token, GitHub API is limited to 60 requests/hour. With a token, you get 5000 requests/hour."
+                  "Without a token, GitHub API is limited to 60 requests/hour. With a token, you get 5000 requests/hour.",
                 )}
               </p>
             </div>
@@ -165,7 +174,10 @@ export function GitHubTokenSettings() {
               type={showToken ? "text" : "password"}
               placeholder={
                 hasToken
-                  ? t("settings.github.enterNewToken", "Enter new token to replace...")
+                  ? t(
+                      "settings.github.enterNewToken",
+                      "Enter new token to replace...",
+                    )
                   : t("settings.github.enterToken", "ghp_xxxxxxxxxxxx")
               }
               value={tokenInput}
@@ -248,10 +260,12 @@ export function GitHubTokenSettings() {
                 </span>
               </div>
               <div className="text-xs text-muted-foreground">
-                {t("settings.github.rateLimit", "Rate limit")}: {validationResult.remaining} / {validationResult.limit}
+                {t("settings.github.rateLimit", "Rate limit")}:{" "}
+                {validationResult.remaining} / {validationResult.limit}
                 {validationResult.resetAt && (
                   <span className="ml-2">
-                    ({t("settings.github.resetsAt", "Resets at")} {formatResetTime(validationResult.resetAt)})
+                    ({t("settings.github.resetsAt", "Resets at")}{" "}
+                    {formatResetTime(validationResult.resetAt)})
                   </span>
                 )}
               </div>
@@ -276,7 +290,10 @@ export function GitHubTokenSettings() {
           className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
         >
           <ExternalLink className="h-3 w-3" />
-          {t("settings.github.createToken", "Create a Personal Access Token on GitHub")}
+          {t(
+            "settings.github.createToken",
+            "Create a Personal Access Token on GitHub",
+          )}
         </a>
       </div>
     </div>

@@ -34,7 +34,8 @@ export function useCheckSkillsUpdates() {
 export function useCheckSkillsUpdatesByIds() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (skillIds: string[]) => updateApi.checkSkillsUpdatesByIds(skillIds),
+    mutationFn: (skillIds: string[]) =>
+      updateApi.checkSkillsUpdatesByIds(skillIds),
     onSuccess: (data) => {
       // 将结果存入 query cache，以便其他组件访问
       queryClient.setQueryData(["updates", "skills"], data);
@@ -75,7 +76,8 @@ export function useCheckCommandsUpdates() {
 export function useCheckCommandsUpdatesByIds() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (commandIds: string[]) => updateApi.checkCommandsUpdatesByIds(commandIds),
+    mutationFn: (commandIds: string[]) =>
+      updateApi.checkCommandsUpdatesByIds(commandIds),
     onSuccess: (data) => {
       // 将结果存入 query cache，以便其他组件访问
       queryClient.setQueryData(["updates", "commands"], data);
@@ -116,7 +118,8 @@ export function useCheckAgentsUpdates() {
 export function useCheckAgentsUpdatesByIds() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (agentIds: string[]) => updateApi.checkAgentsUpdatesByIds(agentIds),
+    mutationFn: (agentIds: string[]) =>
+      updateApi.checkAgentsUpdatesByIds(agentIds),
     onSuccess: (data) => {
       // 将结果存入 query cache，以便其他组件访问
       queryClient.setQueryData(["updates", "agents"], data);
@@ -254,7 +257,8 @@ export function useUpdateCommand() {
 export function useUpdateCommandsBatch() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (commandIds: string[]) => updateApi.updateCommandsBatch(commandIds),
+    mutationFn: (commandIds: string[]) =>
+      updateApi.updateCommandsBatch(commandIds),
     onSuccess: () => {
       // 刷新 Commands 列表
       queryClient.invalidateQueries({ queryKey: ["commands"] });
@@ -336,9 +340,7 @@ export function useFixAgentsHash() {
  */
 export function useUpdatableResourceIds(result?: BatchCheckResult): string[] {
   if (!result) return [];
-  return result.results
-    .filter((r) => r.hasUpdate && !r.error)
-    .map((r) => r.id);
+  return result.results.filter((r) => r.hasUpdate && !r.error).map((r) => r.id);
 }
 
 /**

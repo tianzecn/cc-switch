@@ -17,6 +17,7 @@ import {
 } from "@/hooks/useCommands";
 import { settingsApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { formatInstallTime } from "@/lib/utils/date";
 
 interface CommandDetailPanelProps {
   command: InstalledCommand;
@@ -226,7 +227,7 @@ export const CommandDetailPanel: React.FC<CommandDetailPanelProps> = ({
               {t("commands.installedAt")}
             </h4>
             <p className="text-sm text-foreground">
-              {new Date(command.installedAt).toLocaleString()}
+              {formatInstallTime(command.installedAt)}
             </p>
           </div>
 

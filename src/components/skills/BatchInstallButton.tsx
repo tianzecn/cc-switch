@@ -152,7 +152,12 @@ export const BatchInstallProgress: React.FC<BatchInstallProgressProps> = ({
         </div>
         <Progress value={progress} className="h-1 mt-1" />
       </div>
-      <Button variant="ghost" size="icon" onClick={onCancel} className="h-6 w-6">
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onCancel}
+        className="h-6 w-6"
+      >
         <X size={14} />
       </Button>
     </div>

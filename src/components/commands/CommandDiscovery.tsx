@@ -46,6 +46,7 @@ import {
   type DiscoverySelection,
 } from "./CommandDiscoveryTree";
 import { BatchInstallCommandsButton } from "./BatchInstallCommandsButton";
+import { VirtualList } from "@/components/common/VirtualList";
 
 interface CommandDiscoveryProps {
   onBack: () => void;
@@ -123,15 +124,36 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
     });
   }, [discoverableCommands, searchQuery, categoryFilter]);
 
+  // 按仓库分组排序的命令列表（仅在 selection.type === "all" 时使用）
+  const sortedFilteredCommands = useMemo(() => {
+    if (filteredCommands.length === 0) return [];
+    return [...filteredCommands].sort((a, b) => {
+      // 先按仓库排序
+      const repoCompare = `${a.repoOwner}/${a.repoName}`.localeCompare(
+        `${b.repoOwner}/${b.repoName}`,
+      );
+      if (repoCompare !== 0) return repoCompare;
+      // 再按命名空间排序
+      const nsCompare = (a.namespace || "").localeCompare(b.namespace || "");
+      if (nsCompare !== 0) return nsCompare;
+      // 最后按名称排序
+      return a.name.localeCompare(b.name);
+    });
+  }, [filteredCommands]);
+
   // 当前显示的命令列表（根据选择状态）
   const displayedCommands = useMemo(() => {
-    // 如果有选择（仓库或命名空间），使用选择的命令
-    if (selection.type !== "all" && selection.commands.length > 0) {
+    // 全部模式：使用排序后的所有命令
+    if (selection.type === "all") {
+      return sortedFilteredCommands;
+    }
+    // 仓库/命名空间模式：使用选择的命令
+    if (selection.commands.length > 0) {
       return selection.commands;
     }
-    // 否则返回空（需要用户选择仓库或命名空间）
-    return [];
-  }, [selection]);
+    // fallback：返回排序后的所有命令
+    return sortedFilteredCommands;
+  }, [selection.type, selection.commands, sortedFilteredCommands]);
 
   // 计算未安装命令数量（基于当前显示的命令）
   const uninstalledCount = useMemo(() => {
@@ -209,7 +231,9 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
   };
 
   // 获取命令的更新状态
-  const getCommandUpdateStatus = (cmd: DiscoverableCommand): UpdateCheckResult | undefined => {
+  const getCommandUpdateStatus = (
+    cmd: DiscoverableCommand,
+  ): UpdateCheckResult | undefined => {
     if (!updateCheckResult) return undefined;
     const id = cmd.namespace
       ? `${cmd.namespace}/${cmd.filename}`
@@ -218,7 +242,10 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
   };
 
   return (
-    <ContentContainer variant="wide" className="flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
+    <ContentContainer
+      variant="wide"
+      className="flex flex-col h-[calc(100vh-8rem)] overflow-hidden"
+    >
       {/* Header */}
       <div className="flex-shrink-0 flex items-center gap-4 py-4">
         <Button variant="ghost" size="icon" onClick={onBack}>
@@ -327,42 +354,51 @@ export const CommandDiscovery: React.FC<CommandDiscoveryProps> = ({
 
         {/* Right Panel - Command List */}
         <div className="flex-1 rounded-xl border border-border bg-muted/30 overflow-hidden flex flex-col">
-          {displayedCommands.length > 0 ? (
-            <>
-              <div className="flex-shrink-0 px-4 py-3 border-b border-border/50">
-                <h3 className="text-sm font-medium text-foreground">
-                  {selection.type === "repo"
-                    ? selection.id
-                    : selection.id?.split("/").slice(-1)[0]}
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  {displayedCommands.length} {t("commands.title").toLowerCase()}
+          <div className="flex-shrink-0 px-4 py-3 border-b border-border/50">
+            <h3 className="text-sm font-medium text-foreground">
+              {selection.type === "all"
+                ? t("commands.allCommands")
+                : selection.type === "repo"
+                  ? selection.id
+                  : selection.id?.split("/").slice(-1)[0]}
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              {displayedCommands.length} {t("commands.title").toLowerCase()}
+              {" "}(type: {selection.type}, filtered: {filteredCommands.length})
+            </p>
+          </div>
+          <VirtualList
+            items={displayedCommands}
+            renderItem={(cmd) => (
+              <div className="pb-2 px-2">
+                <CommandListItem
+                  command={cmd}
+                  isInstalled={isCommandInstalled(cmd)}
+                  updateStatus={getCommandUpdateStatus(cmd)}
+                  isInstalling={
+                    installMutation.isPending &&
+                    installMutation.variables?.command.key === cmd.key
+                  }
+                  onInstall={() => handleInstall(cmd)}
+                />
+              </div>
+            )}
+            getItemKey={(cmd) => cmd.key}
+            estimatedItemHeight={100}
+            overscan={5}
+            isLoading={isLoading}
+            skeletonCount={8}
+            showSkeletonSwitches={false}
+            className="flex-1 pt-2"
+            emptyState={
+              <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground h-full">
+                <FileText size={48} className="mb-4 opacity-30" />
+                <p className="text-sm">
+                  {t("commands.noCommandsFound")}
                 </p>
               </div>
-              <div className="flex-1 overflow-y-auto p-2">
-                <div className="space-y-2">
-                  {displayedCommands.map((cmd) => (
-                    <CommandListItem
-                      key={cmd.key}
-                      command={cmd}
-                      isInstalled={isCommandInstalled(cmd)}
-                      updateStatus={getCommandUpdateStatus(cmd)}
-                      isInstalling={
-                        installMutation.isPending &&
-                        installMutation.variables?.command.key === cmd.key
-                      }
-                      onInstall={() => handleInstall(cmd)}
-                    />
-                  ))}
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
-              <FileText size={48} className="mb-4 opacity-30" />
-              <p className="text-sm">{t("commands.selectToView")}</p>
-            </div>
-          )}
+            }
+          />
         </div>
       </div>
 

@@ -154,7 +154,10 @@ export const HookDiscovery: React.FC<HookDiscoveryProps> = ({ onBack }) => {
   };
 
   return (
-    <ContentContainer variant="wide" className="flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
+    <ContentContainer
+      variant="wide"
+      className="flex flex-col h-[calc(100vh-8rem)] overflow-hidden"
+    >
       {/* Header */}
       <div className="flex-shrink-0 flex items-center gap-4 py-4">
         <Button variant="ghost" size="icon" onClick={onBack}>

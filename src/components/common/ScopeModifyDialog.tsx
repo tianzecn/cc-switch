@@ -161,10 +161,7 @@ export function ScopeModifyDialog({
                       {t("scope.moveToProject", "移动到项目")}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {t(
-                        "scope.moveToProjectDesc",
-                        "从全局移动到指定项目目录"
-                      )}
+                      {t("scope.moveToProjectDesc", "从全局移动到指定项目目录")}
                     </span>
                   </div>
                 </Button>
@@ -188,7 +185,7 @@ export function ScopeModifyDialog({
                     <span className="text-xs text-muted-foreground">
                       {t(
                         "scope.upgradeToGlobalDesc",
-                        "从项目移动到全局目录，对所有项目可用"
+                        "从项目移动到全局目录，对所有项目可用",
                       )}
                     </span>
                   </div>
@@ -203,11 +200,11 @@ export function ScopeModifyDialog({
                 {isGlobal
                   ? t(
                       "scope.warningGlobalToProject",
-                      "移动后，该资源将仅在选择的项目中可用"
+                      "移动后，该资源将仅在选择的项目中可用",
                     )
                   : t(
                       "scope.warningProjectToGlobal",
-                      "升级后，该资源将从原项目目录移除，并在全局可用"
+                      "升级后，该资源将从原项目目录移除，并在全局可用",
                     )}
               </div>
             </div>
@@ -235,7 +232,7 @@ export function ScopeModifyDialog({
         title={t("scope.selectTargetProject", "选择目标项目")}
         description={t(
           "scope.selectTargetProjectDesc",
-          "选择要将资源移动到的项目"
+          "选择要将资源移动到的项目",
         )}
       />
     </>
