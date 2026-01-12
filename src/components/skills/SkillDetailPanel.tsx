@@ -37,7 +37,7 @@ export const SkillDetailPanel: React.FC<SkillDetailPanelProps> = ({
   onOpenInEditor,
 }) => {
   const { t } = useTranslation();
-  const [contentExpanded, setContentExpanded] = useState(false);
+  const [contentExpanded, setContentExpanded] = useState(true);
   const [viewMode, setViewMode] = useState<"source" | "rendered">("source");
 
   const isLocal = !skill.repoOwner;

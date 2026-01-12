@@ -1,14 +1,17 @@
 <!-- OPENSPEC:START -->
+
 # OpenSpec Instructions
 
 These instructions are for AI assistants working in this project.
 
 Always open `@/openspec/AGENTS.md` when the request:
+
 - Mentions planning or proposals (words like proposal, spec, change, plan)
 - Introduces new capabilities, breaking changes, architecture shifts, or big performance/security work
 - Sounds ambiguous and you need the authoritative spec before coding
 
 Use `@/openspec/AGENTS.md` to learn:
+
 - How to create and apply change proposals
 - Spec format and conventions
 - Project structure and guidelines
@@ -17,202 +20,72 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 
 <!-- OPENSPEC:END -->
 
-# CLAUDE.md
+# Project Context for Claude Code
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+## Project Overview (WHAT)
 
-## Project Overview
+CC Switch is a cross-platform desktop app for managing Claude Code, Codex CLI, and Gemini CLI configurations.
+Built with Tauri 2 (Rust backend) and React + TypeScript (frontend).
 
-CC Switch is a cross-platform desktop application for managing Claude Code, Codex CLI, and Gemini CLI configurations. Built with Tauri 2 (Rust backend) + React (TypeScript frontend).
+## Why This Repository Exists (WHY)
 
-## Development Commands
+- unify provider, MCP, prompt, and hook configuration across multiple AI CLIs
+- provide a single UI to switch and sync configs safely
+- persist syncable data in SQLite with JSON device settings
 
-```bash
-# Install dependencies
-pnpm install
+## Directory Structure
 
-# Development mode with hot reload
-pnpm dev
+- `src/` React frontend UI
+- `src-tauri/` Rust backend and Tauri commands
+- `tests/` frontend tests
+- `docs/` long-form project docs
+- `openspec/` spec-driven change management
 
-# Build production application
-pnpm build
+## How to Work with This Project (HOW)
 
-# Build debug version
-pnpm tauri build --debug
+- Requirements: Node.js 18+, pnpm 8+, Rust 1.85+, Tauri CLI 2.8+
+- Quick start: `pnpm install` then `pnpm dev`
+- Build: `pnpm build`
+- Type check: `pnpm typecheck`
+- Full command list: `agent_docs/dev-commands.md`
+- Testing details: `agent_docs/testing.md`
+- Formatting/linting is handled via Biome/ESLint; prefer a Stop Hook: https://code.claude.com/docs/en/hooks#stop
 
-# Type checking
-pnpm typecheck
+## Key Architecture Decisions
 
-# Format code
-pnpm format
+- Backend is layered: Commands → Services → DAO → SQLite
+- Frontend uses hooks + TanStack Query for async state
+- SSOT lives in `~/.cc-switch/cc-switch.db`; device settings are JSON
+- File writes are atomic (temp + rename); DB access is mutex-protected
 
-# Check format without modifying
-pnpm format:check
+## Important Files
 
-# Run frontend tests
-pnpm test:unit
+| Area                    | Files                     |
+| ----------------------- | ------------------------- |
+| Backend commands        | `src-tauri/src/commands/` |
+| Backend services        | `src-tauri/src/services/` |
+| Database schema and DAO | `src-tauri/src/database/` |
+| Frontend API wrappers   | `src/lib/api/`            |
+| Frontend components     | `src/components/`         |
+| i18n locales            | `src/i18n/locales/`       |
 
-# Run tests in watch mode
-pnpm test:unit:watch
-```
+## Detailed Documentation (Progressive Disclosure)
 
-### Rust Backend Commands
+| Topic                    | Document                                 |
+| ------------------------ | ---------------------------------------- |
+| Architecture deep dive   | `agent_docs/architecture-guide.md`       |
+| Config locations         | `agent_docs/config-locations.md`         |
+| Documentation automation | `agent_docs/documentation-automation.md` |
+| Development commands     | `agent_docs/dev-commands.md`             |
+| Testing guide            | `agent_docs/testing.md`                  |
+| OpenSpec workflow        | `openspec/AGENTS.md`                     |
+| Project status           | `docs/project-status.md`                 |
+| Release history          | `CHANGELOG.md`                           |
 
-```bash
-cd src-tauri
+## Project Rules
 
-# Format Rust code
-cargo fmt
-
-# Run clippy lints
-cargo clippy
-
-# Run backend tests
-cargo test
-
-# Run specific test
-cargo test test_name
-
-# Run tests with test-hooks feature
-cargo test --features test-hooks
-```
-
-## Architecture
-
-### Layered Architecture (Backend)
-
-```
-Commands (IPC Layer) → Services (Business Logic) → DAO → Database (SQLite)
-```
-
-- **Commands** (`src-tauri/src/commands/`): Tauri IPC handlers, thin wrappers
-- **Services** (`src-tauri/src/services/`): Business logic, core functionality
-- **DAO** (`src-tauri/src/database/dao/`): Data access objects for SQLite
-- **Database** (`src-tauri/src/database/`): SQLite schema, migrations, backup
-
-### Frontend Architecture
-
-```
-Components (UI) ←→ Hooks (Business Logic) ←→ TanStack Query (Cache) ←→ API Layer
-```
-
-- **Components** (`src/components/`): React UI organized by feature
-- **Hooks** (`src/hooks/`): Custom hooks encapsulating business logic
-- **API** (`src/lib/api/`): Type-safe Tauri IPC wrappers
-- **Query** (`src/lib/query/`): TanStack Query configuration and keys
-
-### Key Design Patterns
-
-- **SSOT**: All data stored in `~/.cc-switch/cc-switch.db` (SQLite)
-- **Dual-layer Storage**: SQLite for syncable data, JSON for device-level settings
-- **Atomic Writes**: Temp file + rename pattern prevents corruption
-- **Mutex-protected DB**: Concurrency-safe database access
-
-### Domain Modules (Backend)
-
-| Module | Purpose |
-|--------|---------|
-| `provider.rs` | Provider models and switching logic |
-| `app_config.rs` | Claude/Codex/Gemini config file parsing |
-| `mcp/` | MCP server management and sync |
-| `proxy/` | Local proxy server for API requests |
-| `services/skill.rs` | GitHub skills repository management |
-| `services/command.rs` | Slash commands management (GitHub repos) |
-| `services/agent.rs` | Agents configuration management |
-| `services/hook.rs` | Hooks (event triggers) management |
-| `services/prompt.rs` | System prompt preset management |
-| `usage_script.rs` | Usage statistics script injection |
-
-### Frontend Feature Areas
-
-| Directory | Purpose |
-|-----------|---------|
-| `components/providers/` | Provider management UI |
-| `components/mcp/` | MCP server panel |
-| `components/skills/` | Skills discovery and installation |
-| `components/commands/` | Slash commands management |
-| `components/agents/` | Agents configuration UI |
-| `components/hooks/` | Hooks (event triggers) management |
-| `components/prompts/` | Prompt preset editor |
-| `components/settings/` | App settings dialogs |
-
-## Testing
-
-- **Framework**: vitest + MSW (Mock Service Worker)
-- **Component Testing**: @testing-library/react
-- **Test Location**: `tests/hooks/` for hook tests, `tests/components/` for integration
-- **Backend Tests**: `cargo test` in `src-tauri/`, some require `--features test-hooks`
-
-## Config File Locations
-
-| App | Live Config | MCP Config |
-|-----|-------------|------------|
-| Claude | `~/.claude/settings.json` | `~/.claude.json` |
-| Codex | `~/.codex/auth.json` + `config.toml` | `~/.codex/config.toml` |
-| Gemini | `~/.gemini/.env` + `settings.json` | `~/.gemini/settings.json` |
-| CC Switch | `~/.cc-switch/cc-switch.db` | (stored in DB) |
-
-## Important Conventions
-
-- Frontend uses TanStack Query for all async state
-- Backend commands should be thin; logic belongs in services
-- All database mutations go through DAO layer
-- Use `thiserror` for Rust error types
-- i18n keys in `src/i18n/locales/` (zh/en/ja)
-
-## 自动化文档维护规范
-
-本项目采用自动化文档系统，确保项目知识持续更新。以下文档需要在特定时机更新：
-
-### 文档职责
-
-| 文档 | 用途 | 更新时机 |
-|------|------|----------|
-| `docs/architecture.md` | 系统架构设计 | 架构变更时 |
-| `CHANGELOG.md` | 版本变更历史 | 功能完成/bug修复后 |
-| `docs/project-status.md` | 当前进度和续点 | 每次会话结束时 |
-| `CLAUDE.md` | 项目入口指南 | 重大架构变更时 |
-
-### 更新触发条件
-
-**自动更新场景**（AI 应主动执行）：
-
-1. **完成重要开发任务后**
-   - 更新 `CHANGELOG.md`（新功能/修复）
-   - 更新 `docs/project-status.md`（进度变化）
-   - 如涉及架构变更，更新 `docs/architecture.md`
-
-2. **OpenSpec archive 后**
-   - 自动更新 `CHANGELOG.md` 记录变更
-   - 更新 `docs/project-status.md` 标记完成
-
-3. **会话结束前**
-   - 确保 `docs/project-status.md` 反映当前状态
-   - 记录"下次继续"的建议
-
-4. **用户明确要求时**
-   - 按需更新指定文档
-
-5. **Git commit 前检查**
-   - 提交代码前，检查是否需要更新相关文档
-   - 如有功能变更，确保 `CHANGELOG.md` 已更新
-   - 如有重要进度，确保 `docs/project-status.md` 已更新
-
-### 格式规范
-
-**CHANGELOG.md** 遵循 [Keep a Changelog](https://keepachangelog.com/) 格式：
-- Added: 新功能
-- Changed: 功能变更
-- Fixed: Bug 修复
-- Removed: 移除的功能
-
-**project-status.md** 包含：
-- 近期完成的工作（带日期）
-- 进行中的工作（带状态）
-- 下次继续的建议
-- 技术债务追踪
-
-**architecture.md** 包含：
-- 系统架构图
-- 模块职责
-- 设计决策记录 (ADR)
+- Keep IPC commands thin; business logic lives in services
+- All database writes go through the DAO layer
+- Maintain i18n keys in `src/i18n/locales/`
+- Follow OpenSpec workflow for proposals and architecture changes
+- Update docs listed in `agent_docs/documentation-automation.md` when changes warrant it
