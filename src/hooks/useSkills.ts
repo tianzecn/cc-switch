@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   skillsApi,
-  type AppType,
+  type SkillBackupEntry,
   type DiscoverableSkill,
+  type ImportSkillSelection,
   type InstalledSkill,
   type SkillConflict,
 } from "@/lib/api/skills";
+import type { AppId } from "@/lib/api/types";
 
 /**
  * 查询所有已安装的 Skills
@@ -14,6 +16,24 @@ export function useInstalledSkills() {
   return useQuery({
     queryKey: ["skills", "installed"],
     queryFn: () => skillsApi.getInstalled(),
+  });
+}
+
+export function useSkillBackups() {
+  return useQuery({
+    queryKey: ["skills", "backups"],
+    queryFn: () => skillsApi.getBackups(),
+    enabled: false,
+  });
+}
+
+export function useDeleteSkillBackup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (backupId: string) => skillsApi.deleteBackup(backupId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["skills", "backups"] });
+    },
   });
 }
 
@@ -79,6 +99,23 @@ export function useUninstallSkillsBatch() {
   });
 }
 
+export function useRestoreSkillBackup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      backupId,
+      currentApp,
+    }: {
+      backupId: string;
+      currentApp: AppId;
+    }) => skillsApi.restoreBackup(backupId, currentApp),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["skills", "installed"] });
+      queryClient.invalidateQueries({ queryKey: ["skills", "backups"] });
+    },
+  });
+}
+
 /**
  * 切换 Skill 在特定应用的启用状态
  */
@@ -91,7 +128,7 @@ export function useToggleSkillApp() {
       enabled,
     }: {
       id: string;
-      app: AppType;
+      app: AppId;
       enabled: boolean;
     }) => skillsApi.toggleApp(id, app, enabled),
     onSuccess: () => {
@@ -202,6 +239,26 @@ export function useRestoreBuiltinSkillRepos() {
   });
 }
 
+/**
+ * 从 ZIP 文件安装 Skills
+ */
+export function useInstallSkillsFromZip() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      filePath,
+      currentApp,
+    }: {
+      filePath: string;
+      currentApp: AppId;
+    }) => skillsApi.installFromZip(filePath, currentApp),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["skills", "installed"] });
+      queryClient.invalidateQueries({ queryKey: ["skills", "unmanaged"] });
+    },
+  });
+}
+
 // ========== 命名空间管理 (v3.12.0+) ==========
 
 /**
@@ -249,4 +306,11 @@ export function useSkillContent(id: string | null) {
 
 // ========== 辅助类型 ==========
 
-export type { InstalledSkill, DiscoverableSkill, AppType, SkillConflict };
+export type {
+  InstalledSkill,
+  DiscoverableSkill,
+  AppType,
+  SkillConflict,
+  ImportSkillSelection,
+  SkillBackupEntry,
+};

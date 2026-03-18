@@ -1,14 +1,16 @@
 import { invoke } from "@tauri-apps/api/core";
 
-// ========== 类型定义 ==========
+import type { AppId } from "@/lib/api/types";
 
-export type AppType = "claude" | "codex" | "gemini";
+export type AppType = "claude" | "codex" | "gemini" | "opencode" | "openclaw";
 
 /** Skill 应用启用状态 */
 export interface SkillApps {
   claude: boolean;
   codex: boolean;
   gemini: boolean;
+  opencode: boolean;
+  openclaw: boolean;
 }
 
 /** 已安装的 Skill（v3.10.0+ 统一结构） */
@@ -31,6 +33,17 @@ export interface InstalledSkill {
   projectPath?: string;
 }
 
+export interface SkillUninstallResult {
+  backupPath?: string;
+}
+
+export interface SkillBackupEntry {
+  backupId: string;
+  backupPath: string;
+  createdAt: number;
+  skill: InstalledSkill;
+}
+
 /** 可发现的 Skill（来自仓库） */
 export interface DiscoverableSkill {
   key: string;
@@ -51,6 +64,13 @@ export interface UnmanagedSkill {
   name: string;
   description?: string;
   foundIn: string[];
+  path: string;
+}
+
+/** 导入已有 Skill 时提交的应用启用状态 */
+export interface ImportSkillSelection {
+  directory: string;
+  apps: SkillApps;
 }
 
 /** 技能对象（兼容旧 API） */
@@ -102,6 +122,16 @@ export const skillsApi = {
     return await invoke("get_installed_skills");
   },
 
+  /** 获取可恢复的 Skill 备份列表 */
+  async getBackups(): Promise<SkillBackupEntry[]> {
+    return await invoke("get_skill_backups");
+  },
+
+  /** 删除 Skill 备份 */
+  async deleteBackup(backupId: string): Promise<boolean> {
+    return await invoke("delete_skill_backup", { backupId });
+  },
+
   /** 安装 Skill（统一安装） */
   async installUnified(
     skill: DiscoverableSkill,
@@ -118,7 +148,7 @@ export const skillsApi = {
   },
 
   /** 卸载 Skill（统一卸载） */
-  async uninstallUnified(id: string): Promise<boolean> {
+  async uninstallUnified(id: string): Promise<SkillUninstallResult> {
     return await invoke("uninstall_skill_unified", { id });
   },
 
@@ -127,12 +157,16 @@ export const skillsApi = {
     return await invoke("uninstall_skills_batch", { ids });
   },
 
+  /** 从备份恢复 Skill */
+  async restoreBackup(
+    backupId: string,
+    currentApp: AppId,
+  ): Promise<InstalledSkill> {
+    return await invoke("restore_skill_backup", { backupId, currentApp });
+  },
+
   /** 切换 Skill 的应用启用状态 */
-  async toggleApp(
-    id: string,
-    app: AppType,
-    enabled: boolean,
-  ): Promise<boolean> {
+  async toggleApp(id: string, app: AppId, enabled: boolean): Promise<boolean> {
     return await invoke("toggle_skill_app", { id, app, enabled });
   },
 
@@ -157,8 +191,10 @@ export const skillsApi = {
   },
 
   /** 从应用目录导入 Skills */
-  async importFromApps(directories: string[]): Promise<InstalledSkill[]> {
-    return await invoke("import_skills_from_apps", { directories });
+  async importFromApps(
+    imports: ImportSkillSelection[],
+  ): Promise<InstalledSkill[]> {
+    return await invoke("import_skills_from_apps", { imports });
   },
 
   /** 发现可安装的 Skills（从仓库获取） */
@@ -169,7 +205,7 @@ export const skillsApi = {
   // ========== 兼容旧 API ==========
 
   /** 获取技能列表（兼容旧 API） */
-  async getAll(app: AppType = "claude"): Promise<Skill[]> {
+  async getAll(app: AppId = "claude"): Promise<Skill[]> {
     if (app === "claude") {
       return await invoke("get_skills");
     }
@@ -177,7 +213,7 @@ export const skillsApi = {
   },
 
   /** 安装技能（兼容旧 API） */
-  async install(directory: string, app: AppType = "claude"): Promise<boolean> {
+  async install(directory: string, app: AppId = "claude"): Promise<boolean> {
     if (app === "claude") {
       return await invoke("install_skill", { directory });
     }
@@ -187,8 +223,8 @@ export const skillsApi = {
   /** 卸载技能（兼容旧 API） */
   async uninstall(
     directory: string,
-    app: AppType = "claude",
-  ): Promise<boolean> {
+    app: AppId = "claude",
+  ): Promise<SkillUninstallResult> {
     if (app === "claude") {
       return await invoke("uninstall_skill", { directory });
     }
@@ -242,5 +278,20 @@ export const skillsApi = {
   /** 获取 Skill 内容（SKILL.md） */
   async getContent(id: string): Promise<string> {
     return await invoke("get_skill_content", { id });
+  },
+
+  // ========== ZIP 安装 ==========
+
+  /** 打开 ZIP 文件选择对话框 */
+  async openZipFileDialog(): Promise<string | null> {
+    return await invoke("open_zip_file_dialog");
+  },
+
+  /** 从 ZIP 文件安装 Skills */
+  async installFromZip(
+    filePath: string,
+    currentApp: AppId,
+  ): Promise<InstalledSkill[]> {
+    return await invoke("install_skills_from_zip", { filePath, currentApp });
   },
 };

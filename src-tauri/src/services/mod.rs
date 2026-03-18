@@ -8,6 +8,7 @@ pub mod env_manager;
 pub mod github_api;
 pub mod hook;
 pub mod mcp;
+pub mod omo;
 pub mod project;
 pub mod prompt;
 pub mod provider;
@@ -17,6 +18,9 @@ pub mod speedtest;
 pub mod stream_check;
 pub mod update;
 pub mod usage_stats;
+pub mod webdav;
+pub mod webdav_auto_sync;
+pub mod webdav_sync;
 
 pub use agent::{AgentMetadata, AgentService};
 pub use app_updater::{AppUpdaterService, SkippedVersion, UpdaterConfig};
@@ -25,8 +29,9 @@ pub use project::{ProjectInfo, ProjectService};
 pub use command::{CommandMetadata, CommandService};
 pub use config::ConfigService;
 pub use mcp::McpService;
+pub use omo::OmoService;
 pub use prompt::PromptService;
-pub use provider::{ProviderService, ProviderSortUpdate};
+pub use provider::{ProviderService, ProviderSortUpdate, SwitchResult};
 pub use proxy::ProxyService;
 #[allow(unused_imports)]
 pub use skill::{DiscoverableSkill, Skill, SkillRepo, SkillService};

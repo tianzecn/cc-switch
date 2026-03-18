@@ -14,16 +14,24 @@ import {
 } from "@/components/providers/forms/ProviderForm";
 import { UniversalProviderFormModal } from "@/components/universal/UniversalProviderFormModal";
 import { UniversalProviderPanel } from "@/components/universal";
+import { AuthCenterPanel } from "@/components/settings/AuthCenterPanel";
 import { providerPresets } from "@/config/claudeProviderPresets";
 import { codexProviderPresets } from "@/config/codexProviderPresets";
 import { geminiProviderPresets } from "@/config/geminiProviderPresets";
+import { extractCodexBaseUrl } from "@/utils/providerConfigUtils";
+import type { OpenClawSuggestedDefaults } from "@/config/openclawProviderPresets";
 import type { UniversalProviderPreset } from "@/config/universalProviderPresets";
 
 interface AddProviderDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   appId: AppId;
-  onSubmit: (provider: Omit<Provider, "id">) => Promise<void> | void;
+  onSubmit: (
+    provider: Omit<Provider, "id"> & {
+      providerKey?: string;
+      suggestedDefaults?: OpenClawSuggestedDefaults;
+    },
+  ) => Promise<void> | void;
 }
 
 export function AddProviderDialog({
@@ -33,14 +41,16 @@ export function AddProviderDialog({
   onSubmit,
 }: AddProviderDialogProps) {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<"app-specific" | "universal">(
-    "app-specific",
-  );
+  // OpenCode and OpenClaw don't support universal providers
+  const showUniversalTab = appId !== "opencode" && appId !== "openclaw";
+  const [activeTab, setActiveTab] = useState<
+    "app-specific" | "universal" | "oauth"
+  >("app-specific");
   const [universalFormOpen, setUniversalFormOpen] = useState(false);
   const [selectedUniversalPreset, setSelectedUniversalPreset] =
     useState<UniversalProviderPreset | null>(null);
+  const [isFormSubmitting, setIsFormSubmitting] = useState(false);
 
-  // Handle universal provider save
   const handleUniversalProviderSave = useCallback(
     async (provider: UniversalProvider) => {
       try {
@@ -68,7 +78,6 @@ export function AddProviderDialog({
     [t, onOpenChange],
   );
 
-  // Close universal form and return to main dialog
   const handleUniversalFormClose = useCallback(() => {
     setUniversalFormOpen(false);
     setSelectedUniversalPreset(null);
@@ -82,7 +91,10 @@ export function AddProviderDialog({
       >;
 
       // 构造基础提交数据
-      const providerData: Omit<Provider, "id"> = {
+      const providerData: Omit<Provider, "id"> & {
+        providerKey?: string;
+        suggestedDefaults?: OpenClawSuggestedDefaults;
+      } = {
         name: values.name.trim(),
         notes: values.notes?.trim() || undefined,
         websiteUrl: values.websiteUrl?.trim() || undefined,
@@ -93,12 +105,19 @@ export function AddProviderDialog({
         ...(values.meta ? { meta: values.meta } : {}),
       };
 
+      // OpenCode/OpenClaw: pass providerKey for ID generation
+      if (
+        (appId === "opencode" || appId === "openclaw") &&
+        values.providerKey
+      ) {
+        providerData.providerKey = values.providerKey;
+      }
+
       const hasCustomEndpoints =
         providerData.meta?.custom_endpoints &&
         Object.keys(providerData.meta.custom_endpoints).length > 0;
 
-      if (!hasCustomEndpoints) {
-        // 收集端点候选（仅在缺少自定义端点时兜底）
+      if (!hasCustomEndpoints && values.presetCategory !== "omo") {
         const urlSet = new Set<string>();
 
         const addUrl = (rawUrl?: string) => {
@@ -163,17 +182,27 @@ export function AddProviderDialog({
         } else if (appId === "codex") {
           const config = parsedConfig.config as string | undefined;
           if (config) {
-            const baseUrlMatch = config.match(
-              /base_url\s*=\s*["']([^"']+)["']/,
-            );
-            if (baseUrlMatch?.[1]) {
-              addUrl(baseUrlMatch[1]);
+            const extractedBaseUrl = extractCodexBaseUrl(config);
+            if (extractedBaseUrl) {
+              addUrl(extractedBaseUrl);
             }
           }
         } else if (appId === "gemini") {
           const env = parsedConfig.env as Record<string, any> | undefined;
           if (env?.GOOGLE_GEMINI_BASE_URL) {
             addUrl(env.GOOGLE_GEMINI_BASE_URL);
+          }
+        } else if (appId === "opencode") {
+          const options = parsedConfig.options as
+            | Record<string, any>
+            | undefined;
+          if (options?.baseURL) {
+            addUrl(options.baseURL);
+          }
+        } else if (appId === "openclaw") {
+          // OpenClaw uses baseUrl directly
+          if (parsedConfig.baseUrl) {
+            addUrl(parsedConfig.baseUrl as string);
           }
         }
 
@@ -196,15 +225,19 @@ export function AddProviderDialog({
         }
       }
 
+      // OpenClaw: pass suggestedDefaults for model registration
+      if (appId === "openclaw" && values.suggestedDefaults) {
+        providerData.suggestedDefaults = values.suggestedDefaults;
+      }
+
       await onSubmit(providerData);
       onOpenChange(false);
     },
     [appId, onSubmit, onOpenChange],
   );
 
-  // 动态 footer：根据当前 Tab 显示不同按钮
   const footer =
-    activeTab === "app-specific" ? (
+    !showUniversalTab || activeTab === "app-specific" ? (
       <>
         <Button
           variant="outline"
@@ -216,12 +249,21 @@ export function AddProviderDialog({
         <Button
           type="submit"
           form="provider-form"
+          disabled={isFormSubmitting}
           className="bg-primary text-primary-foreground hover:bg-primary/90"
         >
           <Plus className="h-4 w-4 mr-2" />
           {t("common.add")}
         </Button>
       </>
+    ) : activeTab === "oauth" ? (
+      <Button
+        variant="outline"
+        onClick={() => onOpenChange(false)}
+        className="border-border/20 hover:bg-accent hover:text-accent-foreground"
+      >
+        {t("common.close", { defaultValue: "关闭" })}
+      </Button>
     ) : (
       <>
         <Button
@@ -248,41 +290,64 @@ export function AddProviderDialog({
       onClose={() => onOpenChange(false)}
       footer={footer}
     >
-      <Tabs
-        value={activeTab}
-        onValueChange={(v) => setActiveTab(v as "app-specific" | "universal")}
-      >
-        <TabsList className="grid w-full grid-cols-2 mb-6">
-          <TabsTrigger value="app-specific">
-            {t(`apps.${appId}`)} {t("provider.tabProvider")}
-          </TabsTrigger>
-          <TabsTrigger value="universal">
-            {t("provider.tabUniversal")}
-          </TabsTrigger>
-        </TabsList>
+      {showUniversalTab ? (
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) =>
+            setActiveTab(v as "app-specific" | "universal" | "oauth")
+          }
+        >
+          <TabsList className="grid w-full grid-cols-3 mb-6">
+            <TabsTrigger value="app-specific">
+              {t(`apps.${appId}`)} {t("provider.tabProvider")}
+            </TabsTrigger>
+            <TabsTrigger value="universal">
+              {t("provider.tabUniversal")}
+            </TabsTrigger>
+            <TabsTrigger value="oauth">
+              {t("provider.tabOAuth", { defaultValue: "OAuth 认证源" })}
+            </TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="app-specific" className="mt-0">
-          <ProviderForm
-            appId={appId}
-            submitLabel={t("common.add")}
-            onSubmit={handleSubmit}
-            onCancel={() => onOpenChange(false)}
-            showButtons={false}
-          />
-        </TabsContent>
+          <TabsContent value="app-specific" className="mt-0">
+            <ProviderForm
+              appId={appId}
+              submitLabel={t("common.add")}
+              onSubmit={handleSubmit}
+              onCancel={() => onOpenChange(false)}
+              onSubmittingChange={setIsFormSubmitting}
+              showButtons={false}
+            />
+          </TabsContent>
 
-        <TabsContent value="universal" className="mt-0">
-          <UniversalProviderPanel />
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="universal" className="mt-0">
+            <UniversalProviderPanel />
+          </TabsContent>
 
-      {/* Universal Provider Form Modal */}
-      <UniversalProviderFormModal
-        isOpen={universalFormOpen}
-        onClose={handleUniversalFormClose}
-        onSave={handleUniversalProviderSave}
-        initialPreset={selectedUniversalPreset}
-      />
+          <TabsContent value="oauth" className="mt-0">
+            <AuthCenterPanel />
+          </TabsContent>
+        </Tabs>
+      ) : (
+        // OpenCode/OpenClaw: directly show form without tabs
+        <ProviderForm
+          appId={appId}
+          submitLabel={t("common.add")}
+          onSubmit={handleSubmit}
+          onCancel={() => onOpenChange(false)}
+          onSubmittingChange={setIsFormSubmitting}
+          showButtons={false}
+        />
+      )}
+
+      {showUniversalTab && (
+        <UniversalProviderFormModal
+          isOpen={universalFormOpen}
+          onClose={handleUniversalFormClose}
+          onSave={handleUniversalProviderSave}
+          initialPreset={selectedUniversalPreset}
+        />
+      )}
     </FullScreenPanel>
   );
 }

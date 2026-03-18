@@ -4,7 +4,14 @@
 
 use super::{lock_conn, Database, SCHEMA_VERSION};
 use crate::error::AppError;
-use rusqlite::Connection;
+use rusqlite::{params, Connection};
+use serde::Serialize;
+
+#[derive(Serialize)]
+struct LegacySkillMigrationRow {
+    directory: String,
+    app_type: String,
+}
 
 impl Database {
     /// 创建所有数据库表
@@ -58,7 +65,7 @@ impl Database {
             id TEXT PRIMARY KEY, name TEXT NOT NULL, server_config TEXT NOT NULL,
             description TEXT, homepage TEXT, docs TEXT, tags TEXT NOT NULL DEFAULT '[]',
             enabled_claude BOOLEAN NOT NULL DEFAULT 0, enabled_codex BOOLEAN NOT NULL DEFAULT 0,
-            enabled_gemini BOOLEAN NOT NULL DEFAULT 0
+            enabled_gemini BOOLEAN NOT NULL DEFAULT 0, enabled_opencode BOOLEAN NOT NULL DEFAULT 0
         )",
             [],
         )
@@ -284,13 +291,15 @@ impl Database {
         conn.execute("CREATE TABLE IF NOT EXISTS proxy_config (
             app_type TEXT PRIMARY KEY CHECK (app_type IN ('claude','codex','gemini')),
             proxy_enabled INTEGER NOT NULL DEFAULT 0, listen_address TEXT NOT NULL DEFAULT '127.0.0.1',
-            listen_port INTEGER NOT NULL DEFAULT 5000, enable_logging INTEGER NOT NULL DEFAULT 1,
+            listen_port INTEGER NOT NULL DEFAULT 15721, enable_logging INTEGER NOT NULL DEFAULT 1,
             enabled INTEGER NOT NULL DEFAULT 0, auto_failover_enabled INTEGER NOT NULL DEFAULT 0,
             max_retries INTEGER NOT NULL DEFAULT 3, streaming_first_byte_timeout INTEGER NOT NULL DEFAULT 60,
             streaming_idle_timeout INTEGER NOT NULL DEFAULT 120, non_streaming_timeout INTEGER NOT NULL DEFAULT 600,
             circuit_failure_threshold INTEGER NOT NULL DEFAULT 4, circuit_success_threshold INTEGER NOT NULL DEFAULT 2,
             circuit_timeout_seconds INTEGER NOT NULL DEFAULT 60, circuit_error_rate_threshold REAL NOT NULL DEFAULT 0.6,
             circuit_min_requests INTEGER NOT NULL DEFAULT 10,
+            default_cost_multiplier TEXT NOT NULL DEFAULT '1',
+            pricing_model_source TEXT NOT NULL DEFAULT 'response',
             created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now'))
         )", []).map_err(|e| AppError::Database(e.to_string()))?;
 
@@ -341,6 +350,7 @@ impl Database {
         // 12. Proxy Request Logs 表
         conn.execute("CREATE TABLE IF NOT EXISTS proxy_request_logs (
             request_id TEXT PRIMARY KEY, provider_id TEXT NOT NULL, app_type TEXT NOT NULL, model TEXT NOT NULL,
+            request_model TEXT,
             input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0,
             cache_read_tokens INTEGER NOT NULL DEFAULT 0, cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
             input_cost_usd TEXT NOT NULL DEFAULT '0', output_cost_usd TEXT NOT NULL DEFAULT '0',
@@ -418,6 +428,27 @@ impl Database {
         )
         .map_err(|e| AppError::Database(e.to_string()))?;
 
+        // 17. Usage Daily Rollups 表 (日聚合统计)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS usage_daily_rollups (
+                date TEXT NOT NULL,
+                app_type TEXT NOT NULL,
+                provider_id TEXT NOT NULL,
+                model TEXT NOT NULL,
+                request_count INTEGER NOT NULL DEFAULT 0,
+                success_count INTEGER NOT NULL DEFAULT 0,
+                input_tokens INTEGER NOT NULL DEFAULT 0,
+                output_tokens INTEGER NOT NULL DEFAULT 0,
+                cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+                cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+                total_cost_usd TEXT NOT NULL DEFAULT '0',
+                avg_latency_ms INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (date, app_type, provider_id, model)
+            )",
+            [],
+        )
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
         // 尝试添加 live_takeover_active 列到 proxy_config 表
         let _ = conn.execute(
             "ALTER TABLE proxy_config ADD COLUMN live_takeover_active INTEGER NOT NULL DEFAULT 0",
@@ -434,7 +465,7 @@ impl Database {
             [],
         );
         let _ = conn.execute(
-            "ALTER TABLE proxy_config ADD COLUMN listen_port INTEGER NOT NULL DEFAULT 5000",
+            "ALTER TABLE proxy_config ADD COLUMN listen_port INTEGER NOT NULL DEFAULT 15721",
             [],
         );
         let _ = conn.execute(
@@ -685,7 +716,7 @@ impl Database {
                 conn,
                 "proxy_config",
                 "listen_port",
-                "INTEGER NOT NULL DEFAULT 5000",
+                "INTEGER NOT NULL DEFAULT 15721",
             )?;
             Self::add_column_if_missing(
                 conn,
@@ -731,6 +762,7 @@ impl Database {
         // proxy_request_logs 表
         conn.execute("CREATE TABLE IF NOT EXISTS proxy_request_logs (
             request_id TEXT PRIMARY KEY, provider_id TEXT NOT NULL, app_type TEXT NOT NULL, model TEXT NOT NULL,
+            request_model TEXT,
             input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0,
             cache_read_tokens INTEGER NOT NULL DEFAULT 0, cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
             input_cost_usd TEXT NOT NULL DEFAULT '0', output_cost_usd TEXT NOT NULL DEFAULT '0',
@@ -880,13 +912,15 @@ impl Database {
         conn.execute("CREATE TABLE proxy_config_new (
             app_type TEXT PRIMARY KEY CHECK (app_type IN ('claude','codex','gemini')),
             proxy_enabled INTEGER NOT NULL DEFAULT 0, listen_address TEXT NOT NULL DEFAULT '127.0.0.1',
-            listen_port INTEGER NOT NULL DEFAULT 5000, enable_logging INTEGER NOT NULL DEFAULT 1,
+            listen_port INTEGER NOT NULL DEFAULT 15721, enable_logging INTEGER NOT NULL DEFAULT 1,
             enabled INTEGER NOT NULL DEFAULT 0, auto_failover_enabled INTEGER NOT NULL DEFAULT 0,
             max_retries INTEGER NOT NULL DEFAULT 3, streaming_first_byte_timeout INTEGER NOT NULL DEFAULT 60,
             streaming_idle_timeout INTEGER NOT NULL DEFAULT 120, non_streaming_timeout INTEGER NOT NULL DEFAULT 600,
             circuit_failure_threshold INTEGER NOT NULL DEFAULT 4, circuit_success_threshold INTEGER NOT NULL DEFAULT 2,
             circuit_timeout_seconds INTEGER NOT NULL DEFAULT 60, circuit_error_rate_threshold REAL NOT NULL DEFAULT 0.6,
             circuit_min_requests INTEGER NOT NULL DEFAULT 10,
+            default_cost_multiplier TEXT NOT NULL DEFAULT '1',
+            pricing_model_source TEXT NOT NULL DEFAULT 'response',
             created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now'))
         )", [])?;
 
@@ -1019,11 +1053,30 @@ impl Database {
 
         log::info!("开始迁移 skills 表到 v3 结构（统一管理架构）...");
 
-        // 1. 备份旧数据（用于日志）
+        // 1. 备份旧数据（用于日志和后续启动迁移）
         let old_count: i64 = conn
             .query_row("SELECT COUNT(*) FROM skills", [], |row| row.get(0))
             .unwrap_or(0);
         log::info!("旧 skills 表有 {old_count} 条记录");
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT directory, app_type FROM skills
+                 WHERE installed = 1",
+            )
+            .map_err(|e| AppError::Database(format!("查询旧 skills 快照失败: {e}")))?;
+        let snapshot_rows: Vec<LegacySkillMigrationRow> = stmt
+            .query_map([], |row| {
+                Ok(LegacySkillMigrationRow {
+                    directory: row.get(0)?,
+                    app_type: row.get(1)?,
+                })
+            })
+            .map_err(|e| AppError::Database(format!("读取旧 skills 快照失败: {e}")))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| AppError::Database(format!("解析旧 skills 快照失败: {e}")))?;
+        let snapshot_json = serde_json::to_string(&snapshot_rows)
+            .map_err(|e| AppError::Database(format!("序列化旧 skills 快照失败: {e}")))?;
 
         // 标记：需要在启动后从文件系统扫描并重建 Skills 数据
         // 说明：v3 结构将 Skills 的 SSOT 迁移到 ~/.cc-switch/skills/，
@@ -1031,6 +1084,10 @@ impl Database {
         let _ = conn.execute(
             "INSERT OR REPLACE INTO settings (key, value) VALUES ('skills_ssot_migration_pending', 'true')",
             [],
+        );
+        let _ = conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('skills_ssot_migration_snapshot', ?1)",
+            [snapshot_json],
         );
 
         // 2. 删除旧表
@@ -1459,7 +1516,16 @@ impl Database {
     /// 注意: model_id 使用短横线格式（如 claude-haiku-4-5），与 API 返回的模型名称标准化后一致
     fn seed_model_pricing(conn: &Connection) -> Result<(), AppError> {
         let pricing_data = [
-            // Claude 4.5 系列 (Latest Models)
+            // Claude 4.6 系列
+            (
+                "claude-opus-4-6-20260206",
+                "Claude Opus 4.6",
+                "5",
+                "25",
+                "0.50",
+                "6.25",
+            ),
+            // Claude 4.5 系列
             (
                 "claude-opus-4-5-20251101",
                 "Claude Opus 4.5",
@@ -1560,6 +1626,40 @@ impl Database {
             (
                 "gpt-5.2-codex-xhigh",
                 "GPT-5.2 Codex",
+                "1.75",
+                "14",
+                "0.175",
+                "0",
+            ),
+            // GPT-5.3 Codex 系列
+            ("gpt-5.3-codex", "GPT-5.3 Codex", "1.75", "14", "0.175", "0"),
+            (
+                "gpt-5.3-codex-low",
+                "GPT-5.3 Codex",
+                "1.75",
+                "14",
+                "0.175",
+                "0",
+            ),
+            (
+                "gpt-5.3-codex-medium",
+                "GPT-5.3 Codex",
+                "1.75",
+                "14",
+                "0.175",
+                "0",
+            ),
+            (
+                "gpt-5.3-codex-high",
+                "GPT-5.3 Codex",
+                "1.75",
+                "14",
+                "0.175",
+                "0",
+            ),
+            (
+                "gpt-5.3-codex-xhigh",
+                "GPT-5.3 Codex",
                 "1.75",
                 "14",
                 "0.175",
@@ -1686,6 +1786,15 @@ impl Database {
                 "0.03",
                 "0",
             ),
+            // StepFun 系列
+            (
+                "step-3.5-flash",
+                "Step 3.5 Flash",
+                "0.10",
+                "0.30",
+                "0.02",
+                "0",
+            ),
             // ====== 国产模型 (CNY/1M tokens) ======
             // Doubao (字节跳动)
             (
@@ -1752,7 +1861,7 @@ impl Database {
 
         for (model_id, display_name, input, output, cache_read, cache_creation) in pricing_data {
             conn.execute(
-                "INSERT OR REPLACE INTO model_pricing (
+                "INSERT OR IGNORE INTO model_pricing (
                     model_id, display_name, input_cost_per_million, output_cost_per_million,
                     cache_read_cost_per_million, cache_creation_cost_per_million
                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
@@ -1779,14 +1888,8 @@ impl Database {
     }
 
     fn ensure_model_pricing_seeded_on_conn(conn: &Connection) -> Result<(), AppError> {
-        let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM model_pricing", [], |row| row.get(0))
-            .map_err(|e| AppError::Database(format!("统计模型定价数据失败: {e}")))?;
-
-        if count == 0 {
-            Self::seed_model_pricing(conn)?;
-        }
-        Ok(())
+        // 每次启动都执行 INSERT OR IGNORE，增量追加新模型，已有数据不覆盖
+        Self::seed_model_pricing(conn)
     }
 
     // --- 辅助方法 ---

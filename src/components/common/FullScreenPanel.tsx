@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ContentContainer } from "@/components/layout";
+import { isTextEditableTarget } from "@/utils/domUtils";
 
 interface FullScreenPanelProps {
   isOpen: boolean;
@@ -14,7 +15,6 @@ interface FullScreenPanelProps {
 }
 
 const DRAG_BAR_HEIGHT = 28; // px - match App.tsx
-const HEADER_HEIGHT = 64; // px - match App.tsx
 
 /**
  * Reusable full-screen panel component
@@ -34,6 +34,39 @@ export const FullScreenPanel: React.FC<FullScreenPanelProps> = ({
     }
     return () => {
       document.body.style.overflow = "";
+    };
+  }, [isOpen]);
+
+  // ESC 键关闭面板
+  const onCloseRef = React.useRef(onClose);
+
+  React.useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        // 子组件（例如 Radix 的 Select/Dialog/Dropdown）如果已经消费了 ESC，就不要再关闭整个面板
+        if (event.defaultPrevented) {
+          return;
+        }
+
+        if (isTextEditableTarget(event.target)) {
+          return; // 让输入框自己处理 ESC（比如清空、失焦等）
+        }
+
+        event.stopPropagation(); // 阻止事件继续冒泡到 window，避免触发 App.tsx 的全局监听
+        onCloseRef.current();
+      }
+    };
+
+    // 使用冒泡阶段监听，让子组件（如 Radix UI）优先处理 ESC
+    window.addEventListener("keydown", handleKeyDown, false);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown, false);
     };
   }, [isOpen]);
 
@@ -62,10 +95,13 @@ export const FullScreenPanel: React.FC<FullScreenPanelProps> = ({
           {/* Header - match App.tsx */}
           <div
             className="flex-shrink-0 flex items-center"
-            style={{
-              backgroundColor: "hsl(var(--background))",
-              height: HEADER_HEIGHT,
-            }}
+            data-tauri-drag-region
+            style={
+              {
+                WebkitAppRegion: "drag",
+                backgroundColor: "hsl(var(--background))",
+              } as React.CSSProperties
+            }
           >
             <ContentContainer className="w-full flex items-center gap-4">
               <Button
@@ -73,7 +109,8 @@ export const FullScreenPanel: React.FC<FullScreenPanelProps> = ({
                 variant="outline"
                 size="icon"
                 onClick={onClose}
-                className="rounded-lg"
+                className="rounded-lg select-none"
+                style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
               >
                 <ArrowLeft className="h-4 w-4" />
               </Button>

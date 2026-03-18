@@ -3,11 +3,12 @@
 //! 基于Axum的HTTP服务器，处理代理请求
 
 use super::{
-    failover_switch::FailoverSwitchManager, handlers, provider_router::ProviderRouter, types::*,
-    ProxyError,
+    failover_switch::FailoverSwitchManager, handlers, log_codes::srv as log_srv,
+    provider_router::ProviderRouter, types::*, ProxyError,
 };
 use crate::database::Database;
 use axum::{
+    extract::DefaultBodyLimit,
     routing::{get, post},
     Router,
 };
@@ -95,7 +96,10 @@ impl ProxyServer {
             .await
             .map_err(|e| ProxyError::BindFailed(e.to_string()))?;
 
-        log::info!("代理服务器启动于 {addr}");
+        log::info!("[{}] 代理服务器启动于 {addr}", log_srv::STARTED);
+
+        // 更新全局代理端口，用于系统代理检测
+        crate::proxy::http_client::set_proxy_port(self.config.listen_port);
 
         // 保存关闭句柄
         *self.shutdown_tx.write().await = Some(shutdown_tx);
@@ -146,13 +150,25 @@ impl ProxyServer {
         // 2. 等待服务器任务结束（带 5 秒超时保护）
         if let Some(handle) = self.server_handle.write().await.take() {
             match tokio::time::timeout(std::time::Duration::from_secs(5), handle).await {
-                Ok(Ok(())) => log::info!("代理服务器已完全停止"),
-                Ok(Err(e)) => log::warn!("代理服务器任务异常终止: {e}"),
-                Err(_) => log::warn!("代理服务器停止超时（5秒），强制继续"),
+                Ok(Ok(())) => {
+                    log::info!("[{}] 代理服务器已完全停止", log_srv::STOPPED);
+                    Ok(())
+                }
+                Ok(Err(e)) => {
+                    log::warn!("[{}] 代理服务器任务异常终止: {e}", log_srv::TASK_ERROR);
+                    Err(ProxyError::StopFailed(e.to_string()))
+                }
+                Err(_) => {
+                    log::warn!(
+                        "[{}] 代理服务器停止超时（5秒），强制继续",
+                        log_srv::STOP_TIMEOUT
+                    );
+                    Err(ProxyError::StopTimeout)
+                }
             }
+        } else {
+            Ok(())
         }
-
-        Ok(())
     }
 
     pub async fn get_status(&self) -> ProxyStatus {
@@ -175,6 +191,18 @@ impl ProxyServer {
             .collect();
 
         status
+    }
+
+    /// 更新某个应用类型当前“目标供应商”（用于 UI 展示 active_targets）
+    ///
+    /// 注意：这不代表该供应商一定已经处理过请求，而是用于“热切换/启用故障转移立即切 P1”
+    /// 等场景下，让 UI 能立刻反映最新目标。
+    pub async fn set_active_target(&self, app_type: &str, provider_id: &str, provider_name: &str) {
+        let mut current_providers = self.state.current_providers.write().await;
+        current_providers.insert(
+            app_type.to_string(),
+            (provider_id.to_string(), provider_name.to_string()),
+        );
     }
 
     fn build_router(&self) -> Router {
@@ -209,9 +237,28 @@ impl ProxyServer {
             .route("/v1/responses", post(handlers::handle_responses))
             .route("/v1/v1/responses", post(handlers::handle_responses))
             .route("/codex/v1/responses", post(handlers::handle_responses))
+            // OpenAI Responses Compact API (Codex CLI 远程压缩，透传)
+            .route(
+                "/responses/compact",
+                post(handlers::handle_responses_compact),
+            )
+            .route(
+                "/v1/responses/compact",
+                post(handlers::handle_responses_compact),
+            )
+            .route(
+                "/v1/v1/responses/compact",
+                post(handlers::handle_responses_compact),
+            )
+            .route(
+                "/codex/v1/responses/compact",
+                post(handlers::handle_responses_compact),
+            )
             // Gemini API (支持带前缀和不带前缀)
             .route("/v1beta/*path", post(handlers::handle_gemini))
             .route("/gemini/v1beta/*path", post(handlers::handle_gemini))
+            // 提高默认请求体大小限制（避免 413 Payload Too Large）
+            .layer(DefaultBodyLimit::max(200 * 1024 * 1024))
             .layer(cors)
             .with_state(self.state.clone())
     }

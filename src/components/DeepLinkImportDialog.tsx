@@ -53,15 +53,12 @@ export function DeepLinkImportDialog() {
     const unlistenImport = listen<DeepLinkImportRequest>(
       "deeplink-import",
       async (event) => {
-        console.log("Deep link import event received:", event.payload);
-
         // If config is present, merge it to get the complete configuration
         if (event.payload.config || event.payload.configUrl) {
           try {
             const mergedRequest = await deeplinkApi.mergeDeeplinkConfig(
               event.payload,
             );
-            console.log("Config merged successfully:", mergedRequest);
             setRequest(mergedRequest);
           } catch (error) {
             console.error("Failed to merge config:", error);
@@ -389,12 +386,27 @@ export function DeepLinkImportDialog() {
                   </div>
 
                   {/* API Endpoint */}
-                  <div className="grid grid-cols-3 items-center gap-4">
-                    <div className="font-medium text-sm text-muted-foreground">
+                  <div className="grid grid-cols-3 items-start gap-4">
+                    <div className="font-medium text-sm text-muted-foreground pt-0.5">
                       {t("deeplink.endpoint")}
                     </div>
-                    <div className="col-span-2 text-sm break-all">
-                      {request.endpoint}
+                    <div className="col-span-2 text-sm break-all space-y-1">
+                      {request.endpoint?.split(",").map((ep, idx) => (
+                        <div
+                          key={idx}
+                          className={
+                            idx === 0 ? "font-medium" : "text-muted-foreground"
+                          }
+                        >
+                          {idx === 0 ? "🔹 " : "└ "}
+                          {ep.trim()}
+                          {idx === 0 && request.endpoint?.includes(",") && (
+                            <span className="text-xs text-muted-foreground ml-2">
+                              ({t("deeplink.primaryEndpoint")})
+                            </span>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   </div>
 

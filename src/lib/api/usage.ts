@@ -12,6 +12,7 @@ import type {
 } from "@/types/usage";
 import type { UsageResult } from "@/types";
 import type { AppId } from "./types";
+import type { TemplateType } from "@/config/constants";
 
 export const usageApi = {
   // Provider usage script methods
@@ -28,6 +29,7 @@ export const usageApi = {
     baseUrl?: string,
     accessToken?: string,
     userId?: string,
+    templateType?: TemplateType,
   ): Promise<UsageResult> => {
     return invoke("testUsageScript", {
       providerId,
@@ -38,6 +40,7 @@ export const usageApi = {
       baseUrl,
       accessToken,
       userId,
+      templateType,
     });
   },
 

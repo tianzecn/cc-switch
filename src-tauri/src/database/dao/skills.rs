@@ -3,7 +3,7 @@
 //! 提供 Skills 和 Skill Repos 的 CRUD 操作。
 //!
 //! v3.10.0+ 统一管理架构：
-//! - Skills 使用统一的 id 主键，支持三应用启用标志
+//! - Skills 使用统一的 id 主键，支持四应用启用标志
 //! - 实际文件存储在 ~/.cc-switch/skills/，同步到各应用目录
 
 use crate::app_config::{InstalledSkill, SkillApps};
@@ -44,6 +44,7 @@ impl Database {
                         claude: row.get(9)?,
                         codex: row.get(10)?,
                         gemini: row.get(11)?,
+                        opencode: false,
                     },
                     file_hash: row.get(12)?,
                     installed_at: row.get(13)?,
@@ -88,6 +89,7 @@ impl Database {
                     claude: row.get(9)?,
                     codex: row.get(10)?,
                     gemini: row.get(11)?,
+                    opencode: false,
                 },
                 file_hash: row.get(12)?,
                 installed_at: row.get(13)?,
@@ -157,8 +159,8 @@ impl Database {
         let conn = lock_conn!(self.conn);
         let affected = conn
             .execute(
-                "UPDATE skills SET enabled_claude = ?1, enabled_codex = ?2, enabled_gemini = ?3 WHERE id = ?4",
-                params![apps.claude, apps.codex, apps.gemini, id],
+                "UPDATE skills SET enabled_claude = ?1, enabled_codex = ?2, enabled_gemini = ?3, enabled_opencode = ?4 WHERE id = ?5",
+                params![apps.claude, apps.codex, apps.gemini, apps.opencode, id],
             )
             .map_err(|e| AppError::Database(e.to_string()))?;
         Ok(affected > 0)

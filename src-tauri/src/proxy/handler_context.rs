@@ -5,7 +5,10 @@
 use crate::app_config::AppType;
 use crate::provider::Provider;
 use crate::proxy::{
-    extract_session_id, forwarder::RequestForwarder, server::ProxyState, types::AppProxyConfig,
+    extract_session_id,
+    forwarder::RequestForwarder,
+    server::ProxyState,
+    types::{AppProxyConfig, OptimizerConfig, RectifierConfig},
     ProxyError,
 };
 use axum::http::HeaderMap;
@@ -54,6 +57,10 @@ pub struct RequestContext {
     pub app_type: AppType,
     /// Session ID（从客户端请求提取或新生成）
     pub session_id: String,
+    /// 整流器配置
+    pub rectifier_config: RectifierConfig,
+    /// 优化器配置
+    pub optimizer_config: OptimizerConfig,
 }
 
 impl RequestContext {
@@ -85,6 +92,10 @@ impl RequestContext {
             .get_proxy_config_for_app(app_type_str)
             .await
             .map_err(|e| ProxyError::DatabaseError(e.to_string()))?;
+
+        // 从数据库读取整流器配置
+        let rectifier_config = state.db.get_rectifier_config().unwrap_or_default();
+        let optimizer_config = state.db.get_optimizer_config().unwrap_or_default();
 
         let current_provider_id =
             crate::settings::get_current_provider(&app_type).unwrap_or_default();
@@ -127,7 +138,7 @@ impl RequestContext {
             .cloned()
             .ok_or(ProxyError::NoAvailableProvider)?;
 
-        log::info!(
+        log::debug!(
             "[{}] Provider: {}, model: {}, failover chain: {} providers, session: {}",
             tag,
             provider.name,
@@ -147,6 +158,8 @@ impl RequestContext {
             app_type_str,
             app_type,
             session_id,
+            rectifier_config,
+            optimizer_config,
         })
     }
 
@@ -168,7 +181,6 @@ impl RequestContext {
             .unwrap_or("unknown")
             .to_string();
 
-        log::info!("[{}] 从 URI 提取模型: {}", self.tag, self.request_model);
         self
     }
 
@@ -190,7 +202,7 @@ impl RequestContext {
                 )
             } else {
                 // 故障转移关闭：不启用超时配置
-                log::info!(
+                log::debug!(
                     "[{}] Failover disabled, timeout configs are bypassed",
                     self.tag
                 );
@@ -207,6 +219,8 @@ impl RequestContext {
             self.current_provider_id.clone(),
             first_byte_timeout,
             idle_timeout,
+            self.rectifier_config.clone(),
+            self.optimizer_config.clone(),
         )
     }
 

@@ -23,7 +23,11 @@ export function ProxyToggle({ className, activeApp }: ProxyToggleProps) {
     useProxyStatus();
 
   const handleToggle = async (checked: boolean) => {
-    await setTakeoverForApp({ appType: activeApp, enabled: checked });
+    try {
+      await setTakeoverForApp({ appType: activeApp, enabled: checked });
+    } catch (error) {
+      console.error("[ProxyToggle] Toggle takeover failed:", error);
+    }
   };
 
   const takeoverEnabled = takeoverStatus?.[activeApp] || false;
@@ -33,55 +37,52 @@ export function ProxyToggle({ className, activeApp }: ProxyToggleProps) {
       ? "Claude"
       : activeApp === "codex"
         ? "Codex"
-        : "Gemini";
+        : activeApp === "gemini"
+          ? "Gemini"
+          : "OpenCode";
 
   const tooltipText = takeoverEnabled
     ? isRunning
       ? t("proxy.takeover.tooltip.active", {
+          appLabel,
+          address: status?.address,
+          port: status?.port,
           defaultValue: `${appLabel} 已接管 - ${status?.address}:${status?.port}\n切换该应用供应商为热切换`,
         })
       : t("proxy.takeover.tooltip.broken", {
+          appLabel,
           defaultValue: `${appLabel} 已接管，但代理服务未运行`,
         })
     : t("proxy.takeover.tooltip.inactive", {
+        appLabel,
         defaultValue: `接管 ${appLabel} 的 Live 配置，让该应用请求走本地代理`,
       });
 
   return (
     <div
-      className={cn("p-1 rounded-xl transition-all", className)}
+      className={cn(
+        "flex items-center gap-1 px-1.5 h-8 rounded-lg bg-muted/50 transition-all",
+        className,
+      )}
       title={tooltipText}
     >
-      <div className="flex items-center gap-2 px-2 h-8 rounded-md cursor-default">
-        {isPending ? (
-          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-        ) : (
-          <Radio
-            className={cn(
-              "h-4 w-4 transition-colors",
-              takeoverEnabled
-                ? "text-emerald-500 animate-pulse"
-                : "text-muted-foreground",
-            )}
-          />
-        )}
-        <span
+      {isPending ? (
+        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+      ) : (
+        <Radio
           className={cn(
-            "text-sm font-medium transition-colors select-none",
+            "h-4 w-4 transition-colors",
             takeoverEnabled
-              ? "text-emerald-600 dark:text-emerald-400"
+              ? "text-emerald-500 animate-pulse"
               : "text-muted-foreground",
           )}
-        >
-          Proxy
-        </span>
-        <Switch
-          checked={takeoverEnabled}
-          onCheckedChange={handleToggle}
-          disabled={isPending}
-          className="ml-1"
         />
-      </div>
+      )}
+      <Switch
+        checked={takeoverEnabled}
+        onCheckedChange={handleToggle}
+        disabled={isPending}
+      />
     </div>
   );
 }
