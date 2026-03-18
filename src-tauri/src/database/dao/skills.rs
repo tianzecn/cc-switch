@@ -248,6 +248,7 @@ impl Database {
                         claude: row.get(9)?,
                         codex: row.get(10)?,
                         gemini: row.get(11)?,
+                        opencode: false,
                     },
                     file_hash: row.get(12)?,
                     installed_at: row.get(13)?,

@@ -34,11 +34,17 @@ export type View =
   | "settings"
   | "prompts"
   | "skills"
+  | "skillsDiscovery"
   | "mcp"
   | "agents"
   | "universal"
   | "commands"
-  | "hooks";
+  | "hooks"
+  | "sessions"
+  | "workspace"
+  | "openclawEnv"
+  | "openclawTools"
+  | "openclawAgents";
 
 // Ref types for page action buttons
 export interface PromptPanelRef {

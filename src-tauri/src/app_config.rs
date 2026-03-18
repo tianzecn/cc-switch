@@ -164,6 +164,7 @@ impl CommandApps {
             AppType::Claude => self.claude,
             AppType::Codex => self.codex,
             AppType::Gemini => self.gemini,
+            AppType::OpenCode | AppType::OpenClaw => false,
         }
     }
 
@@ -173,6 +174,7 @@ impl CommandApps {
             AppType::Claude => self.claude = enabled,
             AppType::Codex => self.codex = enabled,
             AppType::Gemini => self.gemini = enabled,
+            AppType::OpenCode | AppType::OpenClaw => {}
         }
     }
 
@@ -654,6 +656,7 @@ impl HookApps {
             AppType::Claude => apps.claude = true,
             AppType::Codex => apps.codex = true,
             AppType::Gemini => apps.gemini = true,
+            AppType::OpenCode | AppType::OpenClaw => {}
         }
         apps
     }

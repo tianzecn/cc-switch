@@ -222,11 +222,13 @@ const AppSwitch: React.FC<AppSwitchProps> = ({
   onToggle,
   label,
 }) => {
-  const colorClass = {
+  const colorClass = ({
     claude: "data-[state=checked]:bg-orange-500",
     codex: "data-[state=checked]:bg-green-500",
     gemini: "data-[state=checked]:bg-blue-500",
-  }[app];
+    opencode: "data-[state=checked]:bg-purple-500",
+    openclaw: "data-[state=checked]:bg-pink-500",
+  } as Record<string, string>)[app] ?? "";
 
   const switchId = `${skillId}-${app}`;
 

@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Server } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
+
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   useAllMcpServers,
@@ -19,6 +19,9 @@ import { settingsApi } from "@/lib/api";
 import { mcpPresets } from "@/config/mcpPresets";
 import { toast } from "sonner";
 import { ContentContainer } from "@/components/layout";
+import { MCP_SKILLS_APP_IDS } from "@/config/appConfig";
+import { AppToggleGroup } from "@/components/common/AppToggleGroup";
+import { ListItemRow } from "@/components/common/ListItemRow";
 
 interface UnifiedMcpPanelProps {
   onOpenChange: (open: boolean) => void;

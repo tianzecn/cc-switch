@@ -43,6 +43,22 @@ import {
   type PageActionRefs,
 } from "@/components/navbar/UnifiedNavbar";
 import { ContentContainer } from "@/components/layout";
+import { SessionManagerPage } from "@/components/sessions/SessionManagerPage";
+import WorkspaceFilesPanel from "@/components/workspace/WorkspaceFilesPanel";
+import EnvPanel from "@/components/openclaw/EnvPanel";
+import ToolsPanel from "@/components/openclaw/ToolsPanel";
+import AgentsDefaultsPanel from "@/components/openclaw/AgentsDefaultsPanel";
+import OpenClawHealthBanner from "@/components/openclaw/OpenClawHealthBanner";
+import {
+  useDisableCurrentOmo,
+  useDisableCurrentOmoSlim,
+} from "@/lib/query/omo";
+
+interface WebDavSyncStatusUpdatedPayload {
+  source?: string;
+  status?: string;
+  error?: string;
+}
 
 const DRAG_BAR_HEIGHT = 28; // px
 const NAVBAR_HEIGHT = 96; // px (3 rows * 32px)
@@ -96,7 +112,7 @@ function App() {
 
   const [activeApp, setActiveApp] = useState<AppId>(getInitialApp);
   const [currentView, setCurrentView] = useState<View>(getInitialView);
-  const [settingsDefaultTab, setSettingsDefaultTab] = useState("general");
+  const [settingsDefaultTab] = useState("general");
   const [isAddOpen, setIsAddOpen] = useState(false);
 
   useEffect(() => {
@@ -154,7 +170,7 @@ function App() {
   const effectiveUsageProvider = useLastValidValue(usageProvider);
 
   const toolbarRef = useRef<HTMLDivElement>(null);
-  const isToolbarCompact = useAutoCompact(toolbarRef);
+  useAutoCompact(toolbarRef);
 
   const promptPanelRef = useRef<any>(null);
   const mcpPanelRef = useRef<any>(null);
@@ -195,13 +211,6 @@ function App() {
       currentView === "openclawAgents");
   const { data: openclawHealthWarnings = [] } =
     useOpenClawHealth(isOpenClawView);
-  const hasSkillsSupport = true;
-  const hasSessionSupport =
-    activeApp === "claude" ||
-    activeApp === "codex" ||
-    activeApp === "opencode" ||
-    activeApp === "openclaw" ||
-    activeApp === "gemini";
 
   // 🎯 使用 useProviderActions Hook 统一管理所有 Provider 操作
   const {

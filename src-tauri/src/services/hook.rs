@@ -222,6 +222,8 @@ impl HookService {
             AppType::Claude => home.join(".claude").join("settings.json"),
             AppType::Codex => home.join(".codex").join("settings.json"),
             AppType::Gemini => home.join(".gemini").join("settings.json"),
+            AppType::OpenCode => home.join(".opencode").join("settings.json"),
+            AppType::OpenClaw => home.join(".openclaw").join("settings.json"),
         };
 
         Ok(path)
@@ -1626,5 +1628,6 @@ pub fn check_app_hooks_support(app: &AppType) -> bool {
         AppType::Claude => true,
         AppType::Codex => false, // TODO: 确认 Codex CLI 是否支持
         AppType::Gemini => false, // TODO: 确认 Gemini CLI 是否支持
+        AppType::OpenCode | AppType::OpenClaw => false,
     }
 }

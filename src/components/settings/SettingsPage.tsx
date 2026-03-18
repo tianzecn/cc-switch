@@ -5,10 +5,7 @@ import {
   Save,
   FolderSearch,
   Database,
-  Server,
-  ChevronDown,
   Github,
-  Maximize2,
   Cloud,
   ScrollText,
   HardDriveDownload,
@@ -44,8 +41,6 @@ import { BackupListSection } from "@/components/settings/BackupListSection";
 import { WebdavSyncSection } from "@/components/settings/WebdavSyncSection";
 import { AboutSection } from "@/components/settings/AboutSection";
 import { GitHubTokenSettings } from "@/components/settings/GitHubTokenSettings";
-import { ProxyPanel } from "@/components/proxy";
-import { PricingConfigPanel } from "@/components/usage/PricingConfigPanel";
 import { ProxyTabContent } from "@/components/settings/ProxyTabContent";
 import { ModelTestConfigPanel } from "@/components/usage/ModelTestConfigPanel";
 import { UsageDashboard } from "@/components/usage/UsageDashboard";
@@ -55,11 +50,9 @@ import { useSettings } from "@/hooks/useSettings";
 import { useImportExport } from "@/hooks/useImportExport";
 import { useTranslation } from "react-i18next";
 import type { SettingsFormState } from "@/hooks/useSettings";
-import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
-import { useProxyStatus } from "@/hooks/useProxyStatus";
+
 import { ContentContainer } from "@/components/layout";
-import { useLayoutMode } from "@/hooks/useLayoutMode";
+
 
 interface SettingsDialogProps {
   open: boolean;
@@ -191,27 +184,6 @@ export function SettingsPage({
 
   const isBusy = useMemo(() => isLoading && !settings, [isLoading, settings]);
 
-  const {
-    isRunning,
-    startProxyServer,
-    stopWithRestore,
-    isPending: isProxyPending,
-  } = useProxyStatus();
-
-  // 布局模式状态
-  const { mode: layoutMode, setMode: setLayoutMode } = useLayoutMode();
-
-  const handleToggleProxy = async (checked: boolean) => {
-    try {
-      if (!checked) {
-        await stopWithRestore();
-      } else {
-        await startProxyServer();
-      }
-    } catch (error) {
-      console.error("Toggle proxy failed:", error);
-    }
-  };
 
   return (
     <ContentContainer className="flex flex-col h-[calc(100vh-8rem)] overflow-hidden">

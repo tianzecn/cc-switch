@@ -772,7 +772,7 @@ impl SkillService {
             repo_owner: Some(skill.repo_owner.clone()),
             repo_name: Some(skill.repo_name.clone()),
             repo_branch: Some(repo_branch),
-            readme_url,
+            readme_url: skill.readme_url.clone(),
             apps: SkillApps::only(current_app),
             file_hash, // 用于更新检测
             installed_at: chrono::Utc::now().timestamp(),
@@ -855,9 +855,9 @@ impl SkillService {
             })??;
 
             // 复制到 SSOT
-            let source = temp_dir.join(&skill.directory);
+            let source = temp_dir.0.join(&skill.directory);
             if !source.exists() {
-                let _ = fs::remove_dir_all(&temp_dir);
+                let _ = fs::remove_dir_all(&temp_dir.0);
                 return Err(anyhow!(format_skill_error(
                     "SKILL_DIR_NOT_FOUND",
                     &[("path", &source.display().to_string())],
@@ -866,7 +866,7 @@ impl SkillService {
             }
 
             Self::copy_dir_recursive(&source, &dest)?;
-            let _ = fs::remove_dir_all(&temp_dir);
+            let _ = fs::remove_dir_all(&temp_dir.0);
         }
 
         // 使用 DiscoverableSkill 中已正确计算的 namespace
@@ -2446,12 +2446,16 @@ impl SkillService {
                 name,
                 description,
                 directory: install_name.clone(),
+                namespace: String::new(),
                 repo_owner: None,
                 repo_name: None,
                 repo_branch: None,
                 readme_url: None,
                 apps: SkillApps::only(current_app),
+                file_hash: None,
                 installed_at: chrono::Utc::now().timestamp(),
+                scope: "global".to_string(),
+                project_path: None,
             };
 
             // 保存到数据库
@@ -2657,6 +2661,11 @@ fn save_repos_from_lock(
                     // 未知分支时使用 HEAD 语义，后续下载会回退到 main/master。
                     branch: info.branch.clone().unwrap_or_else(|| "HEAD".to_string()),
                     enabled: true,
+                    builtin: false,
+                    description_zh: None,
+                    description_en: None,
+                    description_ja: None,
+                    added_at: chrono::Utc::now().timestamp(),
                 };
                 if let Err(e) = db.save_skill_repo(&skill_repo) {
                     log::warn!("保存 skill 仓库 {}/{} 失败: {}", info.owner, info.repo, e);

@@ -107,6 +107,7 @@ impl CommandService {
                     return Ok(custom.join("commands"));
                 }
             }
+            AppType::OpenCode | AppType::OpenClaw => {}
         }
 
         // 默认路径
@@ -116,6 +117,8 @@ impl CommandService {
             AppType::Claude => home.join(".claude").join("commands"),
             AppType::Codex => home.join(".codex").join("commands"),
             AppType::Gemini => home.join(".gemini").join("commands"),
+            AppType::OpenCode => home.join(".opencode").join("commands"),
+            AppType::OpenClaw => home.join(".openclaw").join("commands"),
         })
     }
 
@@ -645,6 +648,8 @@ impl CommandService {
                     AppType::Claude => "claude",
                     AppType::Codex => "codex",
                     AppType::Gemini => "gemini",
+                    AppType::OpenCode => "opencode",
+                    AppType::OpenClaw => "openclaw",
                 };
 
                 unmanaged
@@ -691,6 +696,8 @@ impl CommandService {
                             AppType::Claude => "claude",
                             AppType::Codex => "codex",
                             AppType::Gemini => "gemini",
+                            AppType::OpenCode => "opencode",
+                            AppType::OpenClaw => "openclaw",
                         };
                         found_in.push(app_str.to_string());
                     }
@@ -1810,5 +1817,6 @@ pub fn check_app_commands_support(app: &AppType) -> bool {
         AppType::Claude => true,
         AppType::Codex => false, // TODO: 确认 Codex CLI 是否支持
         AppType::Gemini => false, // TODO: 确认 Gemini CLI 是否支持
+        AppType::OpenCode | AppType::OpenClaw => false,
     }
 }

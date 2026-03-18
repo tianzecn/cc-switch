@@ -59,7 +59,7 @@ import {
   type InstalledSkill,
   type AppType,
 } from "@/hooks/useSkills";
-import type { DiscoverableSkill, SkillRepo } from "@/lib/api/skills";
+import type { DiscoverableSkill, ImportSkillSelection, SkillRepo } from "@/lib/api/skills";
 import { formatSkillError } from "@/lib/errors/skillErrorParser";
 import { ContentContainer } from "@/components/layout";
 import type { TreeSelection } from "@/types/tree";
@@ -576,9 +576,9 @@ export const SkillsPageNew = forwardRef<
     }
   };
 
-  const handleImport = async (directories: string[]) => {
+  const handleImport = async (imports: ImportSkillSelection[]) => {
     try {
-      const imported = await importMutation.mutateAsync(directories);
+      const imported = await importMutation.mutateAsync(imports);
       setImportDialogOpen(false);
       toast.success(t("skills.importSuccess", { count: imported.length }), {
         closeButton: true,
@@ -1097,7 +1097,7 @@ interface ImportSkillsDialogProps {
     description?: string;
     foundIn: string[];
   }>;
-  onImport: (directories: string[]) => void;
+  onImport: (imports: ImportSkillSelection[]) => void;
   onClose: () => void;
 }
 
@@ -1122,7 +1122,18 @@ const ImportSkillsDialog: React.FC<ImportSkillsDialogProps> = ({
   };
 
   const handleImport = () => {
-    onImport(Array.from(selected));
+    onImport(
+      Array.from(selected).map((directory) => ({
+        directory,
+        apps: {
+          claude: false,
+          codex: false,
+          gemini: false,
+          opencode: false,
+          openclaw: false,
+        },
+      })),
+    );
   };
 
   return (
