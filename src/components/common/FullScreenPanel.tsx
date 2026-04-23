@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ContentContainer } from "@/components/layout";
+import { DRAG_REGION_ATTR, DRAG_REGION_STYLE } from "@/lib/platform";
 import { isTextEditableTarget } from "@/utils/domUtils";
 
 interface FullScreenPanelProps {
@@ -81,29 +82,36 @@ export const FullScreenPanel: React.FC<FullScreenPanelProps> = ({
           className="fixed inset-0 z-[60] flex flex-col"
           style={{ backgroundColor: "hsl(var(--background))" }}
         >
-          {/* Drag region - match App.tsx */}
-          <div
-            data-tauri-drag-region
-            style={
-              {
-                WebkitAppRegion: "drag",
-                height: DRAG_BAR_HEIGHT,
-              } as React.CSSProperties
-            }
-          />
+          {/* Drag region - match App.tsx. Linux 上 DRAG_BAR_HEIGHT=0，
+              直接跳过整个元素；macOS 保留 28px 拖拽占位。 */}
+          {DRAG_BAR_HEIGHT > 0 && (
+            <div
+              data-tauri-drag-region
+              style={
+                {
+                  WebkitAppRegion: "drag",
+                  height: DRAG_BAR_HEIGHT,
+                } as React.CSSProperties
+              }
+            />
+          )}
 
           {/* Header - match App.tsx */}
           <div
             className="flex-shrink-0 flex items-center"
-            data-tauri-drag-region
+            {...DRAG_REGION_ATTR}
             style={
               {
-                WebkitAppRegion: "drag",
+                ...DRAG_REGION_STYLE,
                 backgroundColor: "hsl(var(--background))",
               } as React.CSSProperties
             }
           >
-            <ContentContainer className="w-full flex items-center gap-4">
+            <ContentContainer
+              className="w-full flex items-center gap-4"
+              {...DRAG_REGION_ATTR}
+              style={{ ...DRAG_REGION_STYLE } as React.CSSProperties}
+            >
               <Button
                 type="button"
                 variant="outline"

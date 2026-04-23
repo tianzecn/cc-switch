@@ -44,7 +44,8 @@ export type View =
   | "workspace"
   | "openclawEnv"
   | "openclawTools"
-  | "openclawAgents";
+  | "openclawAgents"
+  | "hermesMemory";
 
 // Ref types for page action buttons
 export interface PromptPanelRef {

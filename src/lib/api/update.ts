@@ -178,7 +178,7 @@ export const updateApi = {
 
   /** 更新单个 Skill */
   async updateSkill(skillId: string): Promise<SkillUpdateResult> {
-    return await invoke("update_skill", { skillId });
+    return await invoke("execute_skill_update", { skillId });
   },
 
   /** 批量更新 Skills */

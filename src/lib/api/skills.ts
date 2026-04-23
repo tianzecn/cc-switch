@@ -2,7 +2,13 @@ import { invoke } from "@tauri-apps/api/core";
 
 import type { AppId } from "@/lib/api/types";
 
-export type AppType = "claude" | "codex" | "gemini" | "opencode" | "openclaw";
+export type AppType =
+  | "claude"
+  | "codex"
+  | "gemini"
+  | "opencode"
+  | "openclaw"
+  | "hermes";
 
 /** Skill 应用启用状态 */
 export interface SkillApps {
@@ -11,6 +17,7 @@ export interface SkillApps {
   gemini: boolean;
   opencode: boolean;
   openclaw: boolean;
+  hermes: boolean;
 }
 
 /** 已安装的 Skill（v3.10.0+ 统一结构） */
@@ -27,6 +34,8 @@ export interface InstalledSkill {
   readmeUrl?: string;
   apps: SkillApps;
   installedAt: number;
+  contentHash?: string;
+  updatedAt: number;
   /** 安装范围：global 或 project */
   scope: "global" | "project";
   /** 项目路径（当 scope="project" 时有效） */
@@ -84,6 +93,40 @@ export interface Skill {
   repoOwner?: string;
   repoName?: string;
   repoBranch?: string;
+}
+
+/** Skill 更新信息 */
+export interface SkillUpdateInfo {
+  id: string;
+  name: string;
+  currentHash?: string;
+  remoteHash: string;
+}
+
+/** 存储位置迁移结果 */
+export interface MigrationResult {
+  migratedCount: number;
+  skippedCount: number;
+  errors: string[];
+}
+
+/** skills.sh 可发现的技能 */
+export interface SkillsShDiscoverableSkill {
+  key: string;
+  name: string;
+  directory: string;
+  repoOwner: string;
+  repoName: string;
+  repoBranch: string;
+  installs: number;
+  readmeUrl?: string;
+}
+
+/** skills.sh 搜索结果 */
+export interface SkillsShSearchResult {
+  skills: SkillsShDiscoverableSkill[];
+  totalCount: number;
+  query: string;
 }
 
 /** 仓库配置 */
@@ -200,6 +243,32 @@ export const skillsApi = {
   /** 发现可安装的 Skills（从仓库获取） */
   async discoverAvailable(): Promise<DiscoverableSkill[]> {
     return await invoke("discover_available_skills");
+  },
+
+  /** 检查 Skills 更新 */
+  async checkUpdates(): Promise<SkillUpdateInfo[]> {
+    return await invoke("check_skill_updates");
+  },
+
+  /** 更新单个 Skill */
+  async updateSkill(id: string): Promise<InstalledSkill> {
+    return await invoke("update_skill", { id });
+  },
+
+  /** 迁移 Skill 存储位置 */
+  async migrateStorage(
+    target: "cc_switch" | "unified",
+  ): Promise<MigrationResult> {
+    return await invoke("migrate_skill_storage", { target });
+  },
+
+  /** 搜索 skills.sh 公共目录 */
+  async searchSkillsSh(
+    query: string,
+    limit: number,
+    offset: number,
+  ): Promise<SkillsShSearchResult> {
+    return await invoke("search_skills_sh", { query, limit, offset });
   },
 
   // ========== 兼容旧 API ==========

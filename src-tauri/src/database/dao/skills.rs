@@ -3,7 +3,7 @@
 //! 提供 Skills 和 Skill Repos 的 CRUD 操作。
 //!
 //! v3.10.0+ 统一管理架构：
-//! - Skills 使用统一的 id 主键，支持四应用启用标志
+//! - Skills 使用统一的 id 主键，支持六应用启用标志
 //! - 实际文件存储在 ~/.cc-switch/skills/，同步到各应用目录
 
 use crate::app_config::{InstalledSkill, SkillApps};
@@ -22,7 +22,8 @@ impl Database {
         let mut stmt = conn
             .prepare(
                 "SELECT id, name, description, directory, namespace, repo_owner, repo_name, repo_branch,
-                        readme_url, enabled_claude, enabled_codex, enabled_gemini, file_hash, installed_at,
+                        readme_url, enabled_claude, enabled_codex, enabled_gemini, enabled_opencode,
+                        enabled_hermes, file_hash, content_hash, installed_at, updated_at,
                         scope, project_path
                  FROM skills ORDER BY namespace ASC, name ASC",
             )
@@ -44,12 +45,15 @@ impl Database {
                         claude: row.get(9)?,
                         codex: row.get(10)?,
                         gemini: row.get(11)?,
-                        opencode: false,
+                        opencode: row.get(12)?,
+                        hermes: row.get(13)?,
                     },
-                    file_hash: row.get(12)?,
-                    installed_at: row.get(13)?,
-                    scope: row.get::<_, Option<String>>(14)?.unwrap_or_else(|| "global".to_string()),
-                    project_path: row.get(15)?,
+                    file_hash: row.get(14)?,
+                    content_hash: row.get(15)?,
+                    installed_at: row.get(16)?,
+                    updated_at: row.get::<_, i64>(17).unwrap_or(0),
+                    scope: row.get::<_, Option<String>>(18)?.unwrap_or_else(|| "global".to_string()),
+                    project_path: row.get(19)?,
                 })
             })
             .map_err(|e| AppError::Database(e.to_string()))?;
@@ -68,7 +72,8 @@ impl Database {
         let mut stmt = conn
             .prepare(
                 "SELECT id, name, description, directory, namespace, repo_owner, repo_name, repo_branch,
-                        readme_url, enabled_claude, enabled_codex, enabled_gemini, file_hash, installed_at,
+                        readme_url, enabled_claude, enabled_codex, enabled_gemini, enabled_opencode,
+                        enabled_hermes, file_hash, content_hash, installed_at, updated_at,
                         scope, project_path
                  FROM skills WHERE id = ?1",
             )
@@ -89,12 +94,15 @@ impl Database {
                     claude: row.get(9)?,
                     codex: row.get(10)?,
                     gemini: row.get(11)?,
-                    opencode: false,
+                    opencode: row.get(12)?,
+                    hermes: row.get(13)?,
                 },
-                file_hash: row.get(12)?,
-                installed_at: row.get(13)?,
-                scope: row.get::<_, Option<String>>(14)?.unwrap_or_else(|| "global".to_string()),
-                project_path: row.get(15)?,
+                file_hash: row.get(14)?,
+                content_hash: row.get(15)?,
+                installed_at: row.get(16)?,
+                updated_at: row.get::<_, i64>(17).unwrap_or(0),
+                scope: row.get::<_, Option<String>>(18)?.unwrap_or_else(|| "global".to_string()),
+                project_path: row.get(19)?,
             })
         });
 
@@ -111,9 +119,9 @@ impl Database {
         conn.execute(
             "INSERT OR REPLACE INTO skills
              (id, name, description, directory, namespace, repo_owner, repo_name, repo_branch,
-              readme_url, enabled_claude, enabled_codex, enabled_gemini, file_hash, installed_at,
-              scope, project_path)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+              readme_url, enabled_claude, enabled_codex, enabled_gemini, enabled_opencode, enabled_hermes,
+              file_hash, content_hash, installed_at, updated_at, scope, project_path)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
             params![
                 skill.id,
                 skill.name,
@@ -127,8 +135,12 @@ impl Database {
                 skill.apps.claude,
                 skill.apps.codex,
                 skill.apps.gemini,
+                skill.apps.opencode,
+                skill.apps.hermes,
                 skill.file_hash,
+                skill.content_hash,
                 skill.installed_at,
+                skill.updated_at,
                 skill.scope,
                 skill.project_path,
             ],
@@ -159,8 +171,25 @@ impl Database {
         let conn = lock_conn!(self.conn);
         let affected = conn
             .execute(
-                "UPDATE skills SET enabled_claude = ?1, enabled_codex = ?2, enabled_gemini = ?3, enabled_opencode = ?4 WHERE id = ?5",
-                params![apps.claude, apps.codex, apps.gemini, apps.opencode, id],
+                "UPDATE skills SET enabled_claude = ?1, enabled_codex = ?2, enabled_gemini = ?3, enabled_opencode = ?4, enabled_hermes = ?5 WHERE id = ?6",
+                params![apps.claude, apps.codex, apps.gemini, apps.opencode, apps.hermes, id],
+            )
+            .map_err(|e| AppError::Database(e.to_string()))?;
+        Ok(affected > 0)
+    }
+
+    /// 更新 Skill 的内容哈希和更新时间
+    pub fn update_skill_hash(
+        &self,
+        id: &str,
+        content_hash: &str,
+        updated_at: i64,
+    ) -> Result<bool, AppError> {
+        let conn = lock_conn!(self.conn);
+        let affected = conn
+            .execute(
+                "UPDATE skills SET content_hash = ?1, updated_at = ?2 WHERE id = ?3",
+                params![content_hash, updated_at, id],
             )
             .map_err(|e| AppError::Database(e.to_string()))?;
         Ok(affected > 0)
@@ -226,7 +255,8 @@ impl Database {
         let mut stmt = conn
             .prepare(
                 "SELECT id, name, description, directory, namespace, repo_owner, repo_name, repo_branch,
-                        readme_url, enabled_claude, enabled_codex, enabled_gemini, file_hash, installed_at,
+                        readme_url, enabled_claude, enabled_codex, enabled_gemini, enabled_opencode,
+                        enabled_hermes, file_hash, content_hash, installed_at, updated_at,
                         scope, project_path
                  FROM skills WHERE namespace = ?1 ORDER BY name ASC",
             )
@@ -248,12 +278,15 @@ impl Database {
                         claude: row.get(9)?,
                         codex: row.get(10)?,
                         gemini: row.get(11)?,
-                        opencode: false,
+                        opencode: row.get(12)?,
+                        hermes: row.get(13)?,
                     },
-                    file_hash: row.get(12)?,
-                    installed_at: row.get(13)?,
-                    scope: row.get::<_, Option<String>>(14)?.unwrap_or_else(|| "global".to_string()),
-                    project_path: row.get(15)?,
+                    file_hash: row.get(14)?,
+                    content_hash: row.get(15)?,
+                    installed_at: row.get(16)?,
+                    updated_at: row.get::<_, i64>(17).unwrap_or(0),
+                    scope: row.get::<_, Option<String>>(18)?.unwrap_or_else(|| "global".to_string()),
+                    project_path: row.get(19)?,
                 })
             })
             .map_err(|e| AppError::Database(e.to_string()))?;

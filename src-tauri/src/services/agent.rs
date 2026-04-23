@@ -153,6 +153,7 @@ impl AgentService {
             AppType::Gemini => home.join(".gemini").join("agents"),
             AppType::OpenCode => home.join(".opencode").join("agents"),
             AppType::OpenClaw => home.join(".openclaw").join("agents"),
+            AppType::Hermes => home.join(".hermes").join("agents"),
         };
 
         Ok(dir)
@@ -869,6 +870,7 @@ impl AgentService {
                     AppType::Gemini => "gemini",
                     AppType::OpenCode => "opencode",
                     AppType::OpenClaw => "openclaw",
+                    AppType::Hermes => "hermes",
                 };
 
                 unmanaged
@@ -919,6 +921,7 @@ impl AgentService {
                             AppType::Gemini => "gemini",
                             AppType::OpenCode => "opencode",
                             AppType::OpenClaw => "openclaw",
+                            AppType::Hermes => "hermes",
                         };
                         found_in.push(app_str.to_string());
                     }
@@ -1882,6 +1885,6 @@ pub fn check_app_agents_support(app: &AppType) -> bool {
         AppType::Claude => true,
         AppType::Codex => false, // TODO: 确认 Codex CLI 是否支持
         AppType::Gemini => false, // TODO: 确认 Gemini CLI 是否支持
-        AppType::OpenCode | AppType::OpenClaw => false,
+        AppType::OpenCode | AppType::OpenClaw | AppType::Hermes => false,
     }
 }

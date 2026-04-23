@@ -515,7 +515,7 @@ async fn update_skill_internal(
 
 /// 更新单个 Skill（Tauri 命令）
 #[tauri::command]
-pub async fn update_skill(
+pub async fn execute_skill_update(
     app_state: State<'_, AppState>,
     skill_id: String,
 ) -> Result<SkillUpdateResult, AppError> {

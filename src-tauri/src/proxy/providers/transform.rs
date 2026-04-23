@@ -14,10 +14,65 @@ pub fn is_openai_o_series(model: &str) -> bool {
         && model.as_bytes().get(1).is_some_and(|b| b.is_ascii_digit())
 }
 
-/// Anthropic 请求 → OpenAI 请求
+/// Detect OpenAI models that support reasoning_effort.
 ///
-/// `cache_key`: optional prompt_cache_key to inject for improved cache routing
-pub fn anthropic_to_openai(body: Value, cache_key: Option<&str>) -> Result<Value, ProxyError> {
+/// Supported families:
+/// - o-series: o1, o3, o4-mini, etc.
+/// - GPT-5+: gpt-5, gpt-5.1, gpt-5.4, gpt-5-codex, etc.
+pub fn supports_reasoning_effort(model: &str) -> bool {
+    is_openai_o_series(model)
+        || model
+            .to_lowercase()
+            .strip_prefix("gpt-")
+            .and_then(|rest| rest.chars().next())
+            .is_some_and(|c| c.is_ascii_digit() && c >= '5')
+}
+
+/// Resolve the appropriate OpenAI `reasoning_effort` from an Anthropic request body.
+///
+/// Priority:
+/// 1. Explicit `output_config.effort` — preserves the user's intent directly.
+///    `low`/`medium`/`high` map 1:1; `max` maps to `xhigh`
+///    (supported by mainstream GPT models). Unknown values are ignored.
+/// 2. Fallback: `thinking.type` + `budget_tokens`:
+///    - `adaptive` → `xhigh` (adaptive = maximum reasoning effort)
+///    - `enabled` with budget → `low` (<4 000) / `medium` (4 000–15 999) / `high` (≥16 000)
+///    - `enabled` without budget → `high` (conservative default)
+///    - `disabled` / absent → `None`
+pub fn resolve_reasoning_effort(body: &Value) -> Option<&'static str> {
+    // --- Priority 1: explicit output_config.effort ---
+    if let Some(effort) = body
+        .pointer("/output_config/effort")
+        .and_then(|v| v.as_str())
+    {
+        return match effort {
+            "low" => Some("low"),
+            "medium" => Some("medium"),
+            "high" => Some("high"),
+            "max" => Some("xhigh"), // OpenAI xhigh = maximum reasoning effort
+            _ => None,              // unknown value — do not inject
+        };
+    }
+
+    // --- Priority 2: thinking.type + budget_tokens fallback ---
+    let thinking = body.get("thinking")?;
+    match thinking.get("type").and_then(|t| t.as_str()) {
+        Some("adaptive") => Some("xhigh"),
+        Some("enabled") => {
+            let budget = thinking.get("budget_tokens").and_then(|b| b.as_u64());
+            match budget {
+                Some(b) if b < 4_000 => Some("low"),
+                Some(b) if b < 16_000 => Some("medium"),
+                Some(_) => Some("high"),
+                None => Some("high"), // enabled but no budget — assume strong reasoning
+            }
+        }
+        _ => None, // disabled or missing
+    }
+}
+
+/// Anthropic 请求 → OpenAI Chat Completions 请求
+pub fn anthropic_to_openai(body: Value) -> Result<Value, ProxyError> {
     let mut result = json!({});
 
     // NOTE: 模型映射由上游统一处理（proxy::model_mapper），格式转换层只做结构转换。
@@ -56,6 +111,7 @@ pub fn anthropic_to_openai(body: Value, cache_key: Option<&str>) -> Result<Value
         }
     }
 
+    normalize_openai_system_messages(&mut messages);
     result["messages"] = json!(messages);
 
     // 转换参数 — o-series 模型需要 max_completion_tokens
@@ -78,6 +134,13 @@ pub fn anthropic_to_openai(body: Value, cache_key: Option<&str>) -> Result<Value
     }
     if let Some(v) = body.get("stream") {
         result["stream"] = v.clone();
+    }
+
+    // Map Anthropic thinking → OpenAI reasoning_effort
+    if supports_reasoning_effort(model) {
+        if let Some(effort) = resolve_reasoning_effort(&body) {
+            result["reasoning_effort"] = json!(effort);
+        }
     }
 
     // 转换 tools (过滤 BatchTool)
@@ -110,12 +173,79 @@ pub fn anthropic_to_openai(body: Value, cache_key: Option<&str>) -> Result<Value
         result["tool_choice"] = v.clone();
     }
 
-    // Inject prompt_cache_key for improved cache routing on OpenAI-compatible endpoints
-    if let Some(key) = cache_key {
-        result["prompt_cache_key"] = json!(key);
+    Ok(result)
+}
+
+fn normalize_openai_system_messages(messages: &mut Vec<Value>) {
+    let system_count = messages
+        .iter()
+        .filter(|message| message.get("role").and_then(|value| value.as_str()) == Some("system"))
+        .count();
+
+    if system_count == 0 {
+        return;
     }
 
-    Ok(result)
+    if system_count == 1 {
+        if let Some(index) = messages.iter().position(|message| {
+            message.get("role").and_then(|value| value.as_str()) == Some("system")
+        }) {
+            if index > 0 {
+                let message = messages.remove(index);
+                messages.insert(0, message);
+            }
+        }
+        return;
+    }
+
+    let mut parts = Vec::new();
+    let mut inherited_cache_control: Option<Value> = None;
+    let mut cache_control_conflict = false;
+    let mut saw_cache_control = false;
+    let mut saw_missing_cache_control = false;
+    messages.retain(|message| {
+        if message.get("role").and_then(|value| value.as_str()) != Some("system") {
+            return true;
+        }
+
+        match message.get("content") {
+            Some(Value::String(text)) if !text.is_empty() => parts.push(text.clone()),
+            Some(Value::Array(content_parts)) => {
+                let text = content_parts
+                    .iter()
+                    .filter_map(|part| part.get("text").and_then(|value| value.as_str()))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                if !text.is_empty() {
+                    parts.push(text);
+                }
+            }
+            _ => {}
+        }
+
+        if let Some(cache_control) = message.get("cache_control") {
+            saw_cache_control = true;
+            match &inherited_cache_control {
+                None => inherited_cache_control = Some(cache_control.clone()),
+                Some(existing) if existing == cache_control => {}
+                Some(_) => cache_control_conflict = true,
+            }
+        } else {
+            saw_missing_cache_control = true;
+        }
+
+        false
+    });
+
+    if !parts.is_empty() {
+        let mut merged = json!({"role": "system", "content": parts.join("\n")});
+        if !(cache_control_conflict || (saw_cache_control && saw_missing_cache_control)) {
+            if let Some(cache_control) = inherited_cache_control {
+                merged["cache_control"] = cache_control;
+            }
+        }
+        messages.insert(0, merged);
+    }
 }
 
 /// 转换单条消息到 OpenAI 格式（可能产生多条消息）
@@ -453,7 +583,7 @@ mod tests {
             "messages": [{"role": "user", "content": "Hello"}]
         });
 
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         assert_eq!(result["model"], "claude-3-opus");
         assert_eq!(result["max_tokens"], 1024);
         assert_eq!(result["messages"][0]["role"], "user");
@@ -469,7 +599,7 @@ mod tests {
             "messages": [{"role": "user", "content": "Hello"}]
         });
 
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         assert_eq!(result["messages"][0]["role"], "system");
         assert_eq!(
             result["messages"][0]["content"],
@@ -491,9 +621,74 @@ mod tests {
             }]
         });
 
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         assert_eq!(result["tools"][0]["type"], "function");
         assert_eq!(result["tools"][0]["function"]["name"], "get_weather");
+    }
+
+    #[test]
+    fn test_anthropic_to_openai_preserves_matching_system_cache_control_when_merging() {
+        let input = json!({
+            "model": "claude-3-sonnet",
+            "max_tokens": 1024,
+            "system": [
+                {"type": "text", "text": "You are Claude Code.", "cache_control": {"type": "ephemeral"}},
+                {"type": "text", "text": "Be concise.", "cache_control": {"type": "ephemeral"}}
+            ],
+            "messages": [{"role": "user", "content": "Hello"}]
+        });
+
+        let result = anthropic_to_openai(input).unwrap();
+        assert_eq!(result["messages"].as_array().unwrap().len(), 2);
+        assert_eq!(result["messages"][0]["role"], "system");
+        assert_eq!(
+            result["messages"][0]["content"],
+            "You are Claude Code.\nBe concise."
+        );
+        assert_eq!(result["messages"][0]["cache_control"]["type"], "ephemeral");
+        assert_eq!(result["messages"][1]["role"], "user");
+    }
+
+    #[test]
+    fn test_anthropic_to_openai_drops_mixed_present_absent_system_cache_control_when_merging() {
+        let input = json!({
+            "model": "claude-3-sonnet",
+            "max_tokens": 1024,
+            "system": [
+                {"type": "text", "text": "You are Claude Code.", "cache_control": {"type": "ephemeral"}},
+                {"type": "text", "text": "Be concise."}
+            ],
+            "messages": [{"role": "user", "content": "Hello"}]
+        });
+
+        let result = anthropic_to_openai(input).unwrap();
+        assert_eq!(result["messages"][0]["role"], "system");
+        assert_eq!(
+            result["messages"][0]["content"],
+            "You are Claude Code.\nBe concise."
+        );
+        assert!(result["messages"][0].get("cache_control").is_none());
+    }
+
+    #[test]
+    fn test_anthropic_to_openai_drops_conflicting_system_cache_control_when_merging() {
+        let input = json!({
+            "model": "claude-3-sonnet",
+            "max_tokens": 1024,
+            "system": [
+                {"type": "text", "text": "You are Claude Code.", "cache_control": {"type": "ephemeral"}},
+                {"type": "text", "text": "Be concise.", "cache_control": {"type": "ephemeral", "ttl": "5m"}}
+            ],
+            "messages": [{"role": "user", "content": "Hello"}]
+        });
+
+        let result = anthropic_to_openai(input).unwrap();
+        assert_eq!(result["messages"][0]["role"], "system");
+        assert_eq!(
+            result["messages"][0]["content"],
+            "You are Claude Code.\nBe concise."
+        );
+        assert!(result["messages"][0].get("cache_control").is_none());
     }
 
     #[test]
@@ -510,7 +705,7 @@ mod tests {
             }]
         });
 
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         let msg = &result["messages"][0];
         assert_eq!(msg["role"], "assistant");
         assert!(msg.get("tool_calls").is_some());
@@ -530,7 +725,7 @@ mod tests {
             }]
         });
 
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         let msg = &result["messages"][0];
         assert_eq!(msg["role"], "tool");
         assert_eq!(msg["tool_call_id"], "call_123");
@@ -602,31 +797,19 @@ mod tests {
             "messages": [{"role": "user", "content": "Hello"}]
         });
 
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         assert_eq!(result["model"], "gpt-4o");
     }
 
     #[test]
-    fn test_anthropic_to_openai_with_cache_key() {
+    fn test_anthropic_to_openai_does_not_inject_prompt_cache_key() {
         let input = json!({
             "model": "claude-3-opus",
             "max_tokens": 1024,
             "messages": [{"role": "user", "content": "Hello"}]
         });
 
-        let result = anthropic_to_openai(input, Some("provider-123")).unwrap();
-        assert_eq!(result["prompt_cache_key"], "provider-123");
-    }
-
-    #[test]
-    fn test_anthropic_to_openai_no_cache_key() {
-        let input = json!({
-            "model": "claude-3-opus",
-            "max_tokens": 1024,
-            "messages": [{"role": "user", "content": "Hello"}]
-        });
-
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         assert!(result.get("prompt_cache_key").is_none());
     }
 
@@ -652,7 +835,7 @@ mod tests {
             }]
         });
 
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         // System message cache_control preserved
         assert_eq!(result["messages"][0]["cache_control"]["type"], "ephemeral");
         // Text block cache_control preserved
@@ -801,6 +984,180 @@ mod tests {
     }
 
     #[test]
+    fn test_supports_reasoning_effort() {
+        assert!(supports_reasoning_effort("o1"));
+        assert!(supports_reasoning_effort("o3-mini"));
+        assert!(supports_reasoning_effort("gpt-5"));
+        assert!(supports_reasoning_effort("gpt-5.4"));
+        assert!(supports_reasoning_effort("gpt-5-codex"));
+        assert!(!supports_reasoning_effort("gpt-4o"));
+        assert!(!supports_reasoning_effort("claude-sonnet-4-6"));
+    }
+
+    // ── resolve_reasoning_effort unit tests ──
+
+    #[test]
+    fn test_output_config_low_maps_to_reasoning_effort_low() {
+        let body = json!({"output_config": {"effort": "low"}});
+        assert_eq!(resolve_reasoning_effort(&body), Some("low"));
+    }
+
+    #[test]
+    fn test_output_config_medium_maps_to_reasoning_effort_medium() {
+        let body = json!({"output_config": {"effort": "medium"}});
+        assert_eq!(resolve_reasoning_effort(&body), Some("medium"));
+    }
+
+    #[test]
+    fn test_output_config_high_maps_to_reasoning_effort_high() {
+        let body = json!({"output_config": {"effort": "high"}});
+        assert_eq!(resolve_reasoning_effort(&body), Some("high"));
+    }
+
+    #[test]
+    fn test_output_config_max_maps_to_reasoning_effort_xhigh() {
+        let body = json!({"output_config": {"effort": "max"}});
+        assert_eq!(resolve_reasoning_effort(&body), Some("xhigh"));
+    }
+
+    #[test]
+    fn test_output_config_takes_priority_over_thinking() {
+        // Even with thinking.adaptive present, explicit effort wins
+        let body = json!({
+            "output_config": {"effort": "low"},
+            "thinking": {"type": "adaptive"}
+        });
+        assert_eq!(resolve_reasoning_effort(&body), Some("low"));
+    }
+
+    #[test]
+    fn test_output_config_unknown_value_no_reasoning_effort() {
+        let body = json!({"output_config": {"effort": "turbo"}});
+        assert_eq!(resolve_reasoning_effort(&body), None);
+    }
+
+    #[test]
+    fn test_thinking_enabled_small_budget_maps_low() {
+        let body = json!({"thinking": {"type": "enabled", "budget_tokens": 1024}});
+        assert_eq!(resolve_reasoning_effort(&body), Some("low"));
+    }
+
+    #[test]
+    fn test_thinking_enabled_medium_budget_maps_medium() {
+        let body = json!({"thinking": {"type": "enabled", "budget_tokens": 8000}});
+        assert_eq!(resolve_reasoning_effort(&body), Some("medium"));
+    }
+
+    #[test]
+    fn test_thinking_enabled_large_budget_maps_high() {
+        let body = json!({"thinking": {"type": "enabled", "budget_tokens": 32000}});
+        assert_eq!(resolve_reasoning_effort(&body), Some("high"));
+    }
+
+    #[test]
+    fn test_thinking_enabled_without_budget_maps_high() {
+        let body = json!({"thinking": {"type": "enabled"}});
+        assert_eq!(resolve_reasoning_effort(&body), Some("high"));
+    }
+
+    #[test]
+    fn test_thinking_adaptive_maps_xhigh() {
+        let body = json!({"thinking": {"type": "adaptive"}});
+        assert_eq!(resolve_reasoning_effort(&body), Some("xhigh"));
+    }
+
+    #[test]
+    fn test_thinking_disabled_no_reasoning_effort() {
+        let body = json!({"thinking": {"type": "disabled"}});
+        assert_eq!(resolve_reasoning_effort(&body), None);
+    }
+
+    #[test]
+    fn test_no_thinking_field_no_reasoning_effort() {
+        let body = json!({"messages": [{"role": "user", "content": "Hello"}]});
+        assert_eq!(resolve_reasoning_effort(&body), None);
+    }
+
+    // ── Integration: anthropic_to_openai with resolve_reasoning_effort ──
+
+    #[test]
+    fn test_non_reasoning_model_no_reasoning_effort() {
+        let input = json!({
+            "model": "gpt-4o",
+            "max_tokens": 1024,
+            "thinking": {"type": "enabled", "budget_tokens": 2048},
+            "messages": [{"role": "user", "content": "Hello"}]
+        });
+
+        let result = anthropic_to_openai(input).unwrap();
+        assert!(result.get("reasoning_effort").is_none());
+    }
+
+    #[test]
+    fn test_reasoning_model_with_output_config_effort() {
+        let input = json!({
+            "model": "gpt-5.4",
+            "max_tokens": 1024,
+            "output_config": {"effort": "medium"},
+            "messages": [{"role": "user", "content": "Hello"}]
+        });
+
+        let result = anthropic_to_openai(input).unwrap();
+        assert_eq!(result["reasoning_effort"], "medium");
+    }
+
+    #[test]
+    fn test_reasoning_model_with_output_config_max() {
+        let input = json!({
+            "model": "gpt-5.4",
+            "max_tokens": 1024,
+            "output_config": {"effort": "max"},
+            "messages": [{"role": "user", "content": "Hello"}]
+        });
+
+        let result = anthropic_to_openai(input).unwrap();
+        assert_eq!(result["reasoning_effort"], "xhigh");
+    }
+
+    #[test]
+    fn test_reasoning_model_thinking_enabled_small_budget() {
+        let input = json!({
+            "model": "o3",
+            "max_tokens": 1024,
+            "thinking": {"type": "enabled", "budget_tokens": 2048},
+            "messages": [{"role": "user", "content": "Hello"}]
+        });
+
+        let result = anthropic_to_openai(input).unwrap();
+        assert_eq!(result["reasoning_effort"], "low");
+    }
+
+    #[test]
+    fn test_reasoning_model_thinking_adaptive() {
+        let input = json!({
+            "model": "gpt-5.4",
+            "max_tokens": 1024,
+            "thinking": {"type": "adaptive"},
+            "messages": [{"role": "user", "content": "Hello"}]
+        });
+
+        let result = anthropic_to_openai(input).unwrap();
+        assert_eq!(result["reasoning_effort"], "xhigh");
+    }
+
+    #[test]
+    fn test_reasoning_model_no_thinking_no_effort() {
+        let input = json!({
+            "model": "gpt-5.4",
+            "max_tokens": 1024,
+            "messages": [{"role": "user", "content": "Hello"}]
+        });
+
+        let result = anthropic_to_openai(input).unwrap();
+        assert!(result.get("reasoning_effort").is_none());
+    }
+
+    #[test]
     fn test_anthropic_to_openai_o_series_max_completion_tokens() {
         for model in &["o1", "o3-mini", "o4-mini"] {
             let input = json!({
@@ -809,7 +1166,7 @@ mod tests {
                 "messages": [{"role": "user", "content": "Hello"}]
             });
 
-            let result = anthropic_to_openai(input, None).unwrap();
+            let result = anthropic_to_openai(input).unwrap();
             assert!(
                 result.get("max_tokens").is_none(),
                 "{model} should not have max_tokens"
@@ -829,7 +1186,7 @@ mod tests {
             "messages": [{"role": "user", "content": "Hello"}]
         });
 
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         assert_eq!(result["max_tokens"], 1024);
         assert!(result.get("max_completion_tokens").is_none());
     }

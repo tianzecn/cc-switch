@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 import { useLayoutMode } from "@/hooks/useLayoutMode";
 
-interface ContentContainerProps {
+interface ContentContainerProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
   className?: string;
   variant?: "standard" | "wide";
@@ -11,6 +11,7 @@ export function ContentContainer({
   children,
   className,
   variant = "standard",
+  ...rest
 }: ContentContainerProps) {
   const { mode } = useLayoutMode();
 
@@ -23,6 +24,7 @@ export function ContentContainer({
 
   return (
     <div
+      {...rest}
       className={cn(
         "mx-auto",
         widthClasses,

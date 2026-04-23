@@ -14,7 +14,6 @@ import {
 } from "@/components/providers/forms/ProviderForm";
 import { UniversalProviderFormModal } from "@/components/universal/UniversalProviderFormModal";
 import { UniversalProviderPanel } from "@/components/universal";
-import { AuthCenterPanel } from "@/components/settings/AuthCenterPanel";
 import { providerPresets } from "@/config/claudeProviderPresets";
 import { codexProviderPresets } from "@/config/codexProviderPresets";
 import { geminiProviderPresets } from "@/config/geminiProviderPresets";
@@ -42,10 +41,11 @@ export function AddProviderDialog({
 }: AddProviderDialogProps) {
   const { t } = useTranslation();
   // OpenCode and OpenClaw don't support universal providers
-  const showUniversalTab = appId !== "opencode" && appId !== "openclaw";
-  const [activeTab, setActiveTab] = useState<
-    "app-specific" | "universal" | "oauth"
-  >("app-specific");
+  const showUniversalTab =
+    appId !== "opencode" && appId !== "openclaw" && appId !== "hermes";
+  const [activeTab, setActiveTab] = useState<"app-specific" | "universal">(
+    "app-specific",
+  );
   const [universalFormOpen, setUniversalFormOpen] = useState(false);
   const [selectedUniversalPreset, setSelectedUniversalPreset] =
     useState<UniversalProviderPreset | null>(null);
@@ -107,7 +107,7 @@ export function AddProviderDialog({
 
       // OpenCode/OpenClaw: pass providerKey for ID generation
       if (
-        (appId === "opencode" || appId === "openclaw") &&
+        (appId === "opencode" || appId === "openclaw" || appId === "hermes") &&
         values.providerKey
       ) {
         providerData.providerKey = values.providerKey;
@@ -204,6 +204,10 @@ export function AddProviderDialog({
           if (parsedConfig.baseUrl) {
             addUrl(parsedConfig.baseUrl as string);
           }
+        } else if (appId === "hermes") {
+          if (parsedConfig.base_url) {
+            addUrl(parsedConfig.base_url as string);
+          }
         }
 
         const urls = Array.from(urlSet);
@@ -256,14 +260,6 @@ export function AddProviderDialog({
           {t("common.add")}
         </Button>
       </>
-    ) : activeTab === "oauth" ? (
-      <Button
-        variant="outline"
-        onClick={() => onOpenChange(false)}
-        className="border-border/20 hover:bg-accent hover:text-accent-foreground"
-      >
-        {t("common.close", { defaultValue: "关闭" })}
-      </Button>
     ) : (
       <>
         <Button
@@ -293,19 +289,14 @@ export function AddProviderDialog({
       {showUniversalTab ? (
         <Tabs
           value={activeTab}
-          onValueChange={(v) =>
-            setActiveTab(v as "app-specific" | "universal" | "oauth")
-          }
+          onValueChange={(v) => setActiveTab(v as "app-specific" | "universal")}
         >
-          <TabsList className="grid w-full grid-cols-3 mb-6">
+          <TabsList className="grid w-full grid-cols-2 mb-6">
             <TabsTrigger value="app-specific">
               {t(`apps.${appId}`)} {t("provider.tabProvider")}
             </TabsTrigger>
             <TabsTrigger value="universal">
               {t("provider.tabUniversal")}
-            </TabsTrigger>
-            <TabsTrigger value="oauth">
-              {t("provider.tabOAuth", { defaultValue: "OAuth 认证源" })}
             </TabsTrigger>
           </TabsList>
 
@@ -322,10 +313,6 @@ export function AddProviderDialog({
 
           <TabsContent value="universal" className="mt-0">
             <UniversalProviderPanel />
-          </TabsContent>
-
-          <TabsContent value="oauth" className="mt-0">
-            <AuthCenterPanel />
           </TabsContent>
         </Tabs>
       ) : (

@@ -2,85 +2,38 @@
 //!
 //! 负责将请求转发到上游Provider，支持故障转移
 
+use super::hyper_client::ProxyResponse;
 use super::{
     body_filter::filter_private_params_with_whitelist,
     error::*,
     failover_switch::FailoverSwitchManager,
     log_codes::fwd as log_fwd,
     provider_router::ProviderRouter,
-    providers::{get_adapter, AuthInfo, AuthStrategy, ProviderAdapter, ProviderType},
+    providers::{
+        gemini_shadow::GeminiShadowStore, get_adapter, AuthInfo, AuthStrategy, ProviderAdapter,
+        ProviderType,
+    },
     thinking_budget_rectifier::{rectify_thinking_budget, should_rectify_thinking_budget},
     thinking_rectifier::{
         normalize_thinking_type, rectify_anthropic_request, should_rectify_thinking_signature,
     },
-    types::{OptimizerConfig, ProxyStatus, RectifierConfig},
+    types::{CopilotOptimizerConfig, OptimizerConfig, ProxyStatus, RectifierConfig},
     ProxyError,
 };
-use crate::commands::CopilotAuthState;
+use crate::commands::{CodexOAuthState, CopilotAuthState};
+use crate::proxy::providers::codex_oauth_auth::CodexOAuthManager;
 use crate::proxy::providers::copilot_auth::CopilotAuthManager;
 use crate::{app_config::AppType, provider::Provider};
-use reqwest::Response;
+use http::Extensions;
 use serde_json::Value;
 use std::sync::Arc;
 use tauri::Manager;
 use tokio::sync::RwLock;
 
-/// Headers 黑名单 - 不透传到上游的 Headers
-///
-/// 精简版黑名单，只过滤必须覆盖或可能导致问题的 header
-/// 参考成功透传的请求，保留更多原始 header
-///
-/// 注意：客户端 IP 类（x-forwarded-for, x-real-ip）默认透传
-const HEADER_BLACKLIST: &[&str] = &[
-    // 认证类（会被覆盖）
-    "authorization",
-    "x-api-key",
-    "x-goog-api-key",
-    // 连接类（由 HTTP 客户端管理）
-    "host",
-    "content-length",
-    "transfer-encoding",
-    // 编码类（会被覆盖为 identity）
-    "accept-encoding",
-    // 代理转发类（保留 x-forwarded-for 和 x-real-ip）
-    "x-forwarded-host",
-    "x-forwarded-port",
-    "x-forwarded-proto",
-    "forwarded",
-    // CDN/云服务商特定头
-    "cf-connecting-ip",
-    "cf-ipcountry",
-    "cf-ray",
-    "cf-visitor",
-    "true-client-ip",
-    "fastly-client-ip",
-    "x-azure-clientip",
-    "x-azure-fdid",
-    "x-azure-ref",
-    "akamai-origin-hop",
-    "x-akamai-config-log-detail",
-    // 请求追踪类
-    "x-request-id",
-    "x-correlation-id",
-    "x-trace-id",
-    "x-amzn-trace-id",
-    "x-b3-traceid",
-    "x-b3-spanid",
-    "x-b3-parentspanid",
-    "x-b3-sampled",
-    "traceparent",
-    "tracestate",
-    // anthropic 特定头单独处理，避免重复
-    "anthropic-beta",
-    "anthropic-version",
-    // 客户端 IP 单独处理（默认透传）
-    "x-forwarded-for",
-    "x-real-ip",
-];
-
 pub struct ForwardResult {
-    pub response: Response,
+    pub response: ProxyResponse,
     pub provider: Provider,
+    pub claude_api_format: Option<String>,
 }
 
 pub struct ForwardError {
@@ -93,16 +46,21 @@ pub struct RequestForwarder {
     router: Arc<ProviderRouter>,
     status: Arc<RwLock<ProxyStatus>>,
     current_providers: Arc<RwLock<std::collections::HashMap<String, (String, String)>>>,
+    gemini_shadow: Arc<GeminiShadowStore>,
     /// 故障转移切换管理器
     failover_manager: Arc<FailoverSwitchManager>,
     /// AppHandle，用于发射事件和更新托盘
     app_handle: Option<tauri::AppHandle>,
     /// 请求开始时的"当前供应商 ID"（用于判断是否需要同步 UI/托盘）
     current_provider_id_at_start: String,
+    /// 代理会话 ID（用于 Gemini Native shadow replay）
+    session_id: String,
     /// 整流器配置
     rectifier_config: RectifierConfig,
     /// 优化器配置
     optimizer_config: OptimizerConfig,
+    /// Copilot 优化器配置
+    copilot_optimizer_config: CopilotOptimizerConfig,
     /// 非流式请求超时（秒）
     non_streaming_timeout: std::time::Duration,
 }
@@ -114,23 +72,29 @@ impl RequestForwarder {
         non_streaming_timeout: u64,
         status: Arc<RwLock<ProxyStatus>>,
         current_providers: Arc<RwLock<std::collections::HashMap<String, (String, String)>>>,
+        gemini_shadow: Arc<GeminiShadowStore>,
         failover_manager: Arc<FailoverSwitchManager>,
         app_handle: Option<tauri::AppHandle>,
         current_provider_id_at_start: String,
+        session_id: String,
         _streaming_first_byte_timeout: u64,
         _streaming_idle_timeout: u64,
         rectifier_config: RectifierConfig,
         optimizer_config: OptimizerConfig,
+        copilot_optimizer_config: CopilotOptimizerConfig,
     ) -> Self {
         Self {
             router,
             status,
             current_providers,
+            gemini_shadow,
             failover_manager,
             app_handle,
             current_provider_id_at_start,
+            session_id,
             rectifier_config,
             optimizer_config,
+            copilot_optimizer_config,
             non_streaming_timeout: std::time::Duration::from_secs(non_streaming_timeout),
         }
     }
@@ -149,6 +113,7 @@ impl RequestForwarder {
         endpoint: &str,
         body: Value,
         headers: axum::http::HeaderMap,
+        extensions: Extensions,
         providers: Vec<Provider>,
     ) -> Result<ForwardResult, ForwardError> {
         // 获取适配器
@@ -225,11 +190,12 @@ impl RequestForwarder {
                     endpoint,
                     &provider_body,
                     &headers,
+                    &extensions,
                     adapter.as_ref(),
                 )
                 .await
             {
-                Ok(response) => {
+                Ok((response, claude_api_format)) => {
                     // 成功：记录成功并更新熔断器
                     let _ = self
                         .router
@@ -283,6 +249,7 @@ impl RequestForwarder {
                     return Ok(ForwardResult {
                         response,
                         provider: provider.clone(),
+                        claude_api_format,
                     });
                 }
                 Err(e) => {
@@ -353,11 +320,12 @@ impl RequestForwarder {
                                         endpoint,
                                         &provider_body,
                                         &headers,
+                                        &extensions,
                                         adapter.as_ref(),
                                     )
                                     .await
                                 {
-                                    Ok(response) => {
+                                    Ok((response, claude_api_format)) => {
                                         log::info!("[{app_type_str}] [RECT-002] 整流重试成功");
                                         // 记录成功
                                         let _ = self
@@ -416,6 +384,7 @@ impl RequestForwarder {
                                         return Ok(ForwardResult {
                                             response,
                                             provider: provider.clone(),
+                                            claude_api_format,
                                         });
                                     }
                                     Err(retry_err) => {
@@ -550,11 +519,12 @@ impl RequestForwarder {
                                     endpoint,
                                     &provider_body,
                                     &headers,
+                                    &extensions,
                                     adapter.as_ref(),
                                 )
                                 .await
                             {
-                                Ok(response) => {
+                                Ok((response, claude_api_format)) => {
                                     log::info!("[{app_type_str}] [RECT-011] budget 整流重试成功");
                                     let _ = self
                                         .router
@@ -606,6 +576,7 @@ impl RequestForwarder {
                                     return Ok(ForwardResult {
                                         response,
                                         provider: provider.clone(),
+                                        claude_api_format,
                                     });
                                 }
                                 Err(retry_err) => {
@@ -787,13 +758,24 @@ impl RequestForwarder {
         endpoint: &str,
         body: &Value,
         headers: &axum::http::HeaderMap,
+        extensions: &Extensions,
         adapter: &dyn ProviderAdapter,
-    ) -> Result<Response, ProxyError> {
+    ) -> Result<(ProxyResponse, Option<String>), ProxyError> {
         // 使用适配器提取 base_url
-        let base_url = adapter.extract_base_url(provider)?;
+        let mut base_url = adapter.extract_base_url(provider)?;
 
-        // 检查是否需要格式转换
-        let needs_transform = adapter.needs_transform(provider);
+        let is_full_url = provider
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.is_full_url)
+            .unwrap_or(false);
+
+        // 应用模型映射（独立于格式转换）
+        let (mapped_body, _original_model, _mapped_model) =
+            super::model_mapper::apply_model_mapping(body.clone(), provider);
+
+        // 与 CCH 对齐：请求前不做 thinking 主动改写（仅保留兼容入口）
+        let mut mapped_body = normalize_thinking_type(mapped_body);
 
         // 确定有效端点
         // GitHub Copilot API 使用 /chat/completions（无 /v1 前缀）
@@ -803,37 +785,193 @@ impl RequestForwarder {
             .and_then(|m| m.provider_type.as_deref())
             == Some("github_copilot")
             || base_url.contains("githubcopilot.com");
-        let effective_endpoint =
-            if needs_transform && adapter.name() == "Claude" && endpoint == "/v1/messages" {
-                if is_copilot {
-                    // GitHub Copilot uses /chat/completions without /v1 prefix
-                    "/chat/completions"
-                } else {
-                    // 根据 api_format 选择目标端点
-                    let api_format = super::providers::get_claude_api_format(provider);
-                    if api_format == "openai_responses" {
-                        "/v1/responses"
-                    } else {
-                        "/v1/chat/completions"
-                    }
-                }
+
+        // --- Copilot 优化器：分类 + 请求体优化（在格式转换之前执行） ---
+        // 注意：确定性 ID 也在此处计算，因为 mapped_body 在格式转换时会被 move
+        //
+        // 执行顺序（与 copilot-api 对齐）：
+        //   1. 先在原始 body 上分类（保留 tool_result 语义，避免误判为 user）
+        //   2. 再清洗孤立 tool_result（防止上游 API 报错）
+        //   3. 再合并 tool_result + text（减少 premium 计费）
+        let copilot_optimization = if is_copilot && self.copilot_optimizer_config.enabled {
+            // 1. 在原始 body 上分类 — 必须在清洗/合并之前执行
+            //    孤立 tool_result 仍保持 tool_result 类型，分类能正确识别为 agent
+            let has_anthropic_beta = headers.contains_key("anthropic-beta");
+            let classification = super::copilot_optimizer::classify_request(
+                &mapped_body,
+                has_anthropic_beta,
+                self.copilot_optimizer_config.compact_detection,
+                self.copilot_optimizer_config.subagent_detection,
+            );
+
+            log::debug!(
+                "[Copilot] 优化器分类: initiator={}, is_warmup={}, is_compact={}, is_subagent={}",
+                classification.initiator,
+                classification.is_warmup,
+                classification.is_compact,
+                classification.is_subagent
+            );
+
+            // 2. 孤立 tool_result 清理 — 分类完成后再清洗
+            //    防止上游 API 因不匹配的 tool_result 报错导致重试/重复计费
+            mapped_body = super::copilot_optimizer::sanitize_orphan_tool_results(mapped_body);
+
+            // 3. Tool result 合并 — 将 [tool_result, text] 变为 [tool_result(含text)]
+            if self.copilot_optimizer_config.tool_result_merging {
+                mapped_body = super::copilot_optimizer::merge_tool_results(mapped_body);
+            }
+
+            // 3.5. 主动剥离 thinking block — Copilot 走 OpenAI 兼容端点不识别该块
+            //      避免上游拒绝后由 rectifier 反应式重试（首次请求已消耗 quota）
+            if self.copilot_optimizer_config.strip_thinking {
+                mapped_body = super::copilot_optimizer::strip_thinking_blocks(mapped_body);
+            }
+
+            // 4. Warmup 小模型降级
+            if self.copilot_optimizer_config.warmup_downgrade && classification.is_warmup {
+                log::info!(
+                    "[Copilot] Warmup 请求降级到模型: {}",
+                    self.copilot_optimizer_config.warmup_model
+                );
+                mapped_body["model"] =
+                    serde_json::json!(&self.copilot_optimizer_config.warmup_model);
+            }
+
+            // 预计算确定性 Request ID（在 body 被 move 之前）
+            // Session 提取优先级（与 session.rs extract_from_metadata 对齐）：
+            //   1. metadata.user_id 中的 _session_ 后缀
+            //   2. metadata.session_id（直接字段）
+            //   3. raw metadata.user_id（整串 fallback）
+            //   4. x-session-id header
+            let metadata = body.get("metadata");
+            let session_id = metadata
+                .and_then(|m| m.get("user_id"))
+                .and_then(|v| v.as_str())
+                .and_then(super::session::parse_session_from_user_id)
+                .or_else(|| {
+                    metadata
+                        .and_then(|m| m.get("session_id"))
+                        .and_then(|v| v.as_str())
+                        .filter(|s| !s.is_empty())
+                        .map(|s| s.to_string())
+                })
+                .or_else(|| {
+                    metadata
+                        .and_then(|m| m.get("user_id"))
+                        .and_then(|v| v.as_str())
+                        .filter(|s| !s.is_empty())
+                        .map(|s| s.to_string())
+                })
+                .or_else(|| {
+                    headers
+                        .get("x-session-id")
+                        .and_then(|v| v.to_str().ok())
+                        .filter(|s| !s.is_empty())
+                        .map(|s| s.to_string())
+                })
+                .unwrap_or_default();
+            let det_request_id = if self.copilot_optimizer_config.deterministic_request_id {
+                Some(super::copilot_optimizer::deterministic_request_id(
+                    &mapped_body,
+                    &session_id,
+                ))
             } else {
-                endpoint
+                None
             };
 
-        // 使用适配器构建 URL
-        let url = adapter.build_url(&base_url, effective_endpoint);
+            // 从 session ID 派生稳定的 interaction ID（同一主对话共享）
+            let interaction_id =
+                super::copilot_optimizer::deterministic_interaction_id(&session_id);
 
-        // 应用模型映射（独立于格式转换）
-        let (mapped_body, _original_model, _mapped_model) =
-            super::model_mapper::apply_model_mapping(body.clone(), provider);
+            Some((classification, det_request_id, interaction_id))
+        } else {
+            None
+        };
 
-        // 与 CCH 对齐：请求前不做 thinking 主动改写（仅保留兼容入口）
-        let mapped_body = normalize_thinking_type(mapped_body);
+        // GitHub Copilot 动态 endpoint 路由
+        // 从 CopilotAuthManager 获取缓存的 API endpoint（支持企业版等非默认 endpoint）
+        if is_copilot && !is_full_url {
+            if let Some(app_handle) = &self.app_handle {
+                let copilot_state = app_handle.state::<CopilotAuthState>();
+                let copilot_auth = copilot_state.0.read().await;
+
+                // 从 provider.meta 获取关联的 GitHub 账号 ID
+                let account_id = provider
+                    .meta
+                    .as_ref()
+                    .and_then(|m| m.managed_account_id_for("github_copilot"));
+
+                let dynamic_endpoint = match &account_id {
+                    Some(id) => copilot_auth.get_api_endpoint(id).await,
+                    None => copilot_auth.get_default_api_endpoint().await,
+                };
+
+                // 只在动态 endpoint 与当前 base_url 不同时替换
+                if dynamic_endpoint != base_url {
+                    log::debug!(
+                        "[Copilot] 使用动态 API endpoint: {} (原: {})",
+                        dynamic_endpoint,
+                        base_url
+                    );
+                    base_url = dynamic_endpoint;
+                }
+            }
+        }
+        let resolved_claude_api_format = if adapter.name() == "Claude" {
+            Some(
+                self.resolve_claude_api_format(provider, &mapped_body, is_copilot)
+                    .await,
+            )
+        } else {
+            None
+        };
+        let needs_transform = match resolved_claude_api_format.as_deref() {
+            Some(api_format) => super::providers::claude_api_format_needs_transform(api_format),
+            None => adapter.needs_transform(provider),
+        };
+        let (effective_endpoint, passthrough_query) =
+            if needs_transform && adapter.name() == "Claude" {
+                let api_format = resolved_claude_api_format
+                    .as_deref()
+                    .unwrap_or_else(|| super::providers::get_claude_api_format(provider));
+                rewrite_claude_transform_endpoint(endpoint, api_format, is_copilot, &mapped_body)
+            } else {
+                (
+                    endpoint.to_string(),
+                    split_endpoint_and_query(endpoint)
+                        .1
+                        .map(ToString::to_string),
+                )
+            };
+
+        let url = if matches!(resolved_claude_api_format.as_deref(), Some("gemini_native")) {
+            super::gemini_url::resolve_gemini_native_url(
+                &base_url,
+                &effective_endpoint,
+                is_full_url,
+            )
+        } else if is_full_url {
+            append_query_to_full_url(&base_url, passthrough_query.as_deref())
+        } else {
+            adapter.build_url(&base_url, &effective_endpoint)
+        };
 
         // 转换请求体（如果需要）
         let request_body = if needs_transform {
-            adapter.transform_request(mapped_body, provider)?
+            if adapter.name() == "Claude" {
+                let api_format = resolved_claude_api_format
+                    .as_deref()
+                    .unwrap_or_else(|| super::providers::get_claude_api_format(provider));
+                super::providers::transform_claude_request_for_api_format(
+                    mapped_body,
+                    provider,
+                    api_format,
+                    Some(&self.session_id),
+                    Some(self.gemini_shadow.as_ref()),
+                )?
+            } else {
+                adapter.transform_request(mapped_body, provider)?
+            }
         } else {
             mapped_body
         };
@@ -841,74 +979,14 @@ impl RequestForwarder {
         // 过滤私有参数（以 `_` 开头的字段），防止内部信息泄露到上游
         // 默认使用空白名单，过滤所有 _ 前缀字段
         let filtered_body = filter_private_params_with_whitelist(request_body, &[]);
+        let force_identity_encoding = needs_transform
+            || should_force_identity_encoding(&effective_endpoint, &filtered_body, headers);
 
-        // 获取 HTTP 客户端：优先使用供应商单独代理配置，否则使用全局客户端
-        let proxy_config = provider.meta.as_ref().and_then(|m| m.proxy_config.as_ref());
-        let client = super::http_client::get_for_provider(proxy_config);
-        let mut request = client.post(&url);
+        // Codex OAuth 需要注入的 ChatGPT-Account-Id（在动态 token 获取期间填充）
+        let mut codex_oauth_account_id: Option<String> = None;
 
-        // 只有当 timeout > 0 时才设置请求超时
-        // Duration::ZERO 在 reqwest 中表示"立刻超时"而不是"禁用超时"
-        // 故障转移关闭时会传入 0，此时应该使用 client 的默认超时（600秒）
-        if !self.non_streaming_timeout.is_zero() {
-            request = request.timeout(self.non_streaming_timeout);
-        }
-
-        // 过滤黑名单 Headers，保护隐私并避免冲突
-        for (key, value) in headers {
-            if HEADER_BLACKLIST
-                .iter()
-                .any(|h| key.as_str().eq_ignore_ascii_case(h))
-            {
-                continue;
-            }
-            request = request.header(key, value);
-        }
-
-        // 处理 anthropic-beta Header（仅 Claude）
-        // 关键：确保包含 claude-code-20250219 标记，这是上游服务验证请求来源的依据
-        // 如果客户端发送的 beta 标记中没有包含 claude-code-20250219，需要补充
-        if adapter.name() == "Claude" {
-            const CLAUDE_CODE_BETA: &str = "claude-code-20250219";
-            let beta_value = if let Some(beta) = headers.get("anthropic-beta") {
-                if let Ok(beta_str) = beta.to_str() {
-                    // 检查是否已包含 claude-code-20250219
-                    if beta_str.contains(CLAUDE_CODE_BETA) {
-                        beta_str.to_string()
-                    } else {
-                        // 补充 claude-code-20250219
-                        format!("{CLAUDE_CODE_BETA},{beta_str}")
-                    }
-                } else {
-                    CLAUDE_CODE_BETA.to_string()
-                }
-            } else {
-                // 如果客户端没有发送，使用默认值
-                CLAUDE_CODE_BETA.to_string()
-            };
-            request = request.header("anthropic-beta", &beta_value);
-        }
-
-        // 客户端 IP 透传（默认开启）
-        if let Some(xff) = headers.get("x-forwarded-for") {
-            if let Ok(xff_str) = xff.to_str() {
-                request = request.header("x-forwarded-for", xff_str);
-            }
-        }
-        if let Some(real_ip) = headers.get("x-real-ip") {
-            if let Ok(real_ip_str) = real_ip.to_str() {
-                request = request.header("x-real-ip", real_ip_str);
-            }
-        }
-
-        // 流式请求保守禁用压缩，避免上游压缩 SSE 在连接中断时触发解压错误。
-        // 非流式请求不显式设置 Accept-Encoding，让 reqwest 自动协商压缩并透明解压。
-        if should_force_identity_encoding(effective_endpoint, &filtered_body, headers) {
-            request = request.header("accept-encoding", "identity");
-        }
-
-        // 使用适配器添加认证头
-        if let Some(mut auth) = adapter.extract_auth(provider) {
+        // 获取认证头（提前准备，用于内联替换）
+        let mut auth_headers = if let Some(mut auth) = adapter.extract_auth(provider) {
             // GitHub Copilot 特殊处理：从 CopilotAuthManager 获取真实 token
             if auth.strategy == AuthStrategy::GitHubCopilot {
                 if let Some(app_handle) = &self.app_handle {
@@ -959,17 +1037,321 @@ impl RequestForwarder {
                     ));
                 }
             }
-            request = adapter.add_auth_headers(request, &auth);
+
+            // Codex OAuth 特殊处理：从 CodexOAuthManager 获取真实 access_token
+            if auth.strategy == AuthStrategy::CodexOAuth {
+                if let Some(app_handle) = &self.app_handle {
+                    let codex_state = app_handle.state::<CodexOAuthState>();
+                    let codex_auth: tokio::sync::RwLockReadGuard<'_, CodexOAuthManager> =
+                        codex_state.0.read().await;
+
+                    // 从 provider.meta 获取关联的 ChatGPT 账号 ID
+                    let account_id = provider
+                        .meta
+                        .as_ref()
+                        .and_then(|m| m.managed_account_id_for("codex_oauth"));
+
+                    let token_result = match &account_id {
+                        Some(id) => {
+                            log::debug!("[CodexOAuth] 使用指定账号 {id} 获取 token");
+                            codex_auth.get_valid_token_for_account(id).await
+                        }
+                        None => {
+                            log::debug!("[CodexOAuth] 使用默认账号获取 token");
+                            codex_auth.get_valid_token().await
+                        }
+                    };
+
+                    match token_result {
+                        Ok(token) => {
+                            auth = AuthInfo::new(token, AuthStrategy::CodexOAuth);
+                            // 解析使用的 account_id（用于注入 ChatGPT-Account-Id header）
+                            codex_oauth_account_id = match account_id {
+                                Some(id) => Some(id),
+                                None => codex_auth.default_account_id().await,
+                            };
+                            log::debug!(
+                                "[CodexOAuth] 成功获取 access_token (account={})",
+                                codex_oauth_account_id.as_deref().unwrap_or("default")
+                            );
+                        }
+                        Err(e) => {
+                            log::error!("[CodexOAuth] 获取 access_token 失败: {e}");
+                            return Err(ProxyError::AuthError(format!(
+                                "Codex OAuth 认证失败: {e}"
+                            )));
+                        }
+                    }
+                } else {
+                    log::error!("[CodexOAuth] AppHandle 不可用");
+                    return Err(ProxyError::AuthError(
+                        "Codex OAuth 认证不可用（无 AppHandle）".to_string(),
+                    ));
+                }
+            }
+
+            adapter.get_auth_headers(&auth)
+        } else {
+            Vec::new()
+        };
+
+        // 注入 Codex OAuth 的 ChatGPT-Account-Id header（如果有 account_id）
+        if let Some(ref account_id) = codex_oauth_account_id {
+            if let Ok(hv) = http::HeaderValue::from_str(account_id) {
+                auth_headers.push((http::HeaderName::from_static("chatgpt-account-id"), hv));
+            }
         }
 
-        // anthropic-version 统一处理（仅 Claude）：优先使用客户端的版本号，否则使用默认值
-        // 注意：只设置一次，避免重复
-        if adapter.name() == "Claude" {
-            let version_str = headers
-                .get("anthropic-version")
-                .and_then(|v| v.to_str().ok())
-                .unwrap_or("2023-06-01");
-            request = request.header("anthropic-version", version_str);
+        // --- Copilot 优化器：动态 header 注入 ---
+        if let Some((ref classification, ref det_request_id, ref interaction_id)) =
+            copilot_optimization
+        {
+            for (name, value) in auth_headers.iter_mut() {
+                match name.as_str() {
+                    "x-initiator" if self.copilot_optimizer_config.request_classification => {
+                        *value = http::HeaderValue::from_static(classification.initiator);
+                    }
+                    "x-interaction-type" if classification.is_subagent => {
+                        // 子代理请求：conversation-subagent 不计 premium interaction
+                        *value = http::HeaderValue::from_static("conversation-subagent");
+                    }
+                    "x-request-id" | "x-agent-task-id" => {
+                        if let Some(ref det_id) = det_request_id {
+                            if let Ok(hv) = http::HeaderValue::from_str(det_id) {
+                                *value = hv;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            // x-interaction-id：仅在有 session 时注入（不在 get_auth_headers 中）
+            if let Some(ref iid) = interaction_id {
+                if let Ok(hv) = http::HeaderValue::from_str(iid) {
+                    auth_headers.push((http::HeaderName::from_static("x-interaction-id"), hv));
+                }
+            }
+
+            if classification.is_subagent {
+                log::info!(
+                    "[Copilot] 子代理请求: x-initiator=agent, x-interaction-type=conversation-subagent"
+                );
+            }
+        }
+
+        // Copilot 指纹头名（由 get_auth_headers 注入，需在原始头中去重）
+        let copilot_fingerprint_headers: &[&str] = if is_copilot {
+            &[
+                "user-agent",
+                "editor-version",
+                "editor-plugin-version",
+                "copilot-integration-id",
+                "x-github-api-version",
+                "openai-intent",
+                // 新增 headers
+                "x-initiator",
+                "x-interaction-type",
+                "x-interaction-id",
+                "x-vscode-user-agent-library-version",
+                "x-request-id",
+                "x-agent-task-id",
+            ]
+        } else {
+            &[]
+        };
+
+        // 预计算上游 host 值（用于在原位替换 host header）
+        let upstream_host = url
+            .parse::<http::Uri>()
+            .ok()
+            .and_then(|u| u.authority().map(|a| a.to_string()));
+
+        let should_send_anthropic_headers = adapter.name() == "Claude"
+            && matches!(resolved_claude_api_format.as_deref(), Some("anthropic"));
+
+        // 预计算 anthropic-beta 值（仅 Claude）
+        let anthropic_beta_value = if should_send_anthropic_headers {
+            const CLAUDE_CODE_BETA: &str = "claude-code-20250219";
+            Some(if let Some(beta) = headers.get("anthropic-beta") {
+                if let Ok(beta_str) = beta.to_str() {
+                    if beta_str.contains(CLAUDE_CODE_BETA) {
+                        beta_str.to_string()
+                    } else {
+                        format!("{CLAUDE_CODE_BETA},{beta_str}")
+                    }
+                } else {
+                    CLAUDE_CODE_BETA.to_string()
+                }
+            } else {
+                CLAUDE_CODE_BETA.to_string()
+            })
+        } else {
+            None
+        };
+
+        // ============================================================
+        // 构建有序 HeaderMap — 内联替换，保持客户端原始顺序
+        // ============================================================
+        let mut ordered_headers = http::HeaderMap::new();
+        let mut saw_auth = false;
+        let mut saw_accept_encoding = false;
+        let mut saw_anthropic_beta = false;
+        let mut saw_anthropic_version = false;
+
+        for (key, value) in headers {
+            let key_str = key.as_str();
+
+            // --- host — 原位替换为上游 host（保持客户端原始位置） ---
+            if key_str.eq_ignore_ascii_case("host") {
+                if let Some(ref host_val) = upstream_host {
+                    if let Ok(hv) = http::HeaderValue::from_str(host_val) {
+                        ordered_headers.append(key.clone(), hv);
+                    }
+                }
+                continue;
+            }
+
+            // --- 连接 / 追踪 / CDN 类 — 无条件跳过 ---
+            if matches!(
+                key_str,
+                "content-length"
+                    | "transfer-encoding"
+                    | "x-forwarded-host"
+                    | "x-forwarded-port"
+                    | "x-forwarded-proto"
+                    | "forwarded"
+                    | "cf-connecting-ip"
+                    | "cf-ipcountry"
+                    | "cf-ray"
+                    | "cf-visitor"
+                    | "true-client-ip"
+                    | "fastly-client-ip"
+                    | "x-azure-clientip"
+                    | "x-azure-fdid"
+                    | "x-azure-ref"
+                    | "akamai-origin-hop"
+                    | "x-akamai-config-log-detail"
+                    | "x-request-id"
+                    | "x-correlation-id"
+                    | "x-trace-id"
+                    | "x-amzn-trace-id"
+                    | "x-b3-traceid"
+                    | "x-b3-spanid"
+                    | "x-b3-parentspanid"
+                    | "x-b3-sampled"
+                    | "traceparent"
+                    | "tracestate"
+            ) {
+                continue;
+            }
+
+            // --- 认证类 — 用 adapter 提供的认证头替换（在原始位置） ---
+            if key_str.eq_ignore_ascii_case("authorization")
+                || key_str.eq_ignore_ascii_case("x-api-key")
+                || key_str.eq_ignore_ascii_case("x-goog-api-key")
+            {
+                if !saw_auth {
+                    saw_auth = true;
+                    for (ah_name, ah_value) in &auth_headers {
+                        ordered_headers.append(ah_name.clone(), ah_value.clone());
+                    }
+                }
+                continue;
+            }
+
+            // --- accept-encoding — transform / SSE 路径强制 identity，其余保留原值 ---
+            if key_str.eq_ignore_ascii_case("accept-encoding") {
+                if !saw_accept_encoding {
+                    saw_accept_encoding = true;
+                    if force_identity_encoding {
+                        ordered_headers.append(
+                            http::header::ACCEPT_ENCODING,
+                            http::HeaderValue::from_static("identity"),
+                        );
+                    } else {
+                        ordered_headers.append(key.clone(), value.clone());
+                    }
+                }
+                continue;
+            }
+
+            // --- anthropic-beta — 用重建值替换（确保含 claude-code 标记） ---
+            if key_str.eq_ignore_ascii_case("anthropic-beta") {
+                if !saw_anthropic_beta {
+                    saw_anthropic_beta = true;
+                    if let Some(ref beta_val) = anthropic_beta_value {
+                        if let Ok(hv) = http::HeaderValue::from_str(beta_val) {
+                            ordered_headers.append("anthropic-beta", hv);
+                        }
+                    }
+                }
+                continue;
+            }
+
+            // --- anthropic-version — 透传客户端值 ---
+            if key_str.eq_ignore_ascii_case("anthropic-version") {
+                if should_send_anthropic_headers {
+                    saw_anthropic_version = true;
+                    ordered_headers.append(key.clone(), value.clone());
+                }
+                continue;
+            }
+
+            // --- Copilot 指纹头 — 跳过（由 auth_headers 提供） ---
+            if copilot_fingerprint_headers
+                .iter()
+                .any(|h| key_str.eq_ignore_ascii_case(h))
+            {
+                continue;
+            }
+
+            // --- 默认：透传 ---
+            ordered_headers.append(key.clone(), value.clone());
+        }
+
+        // 如果原始请求中没有认证头，在末尾追加
+        if !saw_auth && !auth_headers.is_empty() {
+            for (ah_name, ah_value) in &auth_headers {
+                ordered_headers.append(ah_name.clone(), ah_value.clone());
+            }
+        }
+
+        // transform / SSE 路径在缺失时补 identity；普通透传不主动补 accept-encoding
+        if !saw_accept_encoding && force_identity_encoding {
+            ordered_headers.append(
+                http::header::ACCEPT_ENCODING,
+                http::HeaderValue::from_static("identity"),
+            );
+        }
+
+        // 如果原始请求中没有 anthropic-beta 且有值需要添加，追加
+        if !saw_anthropic_beta {
+            if let Some(ref beta_val) = anthropic_beta_value {
+                if let Ok(hv) = http::HeaderValue::from_str(beta_val) {
+                    ordered_headers.append("anthropic-beta", hv);
+                }
+            }
+        }
+
+        // anthropic-version：仅在缺失时补充默认值
+        if should_send_anthropic_headers && !saw_anthropic_version {
+            ordered_headers.append(
+                "anthropic-version",
+                http::HeaderValue::from_static("2023-06-01"),
+            );
+        }
+
+        // 序列化请求体
+        let body_bytes = serde_json::to_vec(&filtered_body)
+            .map_err(|e| ProxyError::Internal(format!("Failed to serialize request body: {e}")))?;
+
+        // 确保 content-type 存在
+        if !ordered_headers.contains_key(http::header::CONTENT_TYPE) {
+            ordered_headers.insert(
+                http::header::CONTENT_TYPE,
+                http::HeaderValue::from_static("application/json"),
+            );
         }
 
         // 输出请求信息日志
@@ -987,30 +1369,138 @@ impl RequestForwarder {
             );
         }
 
+        // 确定超时
+        let timeout = if self.non_streaming_timeout.is_zero() {
+            std::time::Duration::from_secs(600) // 默认 600 秒
+        } else {
+            self.non_streaming_timeout
+        };
+
+        // 获取全局代理 URL
+        let upstream_proxy_url: Option<String> = super::http_client::get_current_proxy_url();
+
+        // SOCKS5 代理不支持 CONNECT 隧道，需要用 reqwest
+        let is_socks_proxy = upstream_proxy_url
+            .as_deref()
+            .map(|u| u.starts_with("socks5"))
+            .unwrap_or(false);
+
+        let uri: http::Uri = url
+            .parse()
+            .map_err(|e| ProxyError::ForwardFailed(format!("Invalid URL '{url}': {e}")))?;
+
         // 发送请求
-        let response = request.json(&filtered_body).send().await.map_err(|e| {
-            if e.is_timeout() {
-                ProxyError::Timeout(format!("请求超时: {e}"))
-            } else if e.is_connect() {
-                ProxyError::ForwardFailed(format!("连接失败: {e}"))
-            } else {
-                ProxyError::ForwardFailed(e.to_string())
+        let response = if is_socks_proxy {
+            // SOCKS5 代理：只能走 reqwest（不支持 header case 保留）
+            log::debug!("[Forwarder] Using reqwest for SOCKS5 proxy");
+            let client = super::http_client::get();
+            let mut request = client.post(&url);
+            if !self.non_streaming_timeout.is_zero() {
+                request = request.timeout(self.non_streaming_timeout);
             }
-        })?;
+            for (key, value) in &ordered_headers {
+                request = request.header(key, value);
+            }
+            let reqwest_resp = request.body(body_bytes).send().await.map_err(|e| {
+                if e.is_timeout() {
+                    ProxyError::Timeout(format!("请求超时: {e}"))
+                } else if e.is_connect() {
+                    ProxyError::ForwardFailed(format!("连接失败: {e}"))
+                } else {
+                    ProxyError::ForwardFailed(e.to_string())
+                }
+            })?;
+            ProxyResponse::Reqwest(reqwest_resp)
+        } else {
+            // HTTP 代理或直连：走 hyper raw write（保持 header 大小写）
+            // 如果有 HTTP 代理，hyper_client 会用 CONNECT 隧道穿过代理
+            super::hyper_client::send_request(
+                uri,
+                http::Method::POST,
+                ordered_headers,
+                extensions.clone(),
+                body_bytes,
+                timeout,
+                upstream_proxy_url.as_deref(),
+            )
+            .await?
+        };
 
         // 检查响应状态
         let status = response.status();
 
         if status.is_success() {
-            Ok(response)
+            Ok((response, resolved_claude_api_format))
         } else {
             let status_code = status.as_u16();
-            let body_text = response.text().await.ok();
+            let body_text = String::from_utf8(response.bytes().await?.to_vec()).ok();
 
             Err(ProxyError::UpstreamError {
                 status: status_code,
                 body: body_text,
             })
+        }
+    }
+
+    async fn resolve_claude_api_format(
+        &self,
+        provider: &Provider,
+        body: &Value,
+        is_copilot: bool,
+    ) -> String {
+        if !is_copilot {
+            return super::providers::get_claude_api_format(provider).to_string();
+        }
+
+        let model = body.get("model").and_then(|value| value.as_str());
+        if let Some(model_id) = model {
+            if self
+                .is_copilot_openai_vendor_model(provider, model_id)
+                .await
+            {
+                return "openai_responses".to_string();
+            }
+        }
+
+        "openai_chat".to_string()
+    }
+
+    async fn is_copilot_openai_vendor_model(&self, provider: &Provider, model_id: &str) -> bool {
+        let Some(app_handle) = &self.app_handle else {
+            log::debug!("[Copilot] AppHandle unavailable, fallback to chat/completions");
+            return false;
+        };
+
+        let copilot_state = app_handle.state::<CopilotAuthState>();
+        let copilot_auth = copilot_state.0.read().await;
+        let account_id = provider
+            .meta
+            .as_ref()
+            .and_then(|m| m.managed_account_id_for("github_copilot"));
+
+        let vendor_result = match account_id.as_deref() {
+            Some(id) => {
+                copilot_auth
+                    .get_model_vendor_for_account(id, model_id)
+                    .await
+            }
+            None => copilot_auth.get_model_vendor(model_id).await,
+        };
+
+        match vendor_result {
+            Ok(Some(vendor)) => vendor.eq_ignore_ascii_case("openai"),
+            Ok(None) => {
+                log::debug!(
+                    "[Copilot] Model vendor unavailable for {model_id}, fallback to chat/completions"
+                );
+                false
+            }
+            Err(err) => {
+                log::warn!(
+                    "[Copilot] Failed to resolve model vendor for {model_id}, fallback to chat/completions: {err}"
+                );
+                false
+            }
         }
     }
 
@@ -1160,6 +1650,129 @@ fn extract_json_error_message(body: &Value) -> Option<String> {
         .find_map(|value| value.as_str().map(ToString::to_string))
 }
 
+fn split_endpoint_and_query(endpoint: &str) -> (&str, Option<&str>) {
+    endpoint
+        .split_once('?')
+        .map_or((endpoint, None), |(path, query)| (path, Some(query)))
+}
+
+fn strip_beta_query(query: Option<&str>) -> Option<String> {
+    let filtered = query.map(|query| {
+        query
+            .split('&')
+            .filter(|pair| !pair.is_empty() && !pair.starts_with("beta="))
+            .collect::<Vec<_>>()
+            .join("&")
+    });
+
+    match filtered.as_deref() {
+        Some("") | None => None,
+        Some(_) => filtered,
+    }
+}
+
+fn is_claude_messages_path(path: &str) -> bool {
+    matches!(path, "/v1/messages" | "/claude/v1/messages")
+}
+
+fn rewrite_claude_transform_endpoint(
+    endpoint: &str,
+    api_format: &str,
+    is_copilot: bool,
+    body: &Value,
+) -> (String, Option<String>) {
+    let (path, query) = split_endpoint_and_query(endpoint);
+    let passthrough_query = if is_claude_messages_path(path) {
+        strip_beta_query(query)
+    } else {
+        query.map(ToString::to_string)
+    };
+
+    if !is_claude_messages_path(path) {
+        return (endpoint.to_string(), passthrough_query);
+    }
+
+    if api_format == "gemini_native" {
+        let model =
+            super::providers::transform_gemini::extract_gemini_model(body).unwrap_or("unknown");
+        // Accept both bare ids (`gemini-2.5-pro`) and the resource-name
+        // form (`models/gemini-2.5-pro`) that Gemini SDKs emit. See
+        // `normalize_gemini_model_id` for rationale.
+        let model = super::gemini_url::normalize_gemini_model_id(model);
+        let is_stream = body
+            .get("stream")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+        let target_path = if is_stream {
+            format!("/v1beta/models/{model}:streamGenerateContent")
+        } else {
+            format!("/v1beta/models/{model}:generateContent")
+        };
+
+        let rewritten_query = merge_query_params(
+            passthrough_query.as_deref(),
+            if is_stream { Some("alt=sse") } else { None },
+        );
+
+        let rewritten = match rewritten_query.as_deref() {
+            Some(query) if !query.is_empty() => format!("{target_path}?{query}"),
+            _ => target_path,
+        };
+
+        return (rewritten, rewritten_query);
+    }
+
+    let target_path = if is_copilot && api_format == "openai_responses" {
+        "/v1/responses"
+    } else if is_copilot {
+        "/chat/completions"
+    } else if api_format == "openai_responses" {
+        "/v1/responses"
+    } else {
+        "/v1/chat/completions"
+    };
+
+    let rewritten = match passthrough_query.as_deref() {
+        Some(query) if !query.is_empty() => format!("{target_path}?{query}"),
+        _ => target_path.to_string(),
+    };
+
+    (rewritten, passthrough_query)
+}
+
+fn merge_query_params(base_query: Option<&str>, extra_param: Option<&str>) -> Option<String> {
+    let mut params: Vec<String> = base_query
+        .into_iter()
+        .flat_map(|query| query.split('&'))
+        .filter(|pair| !pair.is_empty())
+        .filter(|pair| !pair.starts_with("alt="))
+        .map(ToString::to_string)
+        .collect();
+
+    if let Some(extra_param) = extra_param {
+        params.push(extra_param.to_string());
+    }
+
+    if params.is_empty() {
+        None
+    } else {
+        Some(params.join("&"))
+    }
+}
+
+fn append_query_to_full_url(base_url: &str, query: Option<&str>) -> String {
+    match query {
+        Some(query) if !query.is_empty() => {
+            if base_url.contains('?') {
+                format!("{base_url}&{query}")
+            } else {
+                format!("{base_url}?{query}")
+            }
+        }
+        _ => base_url.to_string(),
+    }
+}
+
 fn should_force_identity_encoding(
     endpoint: &str,
     body: &Value,
@@ -1200,7 +1813,8 @@ fn summarize_text_for_log(text: &str, max_chars: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::http::{header::ACCEPT, HeaderMap, HeaderValue};
+    use axum::http::header::{HeaderValue, ACCEPT};
+    use axum::http::HeaderMap;
     use serde_json::json;
 
     #[test]
@@ -1269,6 +1883,149 @@ mod tests {
     }
 
     #[test]
+    fn rewrite_claude_transform_endpoint_strips_beta_for_chat_completions() {
+        let (endpoint, passthrough_query) = rewrite_claude_transform_endpoint(
+            "/v1/messages?beta=true&foo=bar",
+            "openai_chat",
+            false,
+            &json!({ "model": "gpt-5.4" }),
+        );
+
+        assert_eq!(endpoint, "/v1/chat/completions?foo=bar");
+        assert_eq!(passthrough_query.as_deref(), Some("foo=bar"));
+    }
+
+    #[test]
+    fn rewrite_claude_transform_endpoint_strips_beta_for_responses() {
+        let (endpoint, passthrough_query) = rewrite_claude_transform_endpoint(
+            "/claude/v1/messages?beta=true&x-id=1",
+            "openai_responses",
+            false,
+            &json!({ "model": "gpt-5.4" }),
+        );
+
+        assert_eq!(endpoint, "/v1/responses?x-id=1");
+        assert_eq!(passthrough_query.as_deref(), Some("x-id=1"));
+    }
+
+    #[test]
+    fn rewrite_claude_transform_endpoint_uses_copilot_path() {
+        let (endpoint, passthrough_query) = rewrite_claude_transform_endpoint(
+            "/v1/messages?beta=true&x-id=1",
+            "anthropic",
+            true,
+            &json!({ "model": "claude-sonnet-4-6" }),
+        );
+
+        assert_eq!(endpoint, "/chat/completions?x-id=1");
+        assert_eq!(passthrough_query.as_deref(), Some("x-id=1"));
+    }
+
+    #[test]
+    fn rewrite_claude_transform_endpoint_uses_copilot_responses_path() {
+        let (endpoint, passthrough_query) = rewrite_claude_transform_endpoint(
+            "/v1/messages?beta=true&x-id=1",
+            "openai_responses",
+            true,
+            &json!({ "model": "gpt-5.4" }),
+        );
+
+        assert_eq!(endpoint, "/v1/responses?x-id=1");
+        assert_eq!(passthrough_query.as_deref(), Some("x-id=1"));
+    }
+
+    #[test]
+    fn rewrite_claude_transform_endpoint_maps_gemini_generate_content() {
+        let (endpoint, passthrough_query) = rewrite_claude_transform_endpoint(
+            "/v1/messages?beta=true&x-id=1",
+            "gemini_native",
+            false,
+            &json!({ "model": "gemini-2.5-pro" }),
+        );
+
+        assert_eq!(
+            endpoint,
+            "/v1beta/models/gemini-2.5-pro:generateContent?x-id=1"
+        );
+        assert_eq!(passthrough_query.as_deref(), Some("x-id=1"));
+    }
+
+    /// Regression: body.model arriving as the resource-name form
+    /// `models/gemini-2.5-pro` must not produce a doubled
+    /// `/v1beta/models/models/...` path.
+    #[test]
+    fn rewrite_claude_transform_endpoint_strips_gemini_model_resource_prefix() {
+        let (endpoint, _) = rewrite_claude_transform_endpoint(
+            "/v1/messages",
+            "gemini_native",
+            false,
+            &json!({ "model": "models/gemini-2.5-pro" }),
+        );
+
+        assert_eq!(endpoint, "/v1beta/models/gemini-2.5-pro:generateContent");
+    }
+
+    #[test]
+    fn rewrite_claude_transform_endpoint_maps_gemini_streaming() {
+        let (endpoint, passthrough_query) = rewrite_claude_transform_endpoint(
+            "/v1/messages?beta=true",
+            "gemini_native",
+            false,
+            &json!({ "model": "gemini-2.5-flash", "stream": true }),
+        );
+
+        assert_eq!(
+            endpoint,
+            "/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse"
+        );
+        assert_eq!(passthrough_query.as_deref(), Some("alt=sse"));
+    }
+
+    #[test]
+    fn append_query_to_full_url_preserves_existing_query_string() {
+        let url = append_query_to_full_url("https://relay.example/api?foo=bar", Some("x-id=1"));
+
+        assert_eq!(url, "https://relay.example/api?foo=bar&x-id=1");
+    }
+
+    #[test]
+    fn build_gemini_native_url_uses_origin_when_base_ends_with_v1beta() {
+        let url = crate::proxy::gemini_url::build_gemini_native_url(
+            "https://generativelanguage.googleapis.com/v1beta",
+            "/v1beta/models/gemini-2.5-pro:generateContent",
+        );
+
+        assert_eq!(
+            url,
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent"
+        );
+    }
+
+    #[test]
+    fn build_gemini_native_url_uses_origin_when_base_already_contains_models_prefix() {
+        let url = crate::proxy::gemini_url::build_gemini_native_url(
+            "https://generativelanguage.googleapis.com/v1beta/models",
+            "/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse",
+        );
+
+        assert_eq!(
+            url,
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse"
+        );
+    }
+
+    #[test]
+    fn resolve_gemini_native_url_keeps_opaque_full_url_as_is() {
+        let url = crate::proxy::gemini_url::resolve_gemini_native_url(
+            "https://relay.example/custom/generate-content",
+            "/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse",
+            true,
+        );
+
+        assert_eq!(url, "https://relay.example/custom/generate-content?alt=sse");
+    }
+
+    #[test]
     fn force_identity_for_stream_flag_requests() {
         let headers = HeaderMap::new();
 
@@ -1311,5 +2068,108 @@ mod tests {
             &json!({ "model": "gpt-5" }),
             &headers
         ));
+    }
+
+    // ==================== Copilot 动态 endpoint 路由相关测试 ====================
+
+    /// 验证 is_copilot 检测逻辑：通过 provider_type 判断
+    #[test]
+    fn copilot_detection_via_provider_type() {
+        use crate::provider::{Provider, ProviderMeta};
+
+        let provider = Provider {
+            id: "test".to_string(),
+            name: "Test Copilot".to_string(),
+            settings_config: serde_json::json!({}),
+            website_url: None,
+            category: None,
+            created_at: None,
+            sort_index: None,
+            notes: None,
+            meta: Some(ProviderMeta {
+                provider_type: Some("github_copilot".to_string()),
+                ..Default::default()
+            }),
+            icon: None,
+            icon_color: None,
+            in_failover_queue: false,
+        };
+
+        let is_copilot = provider
+            .meta
+            .as_ref()
+            .and_then(|m| m.provider_type.as_deref())
+            == Some("github_copilot");
+
+        assert!(is_copilot, "应该通过 provider_type 检测为 Copilot");
+    }
+
+    /// 验证 is_copilot 检测逻辑：通过 base_url 判断
+    #[test]
+    fn copilot_detection_via_base_url() {
+        let base_url = "https://api.githubcopilot.com";
+        let is_copilot = base_url.contains("githubcopilot.com");
+        assert!(is_copilot, "应该通过 base_url 检测为 Copilot");
+
+        let non_copilot_url = "https://api.anthropic.com";
+        let is_not_copilot = non_copilot_url.contains("githubcopilot.com");
+        assert!(!is_not_copilot, "非 Copilot URL 不应被检测为 Copilot");
+    }
+
+    /// 验证企业版 endpoint（不包含 githubcopilot.com）场景下 is_copilot 仍然正确
+    #[test]
+    fn copilot_detection_for_enterprise_endpoint() {
+        use crate::provider::{Provider, ProviderMeta};
+
+        // 企业版场景：provider_type 是 github_copilot，但 base_url 可能是企业内部域名
+        let provider = Provider {
+            id: "enterprise".to_string(),
+            name: "Enterprise Copilot".to_string(),
+            settings_config: serde_json::json!({}),
+            website_url: None,
+            category: None,
+            created_at: None,
+            sort_index: None,
+            notes: None,
+            meta: Some(ProviderMeta {
+                provider_type: Some("github_copilot".to_string()),
+                ..Default::default()
+            }),
+            icon: None,
+            icon_color: None,
+            in_failover_queue: false,
+        };
+
+        let enterprise_base_url = "https://copilot-api.corp.example.com";
+
+        // is_copilot 应该通过 provider_type 检测成功，即使 base_url 不包含 githubcopilot.com
+        let is_copilot = provider
+            .meta
+            .as_ref()
+            .and_then(|m| m.provider_type.as_deref())
+            == Some("github_copilot")
+            || enterprise_base_url.contains("githubcopilot.com");
+
+        assert!(
+            is_copilot,
+            "企业版 Copilot 应该通过 provider_type 被正确检测"
+        );
+    }
+
+    /// 验证动态 endpoint 替换条件
+    #[test]
+    fn dynamic_endpoint_replacement_conditions() {
+        // 条件：is_copilot && !is_full_url
+        let test_cases = [
+            (true, false, true, "Copilot + 非 full_url 应该替换"),
+            (true, true, false, "Copilot + full_url 不应替换"),
+            (false, false, false, "非 Copilot 不应替换"),
+            (false, true, false, "非 Copilot + full_url 不应替换"),
+        ];
+
+        for (is_copilot, is_full_url, should_replace, desc) in test_cases {
+            let will_replace = is_copilot && !is_full_url;
+            assert_eq!(will_replace, should_replace, "{desc}");
+        }
     }
 }

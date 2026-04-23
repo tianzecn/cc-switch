@@ -487,7 +487,7 @@ export const SkillsPageNew = forwardRef<
       message: t("skills.uninstallConfirm", { name: skill.name }),
       onConfirm: async () => {
         try {
-          await uninstallMutation.mutateAsync(skillId);
+          await uninstallMutation.mutateAsync({ id: skillId });
           setConfirmDialog(null);
           setSelectedSkill(null);
           toast.success(t("skills.uninstallSuccess", { name: skill.name }), {
@@ -1131,6 +1131,7 @@ const ImportSkillsDialog: React.FC<ImportSkillsDialogProps> = ({
           gemini: false,
           opencode: false,
           openclaw: false,
+          hermes: false,
         },
       })),
     );

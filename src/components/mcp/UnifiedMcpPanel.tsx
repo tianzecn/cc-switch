@@ -19,7 +19,8 @@ import { settingsApi } from "@/lib/api";
 import { mcpPresets } from "@/config/mcpPresets";
 import { toast } from "sonner";
 import { ContentContainer } from "@/components/layout";
-import { MCP_SKILLS_APP_IDS } from "@/config/appConfig";
+import { MCP_APP_IDS } from "@/config/appConfig";
+import { AppCountBar } from "@/components/common/AppCountBar";
 import { AppToggleGroup } from "@/components/common/AppToggleGroup";
 import { ListItemRow } from "@/components/common/ListItemRow";
 
@@ -57,9 +58,16 @@ const UnifiedMcpPanel = React.forwardRef<
   }, [serversMap]);
 
   const enabledCounts = useMemo(() => {
-    const counts = { claude: 0, codex: 0, gemini: 0, opencode: 0, openclaw: 0 };
+    const counts = {
+      claude: 0,
+      codex: 0,
+      gemini: 0,
+      opencode: 0,
+      openclaw: 0,
+      hermes: 0,
+    };
     serverEntries.forEach(([_, server]) => {
-      for (const app of MCP_SKILLS_APP_IDS) {
+      for (const app of MCP_APP_IDS) {
         if (server.apps[app]) counts[app]++;
       }
     });
@@ -133,16 +141,12 @@ const UnifiedMcpPanel = React.forwardRef<
   };
 
   return (
-    <ContentContainer className="flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
-      {/* Info Section */}
-      <div className="flex-shrink-0 py-4 glass rounded-xl border border-white/10 mb-4 px-6">
-        <div className="text-sm text-muted-foreground">
-          {t("mcp.serverCount", { count: serverEntries.length })} ·{" "}
-          {t("mcp.unifiedPanel.apps.claude")}: {enabledCounts.claude} ·{" "}
-          {t("mcp.unifiedPanel.apps.codex")}: {enabledCounts.codex} ·{" "}
-          {t("mcp.unifiedPanel.apps.gemini")}: {enabledCounts.gemini}
-        </div>
-      </div>
+    <ContentContainer className="flex flex-col flex-1 min-h-0 overflow-hidden">
+      <AppCountBar
+        totalLabel={t("mcp.serverCount", { count: serverEntries.length })}
+        counts={enabledCounts}
+        appIds={MCP_APP_IDS}
+      />
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden pb-24">
         {isLoading ? (
@@ -283,7 +287,7 @@ const UnifiedMcpListItem: React.FC<UnifiedMcpListItemProps> = ({
       <AppToggleGroup
         apps={server.apps}
         onToggle={(app, enabled) => onToggleApp(id, app, enabled)}
-        appIds={MCP_SKILLS_APP_IDS}
+        appIds={MCP_APP_IDS}
       />
 
       <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
