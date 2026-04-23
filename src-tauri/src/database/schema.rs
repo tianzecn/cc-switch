@@ -631,6 +631,11 @@ impl Database {
                         Self::migrate_v13_to_v14(conn)?;
                         Self::set_user_version(conn, 14)?;
                     }
+                    14 => {
+                        log::info!("迁移数据库从 v14 到 v15（补齐 OpenCode/OpenClaw/Hermes 启用列）");
+                        Self::migrate_v14_to_v15(conn)?;
+                        Self::set_user_version(conn, 15)?;
+                    }
                     _ => {
                         return Err(AppError::Database(format!(
                             "未知的数据库版本 {version}，无法迁移到 {SCHEMA_VERSION}"
@@ -1644,6 +1649,19 @@ impl Database {
 
     /// v13 -> v14 迁移：添加 Hermes Agent 支持 — 源自上游 v9 -> v10
     fn migrate_v13_to_v14(conn: &Connection) -> Result<(), AppError> {
+        // mcp_servers: 补齐 OpenCode/OpenClaw/Hermes 列（上游历史迁移在重排时丢失，此处幂等补齐）
+        Self::add_column_if_missing(
+            conn,
+            "mcp_servers",
+            "enabled_opencode",
+            "BOOLEAN NOT NULL DEFAULT 0",
+        )?;
+        Self::add_column_if_missing(
+            conn,
+            "mcp_servers",
+            "enabled_openclaw",
+            "BOOLEAN NOT NULL DEFAULT 0",
+        )?;
         Self::add_column_if_missing(
             conn,
             "mcp_servers",
@@ -1651,8 +1669,20 @@ impl Database {
             "BOOLEAN NOT NULL DEFAULT 0",
         )?;
 
-        // skills table may not exist in databases migrated from very old versions
+        // skills 表：补齐 OpenCode/OpenClaw/Hermes 列
         if Self::table_exists(conn, "skills")? {
+            Self::add_column_if_missing(
+                conn,
+                "skills",
+                "enabled_opencode",
+                "BOOLEAN NOT NULL DEFAULT 0",
+            )?;
+            Self::add_column_if_missing(
+                conn,
+                "skills",
+                "enabled_openclaw",
+                "BOOLEAN NOT NULL DEFAULT 0",
+            )?;
             Self::add_column_if_missing(
                 conn,
                 "skills",
@@ -1661,7 +1691,95 @@ impl Database {
             )?;
         }
 
-        log::info!("v9 -> v10 迁移完成：已添加 Hermes Agent 支持");
+        // commands 表：同步补齐
+        if Self::table_exists(conn, "commands")? {
+            Self::add_column_if_missing(
+                conn,
+                "commands",
+                "enabled_opencode",
+                "BOOLEAN NOT NULL DEFAULT 0",
+            )?;
+            Self::add_column_if_missing(
+                conn,
+                "commands",
+                "enabled_openclaw",
+                "BOOLEAN NOT NULL DEFAULT 0",
+            )?;
+            Self::add_column_if_missing(
+                conn,
+                "commands",
+                "enabled_hermes",
+                "BOOLEAN NOT NULL DEFAULT 0",
+            )?;
+        }
+
+        // agents 表：同步补齐
+        if Self::table_exists(conn, "agents")? {
+            Self::add_column_if_missing(
+                conn,
+                "agents",
+                "enabled_opencode",
+                "BOOLEAN NOT NULL DEFAULT 0",
+            )?;
+            Self::add_column_if_missing(
+                conn,
+                "agents",
+                "enabled_openclaw",
+                "BOOLEAN NOT NULL DEFAULT 0",
+            )?;
+            Self::add_column_if_missing(
+                conn,
+                "agents",
+                "enabled_hermes",
+                "BOOLEAN NOT NULL DEFAULT 0",
+            )?;
+        }
+
+        // hooks 表：同步补齐
+        if Self::table_exists(conn, "hooks")? {
+            Self::add_column_if_missing(
+                conn,
+                "hooks",
+                "enabled_opencode",
+                "BOOLEAN NOT NULL DEFAULT 0",
+            )?;
+            Self::add_column_if_missing(
+                conn,
+                "hooks",
+                "enabled_openclaw",
+                "BOOLEAN NOT NULL DEFAULT 0",
+            )?;
+            Self::add_column_if_missing(
+                conn,
+                "hooks",
+                "enabled_hermes",
+                "BOOLEAN NOT NULL DEFAULT 0",
+            )?;
+        }
+
+        log::info!("v13 -> v14 迁移完成：已补齐 OpenCode/OpenClaw/Hermes 列");
+        Ok(())
+    }
+
+    /// v14 -> v15 迁移：补齐因上游历史迁移重排丢失的启用列
+    ///
+    /// 之前版本的 v13→v14 只加了 `enabled_hermes`；如果现有库缺少
+    /// `enabled_opencode` / `enabled_openclaw`，此迁移会补齐。
+    /// `add_column_if_missing` 是幂等的，对已经有这些列的库不会产生影响。
+    fn migrate_v14_to_v15(conn: &Connection) -> Result<(), AppError> {
+        let tables = ["mcp_servers", "skills", "commands", "agents", "hooks"];
+        let columns = ["enabled_opencode", "enabled_openclaw", "enabled_hermes"];
+
+        for table in tables {
+            if !Self::table_exists(conn, table)? {
+                continue;
+            }
+            for column in columns {
+                Self::add_column_if_missing(conn, table, column, "BOOLEAN NOT NULL DEFAULT 0")?;
+            }
+        }
+
+        log::info!("v14 -> v15 迁移完成：已补齐 OpenCode/OpenClaw/Hermes 启用列");
         Ok(())
     }
 
