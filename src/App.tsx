@@ -5,6 +5,10 @@ import { toast } from "sonner";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useQueryClient } from "@tanstack/react-query";
+import { Minus, Maximize2, Minimize2, X } from "lucide-react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { Button } from "@/components/ui/button";
+import { isLinux } from "@/lib/platform";
 import type { Provider, VisibleApps } from "@/types";
 import type { EnvConflict } from "@/types/env";
 import { useProvidersQuery, useSettingsQuery } from "@/lib/query";
@@ -69,9 +73,8 @@ interface WebDavSyncStatusUpdatedPayload {
   error?: string;
 }
 
-const DRAG_BAR_HEIGHT = 28; // px
-const NAVBAR_HEIGHT = 96; // px (3 rows * 32px)
-const CONTENT_TOP_OFFSET = DRAG_BAR_HEIGHT + NAVBAR_HEIGHT;
+const DEFAULT_DRAG_BAR_HEIGHT = 28; // px
+const HEADER_HEIGHT = 96; // px (3 rows * 32px, matches UnifiedNavbar)
 
 const STORAGE_KEY = "cc-switch-last-app";
 const VALID_APPS: AppId[] = [
@@ -582,9 +585,11 @@ function App() {
   }, []);
 
   const [launchDashboardOpen, setLaunchDashboardOpen] = useState(false);
-  const openHermesWebUI = useOpenHermesWebUI(() =>
+  // Hermes Web UI 启动（预留给未来绑定到导航栏按钮；当前通过确认对话框使用 hermesApi.launchDashboard）
+  const _openHermesWebUI = useOpenHermesWebUI(() =>
     setLaunchDashboardOpen(true),
   );
+  void _openHermesWebUI;
 
   const handleOpenWebsite = async (url: string) => {
     try {

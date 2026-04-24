@@ -188,6 +188,7 @@ export const SkillsPage = forwardRef<SkillsPageHandle, SkillsPageProps>(
       name: s.name,
       description: "",
       directory: s.directory,
+      namespace: "",
       repoOwner: s.repoOwner,
       repoName: s.repoName,
       repoBranch: s.repoBranch,
